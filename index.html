@@ -1016,24 +1016,6 @@
                 </div>
             </div>
 
-            <div id="portfolio-performance-container" class="chart-container" style="display: none;">
-                <div class="chart-header">
-                    <h4>Portfolio Performance History</h4>
-                    <div class="chart-controls" id="performance-chart-controls">
-                        <button class="chart-range-btn" data-range="1W">1W</button>
-                        <button class="chart-range-btn" data-range="1M">1M</button>
-                        <button class="chart-range-btn" data-range="6M">6M</button>
-                        <button class="chart-range-btn" data-range="YTD">YTD</button>
-                        <button class="chart-range-btn active" data-range="1Y">1Y</button>
-                        <button class="chart-range-btn" data-range="3Y">3Y</button>
-                        <button class="chart-range-btn" data-range="5Y">5Y</button>
-                        <button class="chart-range-btn" data-range="All">All</button>
-                    </div>
-                </div>
-                <canvas id="portfolioPerformanceChart"></canvas>
-            </div>
-
-
             <div class="search-section">
                 <div class="input-wrapper">
                     <input type="text" class="search-input" id="stockInput" placeholder="Enter stock symbol (e.g., AAPL)">
@@ -1110,6 +1092,23 @@
         </div>
 
         <div class="stocks-grid" id="stocksGrid"></div>
+
+        <div id="portfolio-performance-container" class="chart-container" style="display: none;">
+            <div class="chart-header">
+                <h4>Portfolio Performance History</h4>
+                <div class="chart-controls" id="performance-chart-controls">
+                    <button class="chart-range-btn" data-range="1W">1W</button>
+                    <button class="chart-range-btn" data-range="1M">1M</button>
+                    <button class="chart-range-btn" data-range="6M">6M</button>
+                    <button class="chart-range-btn" data-range="YTD">YTD</button>
+                    <button class="chart-range-btn active" data-range="1Y">1Y</button>
+                    <button class="chart-range-btn" data-range="3Y">3Y</button>
+                    <button class="chart-range-btn" data-range="5Y">5Y</button>
+                    <button class="chart-range-btn" data-range="All">All</button>
+                </div>
+            </div>
+            <canvas id="portfolioPerformanceChart"></canvas>
+        </div>
 
         <div id="diversification-chart-container" class="chart-container" style="display: none;">
             <canvas id="diversificationChart"></canvas>
