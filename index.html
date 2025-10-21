@@ -530,6 +530,7 @@
             gap: 8px;
             margin-bottom: 12px;
             justify-content: center;
+            flex-wrap: wrap;
         }
         .chart-range-btn {
             padding: 4px 12px;
@@ -1177,6 +1178,10 @@
                 <label for="enable-push-notifications-btn">Enable Push Notifications:</label>
                 <button class="add-btn" id="enable-push-notifications-btn">🔔 Enable Notifications</button>
             </div>
+            <div class="transaction-input-group">
+                <label for="sign-out-other-sessions-btn">Security:</label>
+                <button class="add-btn btn-danger" id="sign-out-other-sessions-btn">🔒 Sign Out on All Other Devices</button>
+            </div>
             <button class="add-btn" id="modal-save-settings-btn">Save Settings</button>
         </div>
     </div>
@@ -1262,7 +1267,7 @@
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyB8wQ0-O2avYjRW7Wjtmiql03q1ikwhX7s",
@@ -1363,6 +1368,24 @@
                     return { success: false, symbol, reason: error.message };
                 }
             }
+            async fetchHistoricalData(symbol) {
+                if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
+                    return { success: false, reason: "Alpha Vantage API Key is missing. Please set it in Settings to fetch historical data." };
+                }
+                const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${this.config.alphaVantageKey}`;
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) return { success: false, reason: `HTTP Error: ${response.status}` };
+                    const json = await response.json();
+                    if (json["Error Message"] || !json["Time Series (Daily)"]) {
+                        return { success: false, reason: json["Information"] || json["Error Message"] || 'Invalid API payload from Alpha Vantage. The free tier has a low request limit.' };
+                    }
+                    return { success: true, data: json["Time Series (Daily)"] };
+                } catch (error) {
+                    console.error(`Error fetching historical data for ${symbol}:`, error);
+                    return { success: false, reason: error.message };
+                }
+            }
         }
         class StockTracker {
             constructor() {
@@ -1377,6 +1400,10 @@
                 this.groupCollapseState = {};
                 this.diversificationChartInstance = null;
                 this.historyChartInstance = null;
+                this.cardChartInstances = {}; // To manage individual card charts
+                this.chartDataCache = {}; // To cache historical data
+                this.sessionId = crypto.randomUUID(); 
+                this.sessionUnsubscribe = null;
                 this.init();
             }
             init() {
@@ -1420,6 +1447,7 @@
                         this.elements.userInfo.style.display = 'flex';
                         this.elements.userName.textContent = `Welcome, ${user.displayName || 'User'}`;
                         this.loadData();
+                        this.setupSessionListener();
                         this.startLiveUpdate();
                     } else {
                         this.userId = null;
@@ -1428,6 +1456,10 @@
                         this.elements.userInfo.style.display = 'none';
                         this.stocks = []; this.mutualFunds = []; this.watchlist = [];
                         this.renderContent();
+                        if (this.sessionUnsubscribe) {
+                            this.sessionUnsubscribe();
+                            this.sessionUnsubscribe = null;
+                        }
                     }
                 });
             }
@@ -1499,6 +1531,7 @@
                     modalRefreshInterval: document.getElementById('modal-refresh-interval'),
                     modalSaveSettingsBtn: document.getElementById('modal-save-settings-btn'),
                     enablePushNotificationsBtn: document.getElementById('enable-push-notifications-btn'),
+                    signOutOtherSessionsBtn: document.getElementById('sign-out-other-sessions-btn'),
                     diversificationChartContainer: document.getElementById('diversification-chart-container'),
                     diversificationChart: document.getElementById('diversificationChart'),
                     historyChartContainer: document.getElementById('history-chart-container'),
@@ -1583,6 +1616,7 @@
                 this.elements.closeSettingsBtn.addEventListener('click', () => this.closeSettingsModal());
                 this.elements.modalSaveSettingsBtn.addEventListener('click', () => this.saveSettings());
                 this.elements.enablePushNotificationsBtn.addEventListener('click', () => this.enablePushNotifications());
+                this.elements.signOutOtherSessionsBtn.addEventListener('click', () => this.signOutOtherSessions());
                 this.elements.confirmModalCancelBtn.addEventListener('click', () => this.closeConfirmModal(true));
                 this.elements.confirmModalConfirmBtn.addEventListener('click', () => this.handleConfirmAction());
                 this.elements.listAllBtn.addEventListener('click', () => this.openListAllModal());
@@ -2452,10 +2486,14 @@
                     cardChartHTML = `
                         <div class="card-chart-container">
                             <div class="chart-controls">
+                                <button class="chart-range-btn" data-range="1W">1W</button>
                                 <button class="chart-range-btn" data-range="1M">1M</button>
                                 <button class="chart-range-btn" data-range="6M">6M</button>
+                                <button class="chart-range-btn" data-range="YTD">YTD</button>
                                 <button class="chart-range-btn active" data-range="1Y">1Y</button>
+                                <button class="chart-range-btn" data-range="3Y">3Y</button>
                                 <button class="chart-range-btn" data-range="5Y">5Y</button>
+                                <button class="chart-range-btn" data-range="All">All</button>
                             </div>
                             <canvas id="chart-${item.id}"></canvas>
                         </div>`;
@@ -2561,9 +2599,130 @@
                 });
             }
 
-            async renderCardChart(symbol) {
-                // This is a placeholder for the real API call
-                console.log(`Fetching chart data for ${symbol}`);
+            async renderCardChart(symbol, range = '1Y') {
+                const card = document.querySelector(`.stock-card[data-symbol="${symbol}"], .fund-card[data-symbol="${symbol}"]`);
+                if (!card) return;
+
+                const chartId = `chart-${card.dataset.id}`;
+                const canvas = document.getElementById(chartId);
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+
+                // Update active button state
+                const chartControls = card.querySelector('.chart-controls');
+                if(chartControls) {
+                    chartControls.querySelectorAll('.chart-range-btn').forEach(btn => btn.classList.remove('active'));
+                    const newActiveButton = chartControls.querySelector(`[data-range="${range}"]`);
+                    if(newActiveButton) newActiveButton.classList.add('active');
+                }
+                
+
+                // Destroy previous chart instance if it exists
+                if (this.cardChartInstances[chartId]) {
+                    this.cardChartInstances[chartId].destroy();
+                }
+
+                try {
+                    let historicalData;
+                    if (this.chartDataCache[symbol]) {
+                        historicalData = this.chartDataCache[symbol];
+                    } else {
+                        this.showLoading(true, `Fetching chart data for ${symbol}...`);
+                        const result = await this.apiService.fetchHistoricalData(symbol);
+                        this.showLoading(false);
+                        if (!result.success) {
+                            throw new Error(result.reason);
+                        }
+                        this.chartDataCache[symbol] = result.data;
+                        historicalData = result.data;
+                    }
+
+                    const allDataPoints = Object.entries(historicalData).map(([date, values]) => ({
+                        x: new Date(date),
+                        y: parseFloat(values['4. close'])
+                    })).sort((a, b) => a.x - b.x);
+
+                    const now = new Date();
+                    let startDate = new Date();
+
+                    switch(range) {
+                        case '1W': startDate.setDate(now.getDate() - 7); break;
+                        case '1M': startDate.setMonth(now.getMonth() - 1); break;
+                        case '6M': startDate.setMonth(now.getMonth() - 6); break;
+                        case 'YTD': startDate = new Date(now.getFullYear(), 0, 1); break;
+                        case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
+                        case '3Y': startDate.setFullYear(now.getFullYear() - 3); break;
+                        case '5Y': startDate.setFullYear(now.getFullYear() - 5); break;
+                        case 'All': startDate = new Date(0); break; // Start from the beginning of time
+                        default: startDate.setFullYear(now.getFullYear() - 1); break;
+                    }
+
+                    const chartData = allDataPoints.filter(dp => dp.x >= startDate);
+                    if (chartData.length === 0) {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.textAlign = 'center';
+                        ctx.fillStyle = this.isDarkMode ? '#777' : '#aaa';
+                        ctx.fillText('No data available for this range.', canvas.width / 2, canvas.height / 2);
+                        return;
+                    }
+
+                    const firstPrice = chartData[0].y;
+                    const lastPrice = chartData[chartData.length - 1].y;
+                    const borderColor = lastPrice >= firstPrice ? 'var(--color-positive)' : 'var(--color-negative)';
+                    const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                    const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
+
+                    this.cardChartInstances[chartId] = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            datasets: [{
+                                label: symbol,
+                                data: chartData,
+                                borderColor: borderColor,
+                                tension: 0.1,
+                                borderWidth: 2,
+                                pointRadius: 0,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: { unit: 'month' },
+                                    ticks: { color: labelColor, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
+                                    grid: { display: false }
+                                },
+                                y: {
+                                    ticks: { color: labelColor, callback: (value) => this.formatCurrency(value) },
+                                    grid: { color: gridColor, drawBorder: false }
+                                }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    mode: 'index',
+                                    intersect: false,
+                                    callbacks: {
+                                        label: (context) => `Price: ${this.formatCurrency(context.parsed.y)}`
+                                    }
+                                }
+                            },
+                            interaction: {
+                                mode: 'index',
+                                intersect: false,
+                            }
+                        }
+                    });
+
+                } catch (error) {
+                    console.error(`Could not render chart for ${symbol}:`, error);
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = 'var(--color-negative)';
+                    ctx.fillText(`Error loading chart data.`, canvas.width / 2, canvas.height / 2);
+                }
             }
             
             async moveToPortfolio(id) {
@@ -2665,7 +2824,7 @@
             }
             renderHistoryChart() {
                 const container = this.elements.historyChartContainer;
-                container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && this.portfolioHistory.length > 1 ? 'block' : 'none';
+                container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && this.portfolioHistory.length > 0 ? 'block' : 'none';
                 if (!container.style.display || container.style.display === 'none') return;
                 const labels = this.portfolioHistory.map(e => e.date);
                 const data = this.portfolioHistory.map(e => e.value);
@@ -3098,9 +3257,49 @@
                 this.closeEditStockModal();
                 this.showSuccess(`✅ Updated details and cost basis for ${newSymbol}!`);
             }
+
+            async signOutOtherSessions() {
+                this.openConfirmModal('This will sign you out of all other devices. Are you sure?', async () => {
+                    if (!this.userId) return;
+                    const sessionControlRef = doc(db, "users", this.userId, "sessionControl", "state");
+                    try {
+                        await setDoc(sessionControlRef, {
+                            revokeTimestamp: serverTimestamp(),
+                            initiatedBy: this.sessionId
+                        });
+                        this.showSuccess("✅ Sign-out command sent to other devices.");
+                        this.closeSettingsModal();
+                    } catch (error) {
+                        console.error("Error signing out other sessions:", error);
+                        this.showError("Could not send sign-out command.");
+                    }
+                });
+            }
+
+            setupSessionListener() {
+                if (this.sessionUnsubscribe) this.sessionUnsubscribe(); 
+
+                if (!this.userId) return;
+
+                const sessionControlRef = doc(db, "users", this.userId, "sessionControl", "state");
+                this.sessionUnsubscribe = onSnapshot(sessionControlRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        if (data.initiatedBy && data.initiatedBy !== this.sessionId) {
+                            console.log("Session revocation received from another device. Signing out.");
+                            this.showError("This session was remotely signed out.");
+                            // Use a short delay to allow the user to see the message
+                            setTimeout(() => {
+                                this.signOut();
+                            }, 3000);
+                        }
+                    }
+                });
+            }
         }
         
         window.stockTracker = new StockTracker();
     </script>
 </body>
 </html>
+
