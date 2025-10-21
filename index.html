@@ -301,7 +301,7 @@
         }
 
         .portfolio-summary {
-            background: linear-gradient(-45deg, #667eea, #764ba2, #23a6d5, #23d5ab);
+            background: linear-gradient(-45deg, #6a11cb, #2575fc, #e73c7e, #66a6ff);
             background-size: 400% 400%;
             animation: animate-gradient 15s ease infinite;
             border-radius: 15px;
@@ -352,7 +352,7 @@
         }
         
         .dark-mode .portfolio-summary {
-             background: linear-gradient(-45deg, #3a3f72, #412854, #135d72, #13725c);
+             background: linear-gradient(-45deg, #3a0a6b, #123e80, #7d2144, #335380);
              background-size: 400% 400%;
         }
         
@@ -973,7 +973,7 @@
                         <span id="stocks-total-value" class="summary-value">$0.00</span>
                     </div>
                     <div class="summary-item">
-                        <span class="summary-label">Mutual Funds Total</span>
+                        <span class="summary-label">Mutual Fund Value</span>
                         <span id="mutual-fund-total-value" class="summary-value">$0.00</span>
                     </div>
                     <div class="summary-item">
@@ -1260,9 +1260,9 @@
     -->
     <script type="module">
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyB8wQ0-O2avYjRW7Wjtmiql03q1ikwhX7s",
@@ -3104,5 +3104,3 @@
     </script>
 </body>
 </html>
-
-
