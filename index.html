@@ -901,7 +901,19 @@
             border-radius: var(--radius-md);
             border: 1px solid var(--border-color);
             box-shadow: var(--shadow-sm);
-            height: 400px;
+            height: 450px;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .chart-header h4 {
+            font-size: 1.25rem;
+            font-weight: 700;
         }
         
         /* --- Mobile Responsiveness --- */
@@ -966,7 +978,7 @@
                 <h3>Your Portfolio at a Glance</h3>
                 <div class="summary-stats">
                     <div class="summary-item">
-                        <span class="summary-label">Combined Totals</span>
+                        <span class="summary-label">Combined Total Value</span>
                         <span id="combined-total-value" class="summary-value">$0.00</span>
                     </div>
                     <div class="summary-item">
@@ -1003,6 +1015,24 @@
                     </div>
                 </div>
             </div>
+
+            <div id="portfolio-performance-container" class="chart-container" style="display: none;">
+                <div class="chart-header">
+                    <h4>Portfolio Performance History</h4>
+                    <div class="chart-controls" id="performance-chart-controls">
+                        <button class="chart-range-btn" data-range="1W">1W</button>
+                        <button class="chart-range-btn" data-range="1M">1M</button>
+                        <button class="chart-range-btn" data-range="6M">6M</button>
+                        <button class="chart-range-btn" data-range="YTD">YTD</button>
+                        <button class="chart-range-btn active" data-range="1Y">1Y</button>
+                        <button class="chart-range-btn" data-range="3Y">3Y</button>
+                        <button class="chart-range-btn" data-range="5Y">5Y</button>
+                        <button class="chart-range-btn" data-range="All">All</button>
+                    </div>
+                </div>
+                <canvas id="portfolioPerformanceChart"></canvas>
+            </div>
+
 
             <div class="search-section">
                 <div class="input-wrapper">
@@ -1084,9 +1114,6 @@
         <div id="diversification-chart-container" class="chart-container" style="display: none;">
             <canvas id="diversificationChart"></canvas>
         </div>
-        <div id="history-chart-container" class="chart-container" style="display: none;">
-            <canvas id="historyChart"></canvas>
-        </div>
     </div>
     
     <div class="small-countdown" id="small-countdown-container">Next update: <span id="smallCountdown">90s</span></div>
@@ -1163,7 +1190,7 @@
                 <input type="text" class="search-input" id="modal-finnhub-key" placeholder="Enter your Finnhub API Key">
             </div>
             <div class="transaction-input-group">
-                <label for="modal-alpha-vantage-key">Alpha Vantage API Key (Used for Mutual Funds):</label>
+                <label for="modal-alpha-vantage-key">Alpha Vantage API Key (Used for Charts & Mutual Funds):</label>
                 <input type="text" class="search-input" id="modal-alpha-vantage-key" placeholder="Enter your Alpha Vantage API Key">
             </div>
             <div class="transaction-input-group">
@@ -1399,7 +1426,7 @@
                 this.refreshIntervalId = null;
                 this.groupCollapseState = {};
                 this.diversificationChartInstance = null;
-                this.historyChartInstance = null;
+                this.portfolioPerformanceChartInstance = null;
                 this.cardChartInstances = {}; // To manage individual card charts
                 this.chartDataCache = {}; // To cache historical data
                 this.sessionId = crypto.randomUUID(); 
@@ -1534,11 +1561,12 @@
                     signOutOtherSessionsBtn: document.getElementById('sign-out-other-sessions-btn'),
                     diversificationChartContainer: document.getElementById('diversification-chart-container'),
                     diversificationChart: document.getElementById('diversificationChart'),
-                    historyChartContainer: document.getElementById('history-chart-container'),
-                    historyChart: document.getElementById('historyChart'),
+                    portfolioPerformanceContainer: document.getElementById('portfolio-performance-container'),
+                    portfolioPerformanceChart: document.getElementById('portfolioPerformanceChart'),
+                    performanceChartControls: document.getElementById('performance-chart-controls'),
                     resizeObserver: new ResizeObserver(() => {
                         this.renderDiversificationChart();
-                        this.renderHistoryChart();
+                        this.renderPortfolioPerformanceChart();
                     }),
                     confirmModal: document.getElementById('confirmModal'),
                     confirmModalText: document.getElementById('confirm-modal-text'),
@@ -1591,7 +1619,7 @@
                     alertPriceUpper: document.getElementById('alert-price-upper'),
                 };
                 if (this.elements.diversificationChartContainer) this.elements.resizeObserver.observe(this.elements.diversificationChartContainer);
-                if (this.elements.historyChartContainer) this.elements.resizeObserver.observe(this.elements.historyChartContainer);
+                if (this.elements.portfolioPerformanceContainer) this.elements.resizeObserver.observe(this.elements.portfolioPerformanceContainer);
             }
             setupEventListeners() {
                 this.elements.googleSignInBtn.addEventListener('click', () => this.signIn());
@@ -1635,6 +1663,15 @@
                 
                 if (this.elements.alertType) {
                     this.elements.alertType.addEventListener('change', (e) => this.toggleAlertInputs(e.target.value));
+                }
+
+                if(this.elements.performanceChartControls) {
+                    this.elements.performanceChartControls.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('chart-range-btn')) {
+                            const range = e.target.dataset.range;
+                            this.renderPortfolioPerformanceChart(range);
+                        }
+                    });
                 }
 
                 // NEW: Event listener for clear buttons
@@ -1889,7 +1926,7 @@
                 }
 
                 this.renderDiversificationChart();
-                this.renderHistoryChart();
+                this.renderPortfolioPerformanceChart();
                 if (sortedItems.length === 0 && type !== 'stock' && type !== 'fund') {
                      grid.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your ${type} list is empty.</div>`;
                 }
@@ -2822,40 +2859,69 @@
                 else lastEntry.value = totalValue;
                 await this.saveData();
             }
-            renderHistoryChart() {
-                const container = this.elements.historyChartContainer;
+            renderPortfolioPerformanceChart(range = '1Y') {
+                const container = this.elements.portfolioPerformanceContainer;
                 container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && this.portfolioHistory.length > 0 ? 'block' : 'none';
-                if (!container.style.display || container.style.display === 'none') return;
-                const labels = this.portfolioHistory.map(e => e.date);
-                const data = this.portfolioHistory.map(e => e.value);
-                if (this.historyChartInstance) {
-                    this.historyChartInstance.destroy();
+                if (container.style.display === 'none') return;
+                
+                // Update active button state
+                this.elements.performanceChartControls.querySelectorAll('.chart-range-btn').forEach(btn => btn.classList.remove('active'));
+                this.elements.performanceChartControls.querySelector(`[data-range="${range}"]`).classList.add('active');
+
+
+                const allDataPoints = this.portfolioHistory.map(e => ({ x: new Date(e.date), y: e.value }));
+                
+                const now = new Date();
+                let startDate = new Date();
+
+                switch(range) {
+                    case '1W': startDate.setDate(now.getDate() - 7); break;
+                    case '1M': startDate.setMonth(now.getMonth() - 1); break;
+                    case '6M': startDate.setMonth(now.getMonth() - 6); break;
+                    case 'YTD': startDate = new Date(now.getFullYear(), 0, 1); break;
+                    case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
+                    case '3Y': startDate.setFullYear(now.getFullYear() - 3); break;
+                    case '5Y': startDate.setFullYear(now.getFullYear() - 5); break;
+                    case 'All': startDate = new Date(0); break;
+                    default: startDate.setFullYear(now.getFullYear() - 1); break;
+                }
+
+                const chartData = allDataPoints.filter(dp => dp.x >= startDate);
+                if (chartData.length === 0) chartData.push(allDataPoints.at(-1)).filter(Boolean); // Show last point if range is empty
+
+                if (this.portfolioPerformanceChartInstance) {
+                    this.portfolioPerformanceChartInstance.destroy();
                 }
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
-                this.historyChartInstance = new Chart(this.elements.historyChart, {
-                    type: 'line', data: { labels, datasets: [{ label: 'Portfolio Value', data, borderColor: '#667eea', tension: 0.1 }] },
+
+                const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
+                const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                gradient.addColorStop(0, this.isDarkMode ? 'rgba(102, 166, 255, 0.4)' : 'rgba(102, 126, 234, 0.4)');
+                gradient.addColorStop(1, 'rgba(102, 126, 234, 0)');
+                
+                this.portfolioPerformanceChartInstance = new Chart(ctx, {
+                    type: 'line', 
+                    data: {
+                        datasets: [{ 
+                            label: 'Portfolio Value', 
+                            data: chartData, 
+                            borderColor: this.isDarkMode ? '#66a6ff' : '#667eea', 
+                            tension: 0.3,
+                            borderWidth: 3,
+                            pointRadius: 0,
+                            fill: true,
+                            backgroundColor: gradient
+                        }] 
+                    },
                     options: { 
                         responsive: true, 
                         maintainAspectRatio: false, 
                         scales: { 
-                            y: { 
-                                beginAtZero: false,
-                                grace: '5%',
-                                ticks: { 
-                                    color: labelColor, 
-                                    callback: (v) => this.formatCurrency(v)
-                                }, 
-                                grid: { color: gridColor } 
-                            }, 
-                            x: { 
-                                ticks: { color: labelColor }, 
-                                grid: { color: gridColor } 
-                            } 
+                            y: { beginAtZero: false, grace: '10%', ticks: { color: labelColor, callback: (v) => this.formatCurrency(v) }, grid: { color: gridColor, drawBorder: false } }, 
+                            x: { type: 'time', time: { unit: 'month' }, ticks: { color: labelColor, maxRotation: 0, autoSkip: true }, grid: { display: false } } 
                         }, 
-                        plugins: { 
-                            legend: { display: false } 
-                        } 
+                        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, callbacks: { label: (c) => `Value: ${this.formatCurrency(c.parsed.y)}` } } } 
                     }
                 });
             }
@@ -2926,7 +2992,7 @@
                 document.body.classList.toggle('dark-mode', this.isDarkMode);
                 if (this.currentTab === 'stocks' || this.currentTab === 'funds') {
                     this.renderDiversificationChart();
-                    this.renderHistoryChart();
+                    this.renderPortfolioPerformanceChart();
                 }
             }
             togglePrivacyMode() {
