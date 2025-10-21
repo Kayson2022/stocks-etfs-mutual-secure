@@ -966,7 +966,7 @@
                 <h3>Your Portfolio at a Glance</h3>
                 <div class="summary-stats">
                     <div class="summary-item">
-                        <span class="summary-label">Combined Total Value</span>
+                        <span class="summary-label">Combined Totals</span>
                         <span id="combined-total-value" class="summary-value">$0.00</span>
                     </div>
                     <div class="summary-item">
@@ -1267,7 +1267,7 @@
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, serverTimestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, serverTimestamp, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         
         const firebaseConfig = {
             apiKey: "AIzaSyB8wQ0-O2avYjRW7Wjtmiql03q1ikwhX7s",
@@ -3288,10 +3288,14 @@
                         if (data.initiatedBy && data.initiatedBy !== this.sessionId) {
                             console.log("Session revocation received from another device. Signing out.");
                             this.showError("This session was remotely signed out.");
-                            // Use a short delay to allow the user to see the message
-                            setTimeout(() => {
-                                this.signOut();
-                            }, 3000);
+                            
+                            // Delete the document to prevent a sign-out loop
+                            deleteDoc(sessionControlRef).then(() => {
+                                // Use a short delay to allow the user to see the message
+                                setTimeout(() => {
+                                    this.signOut();
+                                }, 3000);
+                            });
                         }
                     }
                 });
@@ -3302,5 +3306,4 @@
     </script>
 </body>
 </html>
-
 
