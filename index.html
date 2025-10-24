@@ -34,22 +34,24 @@
             --text-primary: #212529;
             --text-secondary: #6c757d;
             --border-color: #dee2e6;
-            --accent-primary: #0052FF;
-            --accent-primary-hover: #0048DE;
+            /* --accent-primary: #0052FF; */
+            /* --accent-primary-hover: #0048DE; */
+            --accent-primary: #7c3aed; /* CHANGED: Purple */
+            --accent-primary-hover: #6d28d9; /* CHANGED: Purple */
             --color-positive: #17A589;
             --color-negative: #E74C3C;
         }
 
         body.dark-mode {
-            /* Dark Theme */
-            --bg-primary: #121212;
-            --bg-secondary: #1E1E1E;
-            --bg-tertiary: #2A2A2A;
+            /* Dark Theme - UPDATED to match user's image */
+            --bg-primary: #181a20; /* CHANGED */
+            --bg-secondary: #22252e; /* CHANGED */
+            --bg-tertiary: #2b2e37; /* CHANGED */
             --text-primary: #f8f9fa;
             --text-secondary: #adb5bd;
-            --border-color: #343a40;
-            --accent-primary: #4299e1;
-            --accent-primary-hover: #3182ce;
+            --border-color: #373a40; /* CHANGED */
+            --accent-primary: #a78bfa; /* CHANGED: Purple */
+            --accent-primary-hover: #8b5cf6; /* CHANGED: Purple */
             --color-positive: #2ECC71;
             --color-negative: #E74C3C;
         }
@@ -352,7 +354,7 @@
         }
         
         .dark-mode .portfolio-summary {
-             background: linear-gradient(-45deg, #3a0a6b, #123e80, #7d2144, #335380);
+             background: linear-gradient(-45deg, #581c87, #312e81, #9d174d, #3730a3); /* CHANGED: Darker purples */
              background-size: 400% 400%;
         }
         
@@ -2828,7 +2830,7 @@
                         this.showSuccess(`✅ Data successfully imported!`);
                     } catch (err) { this.showError('❌ Error parsing JSON file.'); }
                 };
-                reader.readText(file);
+                reader.readAsText(file);
             }
             renderDiversificationChart() {
                 const container = this.elements.diversificationChartContainer;
@@ -2866,6 +2868,19 @@
                 else lastEntry.value = totalValue;
                 await this.saveData();
             }
+            
+            /**
+             * ==================================================================
+             * ==      UPDATED PORTFOLIO PERFORMANCE CHART FUNCTION            ==
+             * ==================================================================
+             * This function is updated to match the user's screenshot:
+             * 1. Sets x-axis to 'day' and formats labels as 'M/d/yyyy'.
+             * 2. Sets a purple line color with white data points.
+             * 3. Disables the line fill.
+             * 4. Sets line tension to 0 for sharp, straight lines.
+             * 5. Updates grid/label colors to match the new dark theme.
+             * 6. Adds "Today's G/L" to the tooltip for the last data point.
+             */
             renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
                 container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && this.portfolioHistory.length > 0 ? 'block' : 'none';
@@ -2874,7 +2889,6 @@
                 // Update active button state
                 this.elements.performanceChartControls.querySelectorAll('.chart-range-btn').forEach(btn => btn.classList.remove('active'));
                 this.elements.performanceChartControls.querySelector(`[data-range="${range}"]`).classList.add('active');
-
 
                 const allDataPoints = this.portfolioHistory.map(e => ({ x: new Date(e.date), y: e.value }));
                 
@@ -2899,45 +2913,118 @@
                 if (this.portfolioPerformanceChartInstance) {
                     this.portfolioPerformanceChartInstance.destroy();
                 }
-                
-                // --- MODIFICATION START ---
-                // Force dark-theme colors to match the user's image
-                const gridColor = 'rgba(255, 255, 255, 0.1)';
-                const labelColor = '#f1f1f1';
+
+                // --- NEW STYLING based on user image ---
+                const gridColor = this.isDarkMode ? '#373a40' : '#dee2e6'; // Lighter grid for dark mode
+                const labelColor = this.isDarkMode ? '#adb5bd' : '#6c757d';
+                const chartLineColor = this.isDarkMode ? '#c084fc' : '#6366f1'; // Purple line
+                const pointColor = this.isDarkMode ? '#f8f9fa' : '#f8f9fa'; // White points
 
                 const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
-                // Remove gradient fill
-                // const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-                // gradient.addColorStop(0, this.isDarkMode ? 'rgba(102, 166, 255, 0.4)' : 'rgba(102, 126, 234, 0.4)');
-                // gradient.addColorStop(1, 'rgba(102, 126, 234, 0)');
                 
+                // --- CALCULATE G/L FOR TOOLTIP ---
+                const stockMetrics = this.calculateSummaryMetrics(this.stocks);
+                const fundMetrics = this.calculateSummaryMetrics(this.mutualFunds);
+                const totalPLToday = stockMetrics.totalPLToday + fundMetrics.totalPLToday;
+                const totalPLTodayFormatted = `${totalPLToday >= 0 ? '+' : ''}${this.formatCurrency(totalPLToday)}`;
+
                 this.portfolioPerformanceChartInstance = new Chart(ctx, {
                     type: 'line', 
                     data: {
                         datasets: [{ 
                             label: 'Portfolio Value', 
                             data: chartData, 
-                            borderColor: '#66a6ff', // Hardcode line color
-                            tension: 0.1, // Make line slightly jagged
-                            borderWidth: 3,
-                            pointRadius: 4, // Add visible points
-                            pointBackgroundColor: '#66a6ff', // Point fill color
-                            fill: false, // Disable fill
-                            backgroundColor: 'transparent' // Was gradient
+                            borderColor: chartLineColor, // <-- CHANGED: Purple line
+                            tension: 0, // <-- CHANGED: Straight lines
+                            borderWidth: 2, 
+                            pointRadius: 2, // <-- CHANGED: Show points
+                            pointBackgroundColor: pointColor, // <-- CHANGED: White points
+                            pointBorderColor: pointColor, // <-- CHANGED: White points
+                            fill: false, // <-- CHANGED: No fill
                         }] 
                     },
                     options: { 
                         responsive: true, 
                         maintainAspectRatio: false, 
                         scales: { 
-                            y: { beginAtZero: false, grace: '10%', ticks: { color: labelColor, callback: (v) => this.formatCurrency(v) }, grid: { color: gridColor, drawBorder: false } }, 
-                            x: { type: 'time', time: { unit: 'month' }, ticks: { color: labelColor, maxRotation: 0, autoSkip: true }, grid: { color: gridColor, drawBorder: false } } // Enable X-axis grid
+                            y: { 
+                                beginAtZero: false, 
+                                grace: '10%', 
+                                ticks: { 
+                                    color: labelColor, 
+                                    callback: (v) => this.formatCurrency(v) 
+                                }, 
+                                grid: { 
+                                    color: gridColor, // <-- Use new grid color
+                                    drawBorder: false 
+                                } 
+                            }, 
+                            x: { 
+                                type: 'time', 
+                                time: { 
+                                    unit: 'day', // <-- CHANGED: Show days
+                                    displayFormats: {
+                                        day: 'M/d/yyyy' // <-- CHANGED: Format like image
+                                    },
+                                    tooltipFormat: 'PP' // 'Oct 23, 2025'
+                                }, 
+                                ticks: { 
+                                    color: labelColor, 
+                                    maxRotation: 0, 
+                                    autoSkip: true,
+                                    maxTicksLimit: 10 // Max 10 labels
+                                }, 
+                                grid: { 
+                                    color: gridColor, // <-- Use new grid color
+                                    display: true // <-- CHANGED: Show X-axis gridlines
+                                } 
+                            } 
                         }, 
-                        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, callbacks: { label: (c) => `Value: ${this.formatCurrency(c.parsed.y)}` } } } 
+                        plugins: { 
+                            legend: { display: false }, 
+                            tooltip: { 
+                                mode: 'index', 
+                                intersect: false, 
+                                callbacks: { 
+                                    title: (tooltipItems) => {
+                                        // Format the title date
+                                        if (tooltipItems[0]) {
+                                            const date = new Date(tooltipItems[0].parsed.x);
+                                            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                                        }
+                                        return '';
+                                    },
+                                    label: (c) => `Value: ${this.formatCurrency(c.parsed.y)}`,
+                                    // --- NEW TOOLTIP FOOTER ---
+                                    footer: (tooltipItems) => {
+                                        const lastDataIndex = chartData.length - 1;
+                                        if (tooltipItems[0] && tooltipItems[0].dataIndex === lastDataIndex) {
+                                            // Check if the last data point is for 'today'
+                                            const today = new Date().setHours(0,0,0,0);
+                                            const lastDate = new Date(chartData[lastDataIndex].x).setHours(0,0,0,0);
+                                            
+                                            if (lastDate === today) {
+                                                return `Today's G/L: ${totalPLTodayFormatted}`;
+                                            }
+                                        }
+                                        return null;
+                                    }
+                                },
+                                // --- NEW TOOLTIP STYLING ---
+                                bodyColor: this.isDarkMode ? '#f8f9fa' : '#212529',
+                                titleColor: this.isDarkMode ? '#adb5bd' : '#6c757d',
+                                footerColor: totalPLToday >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
+                                backgroundColor: this.isDarkMode ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
+                                borderColor: 'var(--border-color)',
+                                borderWidth: 1,
+                                padding: 10,
+                                displayColors: false
+                            } 
+                        } 
                     }
                 });
-                // --- MODIFICATION END ---
             }
+
             openConfirmModal(text, onConfirmAction, onCancelAction = null) {
                  this.elements.alertsSummaryModal.style.display = 'none';
                 this.elements.confirmModal.style.display = 'flex';
