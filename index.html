@@ -3079,12 +3079,28 @@
                 this.showSuccess('✅ Settings saved!');
                 this.startLiveUpdate();
             }
+
+            /**
+             * ==================================================================
+             * ==      FIXED NOTIFICATION FUNCTION                           ==
+             * ==================================================================
+             * This function is updated to handle the 'denied' state,
+             * which was causing the button to do nothing.
+             */
             enablePushNotifications() {
                 if (!("Notification" in window)) {
                     this.showError("This browser does not support desktop notification");
-                } else if (Notification.permission === "granted") {
+                    return;
+                }
+
+                const permission = Notification.permission;
+
+                if (permission === "granted") {
                     new Notification("Notifications are already enabled!");
-                } else if (Notification.permission !== "denied") {
+                } else if (permission === "denied") {
+                    // This was the missing part!
+                    this.showError("Notifications are blocked. Please go to your browser settings (look for the 🔒 lock icon in the address bar) to enable them for this site.");
+                } else { // This handles the "default" state
                     Notification.requestPermission().then(permission => {
                         if (permission === "granted") {
                             new Notification("Notifications enabled!");
@@ -3092,6 +3108,7 @@
                     });
                 }
             }
+
             toggleDarkMode() {
                 this.isDarkMode = !this.isDarkMode;
                 localStorage.setItem('darkMode', this.isDarkMode);
