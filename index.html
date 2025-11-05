@@ -2405,7 +2405,7 @@
             }
 
             // ==================================================================
-            // === Grouping Logic for Sold Off Positions (Closed Positions) ===
+            // === Fixed Grouping Logic to separate Closed and group Active ===
             // ==================================================================
             renderGroupedStocks(items, container, type) {
                 // 1. Calculate stats and split into Active vs. Closed
@@ -2422,7 +2422,6 @@
                     } else if (stats.totalSharesOwned >= floatingPointEpsilon) {
                         activeItems.push(item);
                     }
-                    // Items with 0 shares and no history (just added as symbol) are implicitly ignored here.
                 });
                 
                 // 2. Group Closed Positions (Always appear first)
@@ -2437,28 +2436,34 @@
                     );
                 }
 
-                // 3. Group Active Items by Performance (Only if there are active items)
+                // 3. Group Active Items by Performance
                 if (activeItems.length > 0) {
-                    const gains = activeItems.filter(s => (s.changePercent || 0) >= 0).sort((a, b) => b.changePercent - a.changePercent);
-                    const losses = activeItems.filter(s => (s.changePercent || 0) < 0).sort((a, b) => a.changePercent - b.changePercent);
+                    // Sort active items by performance
+                    const sortedActiveItems = activeItems.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
                     
+                    const gains = sortedActiveItems.filter(s => (s.changePercent || 0) >= 0);
+                    const losses = sortedActiveItems.filter(s => (s.changePercent || 0) < 0).sort((a, b) => a.changePercent - b.changePercent); // Sort losses reverse for display
+                    
+                    // Separate biggest gain
                     const biggestGain = gains.length > 0 ? [gains[0]] : [];
+                    const otherGains = gains.filter(s => biggestGain.length === 0 || s.id !== biggestGain[0].id);
                     
+                    // Render Groups
                     if (biggestGain.length > 0) {
                         this.createGroup('🚀 Biggest Gain Today', biggestGain, 'biggest-gain-header', container, type, this.getGroupSummary(biggestGain, 'biggest-gain'));
                     }
                     
-                    const otherGains = gains.filter(s => biggestGain.length === 0 || s.id !== biggestGain[0].id);
-                    
                     this.createGroup('📈 Gains Today', otherGains, 'gains-header', container, type, this.getGroupSummary(otherGains, 'gains'));
                     this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
-                } else if (closedPositions.length === 0) {
-                    // Only show 'empty portfolio' message if neither active nor closed positions exist
+                } 
+                
+                // 4. Handle Empty Portfolio Message
+                if (items.length === 0) {
                     container.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your portfolio is empty.</div>`; 
                 }
             }
             // ==================================================================
-            // === END Grouping Logic for Sold Off Positions (Closed Positions) ===
+            // === END Fixed Grouping Logic ===
             // ==================================================================
 
             renderGroupedByPlatform(items, container, type) {
