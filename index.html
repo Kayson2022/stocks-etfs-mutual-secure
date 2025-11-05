@@ -1599,7 +1599,7 @@
                     modalRefreshInterval: document.getElementById('modal-refresh-interval'),
                     modalSaveSettingsBtn: document.getElementById('modal-save-settings-btn'),
                     enablePushNotificationsBtn: document.getElementById('enable-push-notifications-btn'),
-                    signOutOtherSessionsBtn: document.getElementById('signOutOtherSessionsBtn'),
+                    signOutOtherSessionsBtn: document.getElementById('sign-out-other-sessions-btn'),
                     diversificationChartContainer: document.getElementById('diversification-chart-container'),
                     diversificationChart: document.getElementById('diversificationChart'),
                     portfolioPerformanceContainer: document.getElementById('portfolio-performance-container'),
@@ -2453,8 +2453,13 @@
                         this.createGroup('🚀 Biggest Gain Today', biggestGain, 'biggest-gain-header', container, type, this.getGroupSummary(biggestGain, 'biggest-gain'));
                     }
                     
-                    this.createGroup('📈 Gains Today', otherGains, 'gains-header', container, type, this.getGroupSummary(otherGains, 'gains'));
-                    this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
+                    if (otherGains.length > 0) {
+                        this.createGroup('📈 Gains Today', otherGains, 'gains-header', container, type, this.getGroupSummary(otherGains, 'gains'));
+                    }
+                    
+                    if (losses.length > 0) {
+                        this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
+                    }
                 } 
                 
                 // 4. Handle Empty Portfolio Message
@@ -2515,6 +2520,7 @@
                         const totalPLClass = totalPL >= 0 ? 'positive' : 'negative';
                         const totalValue = stats.currentValue;
                         const totalChangeToday = (item.change || 0) * stats.totalSharesOwned;
+                        // FIX: Declaring totalChangeTodayClass
                         const totalChangeTodayClass = totalChangeToday >= 0 ? 'positive' : 'negative';
                         summaryText = `Gained <span class="${changeClass}">${this.formatCurrency(item.change)}</span> today, a change of <span class="${changePercentClass}">${(item.changePercent || 0).toFixed(2)}%</span>.`;
                         summaryText += `\nTotal Value: <span class="${totalPL >= 0 ? 'positive' : 'negative'}">${this.formatCurrency(totalValue)}</span>`;
@@ -2551,7 +2557,7 @@
                     const totalPLClass = totalPLUnrealized >= 0 ? 'positive' : 'negative';
                     summaryText = `Total Value: ${this.formatCurrency(totalValue)}\n`;
                     summaryText += `Total Unrealized P/L: <span class="${totalPLClass}">${this.formatCurrency(totalPLUnrealized)}</span> (<span class="${totalPLClass}">${this.formatNumber(totalPLPercent, 2)}%</span>)\n`;
-                    summaryText += `Total Change Today: <span class="${totalChangeTodayClass}">${this.formatCurrency(totalChangeToday)}</span>`;
+                    summaryText += `Total Change Today: <span class="${totalChangeClass}">${this.formatCurrency(totalChangeToday)}</span>`;
                 }
                 return { title: summaryTitle, text: summaryText };
             }
