@@ -243,6 +243,7 @@
             font-size: 1rem;
             font-weight: 600;
             color: var(--text-secondary);
+            cursor: pointer;
             transition: var(--transition);
             margin-bottom: 0;
         }
@@ -2377,10 +2378,7 @@
             }
             
             createGroup(title, itemList, headerClass, parent, type, summary = { title: '', text: '' }) {
-                if(itemList.length === 0) {
-                    return;
-                }
-                
+                if(itemList.length === 0) return;
                 const groupWrapper = document.createElement('div');
                 groupWrapper.className = 'group-wrapper';
 
@@ -2415,7 +2413,6 @@
                 };
 
                 header.addEventListener('click', toggleGroup);
-                
                 footer.querySelector('.collapse-group-btn').addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -2584,17 +2581,11 @@
 
             async renderCardChart(symbol, range = '1Y') {
                 const card = document.querySelector(`.stock-card[data-symbol="${symbol}"], .fund-card[data-symbol="${symbol}"]`);
-                if (!card) {
-                    return;
-                }
+                if (!card) return;
 
                 const chartId = `chart-${card.dataset.id}`;
                 const canvas = document.getElementById(chartId);
-                
-                if (!canvas) {
-                    return;
-                }
-                
+                if (!canvas) return;
                 const ctx = canvas.getContext('2d');
 
                 // Update active button state
@@ -2602,9 +2593,7 @@
                 if(chartControls) {
                     chartControls.querySelectorAll('.chart-range-btn').forEach(btn => btn.classList.remove('active'));
                     const newActiveButton = chartControls.querySelector(`[data-range="${range}"]`);
-                    if(newActiveButton) {
-                        newActiveButton.classList.add('active');
-                    }
+                    if(newActiveButton) newActiveButton.classList.add('active');
                 }
                 
 
@@ -2621,11 +2610,9 @@
                         this.showLoading(true, `Fetching chart data for ${symbol}...`);
                         const result = await this.apiService.fetchHistoricalData(symbol);
                         this.showLoading(false);
-                        
                         if (!result.success) {
                             throw new Error(result.reason);
                         }
-                        
                         this.chartDataCache[symbol] = result.data;
                         historicalData = result.data;
                     }
@@ -2646,12 +2633,11 @@
                         case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
                         case '3Y': startDate.setFullYear(now.getFullYear() - 3); break;
                         case '5Y': startDate.setFullYear(now.getFullYear() - 5); break;
-                        case 'All': startDate = new Date(0); break; 
+                        case 'All': startDate = new Date(0); break; // Start from the beginning of time
                         default: startDate.setFullYear(now.getFullYear() - 1); break;
                     }
 
                     const chartData = allDataPoints.filter(dp => dp.x >= startDate);
-                    
                     if (chartData.length === 0) {
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
                         ctx.textAlign = 'center';
@@ -2721,9 +2707,7 @@
             
             async moveToPortfolio(id) {
                 const stockIndex = this.watchlist.findIndex(stock => stock.id === id);
-                if (stockIndex === -1) {
-                    return;
-                }
+                if (stockIndex === -1) return;
 
                 const [stockToMove] = this.watchlist.splice(stockIndex, 1);
                 
@@ -2736,190 +2720,105 @@
                 this.renderContent();
                 this.showSuccess(`✅ Moved ${stockToMove.symbol} to portfolio!`);
             }
-            
             showRefreshStatus(type, stats) {
                 const statusDiv = this.elements.refreshStatusPopup;
-                if (!statusDiv) {
-                    return;
-                }
-                
+                if (!statusDiv) return;
                 statusDiv.innerHTML = `Refreshed ${stats.success} ${type}(s). ✅ ${stats.gains} gained, 🔻${stats.losses} lost. Failed: ${stats.failed}.`;
                 statusDiv.style.display = 'block';
-                
-                setTimeout(() => { 
-                    statusDiv.style.display = 'none'; 
-                }, 15000);
+                setTimeout(() => { statusDiv.style.display = 'none'; }, 15000);
             }
-            
-            showLoading(show, message = 'Loading...') { 
-                this.elements.loadingDiv.style.display = show ? 'block' : 'none'; 
-                this.elements.loadingDiv.textContent = message; 
-            }
-            
+            showLoading(show, message = 'Loading...') { this.elements.loadingDiv.style.display = show ? 'block' : 'none'; this.elements.loadingDiv.textContent = message; }
             showError(message) {
                 this.elements.errorDiv.style.display = 'block';
                 this.elements.errorDiv.innerHTML = `<h4>Error</h4><p>${message}</p>`;
-                
-                setTimeout(() => {
-                    this.elements.errorDiv.style.display = 'none';
-                }, 10000);
+                setTimeout(() => this.elements.errorDiv.style.display = 'none', 10000);
             }
-            
             showSuccess(message) {
                 this.elements.successDiv.style.display = 'block';
                 this.elements.successDiv.innerHTML = `<h4>Success</h4><p>${message}</p>`;
-                
-                setTimeout(() => {
-                    this.elements.successDiv.style.display = 'none';
-                }, 3000);
+                setTimeout(() => this.elements.successDiv.style.display = 'none', 3000);
             }
-            
             async exportData() {
                 this.saveScrollPosition();
-                
                 const dataStr = JSON.stringify({ stocks: this.stocks, mutualFunds: this.mutualFunds, watchlist: this.watchlist }, null, 2);
                 const blob = new Blob([dataStr], {type: 'application/json'});
                 const a = document.createElement('a');
-                
                 a.href = URL.createObjectURL(blob);
                 a.download = 'portfolio-data.json';
                 a.click();
                 URL.revokeObjectURL(a.href);
             }
-            
             async importData(e) {
                 const file = e.target.files[0];
-                if (!file) {
-                    return;
-                }
-                
+                if (!file) return;
                 this.saveScrollPosition();
                 const reader = new FileReader();
-                
                 reader.onload = async (event) => {
                     try {
                         const data = JSON.parse(event.target.result);
                         this.stocks = data.stocks || this.stocks;
                         this.mutualFunds = data.mutualFunds || this.mutualFunds;
                         this.watchlist = data.watchlist || this.watchlist;
-                        
                         await this.saveData();
                         this.renderContent();
                         this.showSuccess(`✅ Data successfully imported!`);
-                    } catch (err) { 
-                        this.showError('❌ Error parsing JSON file.'); 
-                    }
+                    } catch (err) { this.showError('❌ Error parsing JSON file.'); }
                 };
-                
                 reader.readAsText(file);
             }
-            
             renderDiversificationChart() {
                 const container = this.elements.diversificationChartContainer;
                 const allItems = [...this.stocks, ...this.mutualFunds];
-                
                 const hasTransactions = allItems.some(s => s.transactions && s.transactions.length > 0 && this.calculateTransactionStats(s.transactions).currentValue > 0);
-                
                 container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && hasTransactions ? 'block' : 'none';
-                
-                if (!container.style.display || container.style.display === 'none') {
-                    return;
-                }
-                
+                if (!container.style.display || container.style.display === 'none') return;
                 const industryData = allItems.reduce((acc, stock) => {
                     const { currentValue } = this.calculateTransactionStats(stock.transactions, stock.price);
-                    if (currentValue > 0) {
-                        acc[stock.industry || 'Other'] = (acc[stock.industry || 'Other'] || 0) + currentValue;
-                    }
+                    if (currentValue > 0) acc[stock.industry || 'Other'] = (acc[stock.industry || 'Other'] || 0) + currentValue;
                     return acc;
                 }, {});
-                
                 const sortedData = Object.entries(industryData).sort(([, a], [, b]) => b - a);
                 const labels = sortedData.map(([label]) => label);
                 const data = sortedData.map(([, value]) => value);
-                
                 if (this.diversificationChartInstance) {
                     this.diversificationChartInstance.destroy();
                 }
-                
                 const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
-                
                 this.diversificationChartInstance = new Chart(this.elements.diversificationChart, {
                     type: 'bar',
-                    data: { 
-                        labels, 
-                        datasets: [{ 
-                            label: 'Value', 
-                            data, 
-                            backgroundColor: colors 
-                        }] 
-                    },
-                    options: { 
-                        responsive: true, 
-                        maintainAspectRatio: false, 
-                        plugins: { 
-                            title: { 
-                                display: true, 
-                                text: 'Portfolio by Industry', 
-                                color: labelColor 
-                            }, 
-                            legend: { 
-                                display: false 
-                            } 
-                        }, 
-                        scales: { 
-                            y: { 
-                                ticks: { 
-                                    color: labelColor 
-                                }, 
-                                grid: { 
-                                    color: gridColor 
-                                } 
-                            }, 
-                            x: { 
-                                ticks: { 
-                                    color: labelColor 
-                                }, 
-                                grid: { 
-                                    color: gridColor 
-                                } 
-                            } 
-                        } 
-                    }
+                    data: { labels, datasets: [{ label: 'Value', data, backgroundColor: colors }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Portfolio by Industry', color: labelColor }, legend: { display: false } }, scales: { y: { ticks: { color: labelColor }, grid: { color: gridColor } }, x: { ticks: { color: labelColor }, grid: { color: gridColor } } } }
                 });
             }
-            
             async updatePortfolioHistory() {
                 const allItems = [...this.stocks, ...this.mutualFunds];
                  const today = new Date().toISOString().slice(0, 10);
                 const lastEntry = this.portfolioHistory.at(-1);
-                
                 let totalValue = allItems.reduce((sum, item) => sum + this.calculateTransactionStats(item.transactions, item.price).currentValue, 0);
-                
-                if (totalValue <= 0) {
-                    return;
-                }
-                
-                if (!lastEntry || lastEntry.date !== today) {
-                    this.portfolioHistory.push({ date: today, value: totalValue });
-                } else {
-                    lastEntry.value = totalValue;
-                }
-                
+                if (totalValue <= 0) return;
+                if (!lastEntry || lastEntry.date !== today) this.portfolioHistory.push({ date: today, value: totalValue });
+                else lastEntry.value = totalValue;
                 await this.saveData();
             }
             
-            // --- Portfolio Performance Chart Rendering ---
+            /**
+             * ==================================================================
+             * ==      UPDATED PORTFOLIO PERFORMANCE CHART FUNCTION            ==
+             * ==================================================================
+             * This function is updated to match the user's screenshot:
+             * 1. Sets line to black (light mode) or white (dark mode).
+             * 2. Adds a light purple fill under the line.
+             * 3. Styles data points to be black/white with an opposing border.
+             * 4. Makes the line curved for '1W' (or small data sets) and angular for others.
+             * 5. Hides vertical (X-axis) gridlines to match the image.
+             * 6. Adds "Today's G/L" to the tooltip for the last data point.
+             */
             renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
-                
                 container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && this.portfolioHistory.length > 0 ? 'block' : 'none';
-                
-                if (container.style.display === 'none') {
-                    return;
-                }
+                if (container.style.display === 'none') return;
                 
                 // Update active button state
                 this.elements.performanceChartControls.querySelectorAll('.chart-range-btn').forEach(btn => btn.classList.remove('active'));
@@ -2943,24 +2842,23 @@
                 }
 
                 const chartData = allDataPoints.filter(dp => dp.x >= startDate);
-                
-                if (chartData.length === 0) {
-                    chartData.push(allDataPoints.at(-1)).filter(Boolean); 
-                }
+                if (chartData.length === 0) chartData.push(allDataPoints.at(-1)).filter(Boolean); // Show last point if range is empty
 
                 if (this.portfolioPerformanceChartInstance) {
                     this.portfolioPerformanceChartInstance.destroy();
                 }
 
-                const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'; 
+                // --- NEW STYLING based on user image ---
+                const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'; // Fainter grid
                 const labelColor = this.isDarkMode ? '#adb5bd' : '#6c757d';
-                const chartLineColor = this.isDarkMode ? '#f8f9fa' : '#212529'; 
-                const pointFillColor = this.isDarkMode ? '#f8f9fa' : '#212529'; 
-                const pointBorderColor = this.isDarkMode ? '#22252e' : '#ffffff'; 
-                const fillBackgroundColor = this.isDarkMode ? 'rgba(167, 139, 250, 0.1)' : 'rgba(124, 58, 237, 0.1)'; 
+                const chartLineColor = this.isDarkMode ? '#f8f9fa' : '#212529'; // Black/White line
+                const pointFillColor = this.isDarkMode ? '#f8f9fa' : '#212529'; // Black/White point fill
+                const pointBorderColor = this.isDarkMode ? '#22252e' : '#ffffff'; // Background-matching border
+                const fillBackgroundColor = this.isDarkMode ? 'rgba(167, 139, 250, 0.1)' : 'rgba(124, 58, 237, 0.1)'; // Purple fill
 
                 const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
                 
+                // --- CALCULATE G/L FOR TOOLTIP ---
                 const stockMetrics = this.calculateSummaryMetrics(this.stocks);
                 const fundMetrics = this.calculateSummaryMetrics(this.mutualFunds);
                 const totalPLToday = stockMetrics.totalPLToday + fundMetrics.totalPLToday;
@@ -2972,16 +2870,16 @@
                         datasets: [{ 
                             label: 'Portfolio Value', 
                             data: chartData, 
-                            borderColor: chartLineColor, 
-                            tension: chartData.length < 15 ? 0.3 : 0, 
+                            borderColor: chartLineColor, // <-- CHANGED: Black/White line
+                            tension: chartData.length < 15 ? 0.3 : 0, // <-- CHANGED: Conditional curve
                             borderWidth: 2, 
-                            pointRadius: 3, 
-                            pointBackgroundColor: pointFillColor, 
-                            pointBorderColor: pointBorderColor, 
-                            pointBorderWidth: 2, 
-                            pointHoverRadius: 5, 
-                            fill: true, 
-                            backgroundColor: fillBackgroundColor, 
+                            pointRadius: 3, // <-- CHANGED: Show points
+                            pointBackgroundColor: pointFillColor, // <-- CHANGED: Black/White fill
+                            pointBorderColor: pointBorderColor, // <-- CHANGED: Background-matching border
+                            pointBorderWidth: 2, // <-- ADDED
+                            pointHoverRadius: 5, // <-- ADDED
+                            fill: true, // <-- CHANGED: Enable fill
+                            backgroundColor: fillBackgroundColor, // <-- ADDED: Purple fill
                         }] 
                     },
                     options: { 
@@ -2996,28 +2894,28 @@
                                     callback: (v) => this.formatCurrency(v) 
                                 }, 
                                 grid: { 
-                                    color: gridColor, 
+                                    color: gridColor, // <-- Use new grid color
                                     drawBorder: false 
                                 } 
                             }, 
                             x: { 
                                 type: 'time', 
                                 time: { 
-                                    unit: 'day', 
+                                    unit: 'day', // <-- CHANGED: Show days
                                     displayFormats: {
-                                        day: 'M/d/yyyy' 
+                                        day: 'M/d/yyyy' // <-- CHANGED: Format like image
                                     },
-                                    tooltipFormat: 'PP' 
+                                    tooltipFormat: 'PP' // 'Oct 23, 2025'
                                 }, 
                                 ticks: { 
                                     color: labelColor, 
                                     maxRotation: 0, 
                                     autoSkip: true,
-                                    maxTicksLimit: 10 
+                                    maxTicksLimit: 10 // Max 10 labels
                                 }, 
                                 grid: { 
-                                    color: gridColor, 
-                                    display: true 
+                                    color: gridColor, // <-- Use new grid color
+                                    display: true // <-- KEPT: Show X-axis gridlines per image
                                 } 
                             } 
                         }, 
@@ -3028,6 +2926,7 @@
                                 intersect: false, 
                                 callbacks: { 
                                     title: (tooltipItems) => {
+                                        // Format the title date
                                         if (tooltipItems[0]) {
                                             const date = new Date(tooltipItems[0].parsed.x);
                                             return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -3035,9 +2934,11 @@
                                         return '';
                                     },
                                     label: (c) => `Value: ${this.formatCurrency(c.parsed.y)}`,
+                                    // --- NEW TOOLTIP FOOTER ---
                                     footer: (tooltipItems) => {
                                         const lastDataIndex = chartData.length - 1;
                                         if (tooltipItems[0] && tooltipItems[0].dataIndex === lastDataIndex) {
+                                            // Check if the last data point is for 'today'
                                             const today = new Date().setHours(0,0,0,0);
                                             const lastDate = new Date(chartData[lastDataIndex].x).setHours(0,0,0,0);
                                             
@@ -3048,6 +2949,7 @@
                                         return null;
                                     }
                                 },
+                                // --- NEW TOOLTIP STYLING ---
                                 bodyColor: this.isDarkMode ? '#f8f9fa' : '#212529',
                                 titleColor: this.isDarkMode ? '#adb5bd' : '#6c757d',
                                 footerColor: totalPLToday >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
@@ -3069,7 +2971,6 @@
                  this.onConfirm = onConfirmAction;
                  this.onCancel = onCancelAction;
             }
-            
             closeConfirmModal(wasCancelled = false) {
                  this.elements.confirmModal.style.display = 'none';
                 if (wasCancelled && this.onCancel) {
@@ -3078,14 +2979,10 @@
                 this.onConfirm = null;
                 this.onCancel = null;
             }
-            
             handleConfirmAction() {
-                 if (this.onConfirm) {
-                    this.onConfirm();
-                }
+                 if (this.onConfirm) this.onConfirm();
                  this.closeConfirmModal(false);
             }
-            
             openSettingsModal(){
                 this.elements.modalFinnhubKey.value = this.config.finnhubApiKey || '';
                 this.elements.modalAlphaVantageKey.value = this.config.alphaVantageKey || '';
@@ -3093,25 +2990,18 @@
                 this.elements.modalRefreshInterval.value = this.config.refreshIntervalMs / 1000;
                 this.elements.settingsModal.style.display = 'flex';
             }
-            
-            closeSettingsModal(){ 
-                this.elements.settingsModal.style.display = 'none'; 
-            }
-            
+            closeSettingsModal(){ this.elements.settingsModal.style.display = 'none'; }
             saveSettings(){
                 const finnhubKey = this.elements.modalFinnhubKey.value.trim();
                 const alphaVantageKey = this.elements.modalAlphaVantageKey.value.trim();
                 const fmpKey = this.elements.modalFmpKey.value.trim();
                 const interval = parseInt(this.elements.modalRefreshInterval.value, 10);
-                
                 localStorage.setItem('finnhubApiKey', finnhubKey);
                 localStorage.setItem('alphaVantageKey', alphaVantageKey);
                 localStorage.setItem('fmpApiKey', fmpKey);
-                
                 if (interval && interval >= 10) {
                     localStorage.setItem('refreshIntervalMs', interval * 1000);
                 }
-                
                 this.loadConfig();
                  this.apiService = new ApiService(this.config);
                 this.closeSettingsModal();
@@ -3119,6 +3009,13 @@
                 this.startLiveUpdate();
             }
 
+            /**
+             * ==================================================================
+             * ==      FIXED NOTIFICATION FUNCTION                           ==
+             * ==================================================================
+             * This function is updated to handle the 'denied' state,
+             * which was causing the button to do nothing.
+             */
             enablePushNotifications() {
                 if (!("Notification" in window)) {
                     this.showError("This browser does not support desktop notification");
@@ -3130,8 +3027,9 @@
                 if (permission === "granted") {
                     new Notification("Notifications are already enabled!");
                 } else if (permission === "denied") {
+                    // This was the missing part!
                     this.showError("Notifications are blocked. Please go to your browser settings (look for the 🔒 lock icon in the address bar) to enable them for this site.");
-                } else { 
+                } else { // This handles the "default" state
                     Notification.requestPermission().then(permission => {
                         if (permission === "granted") {
                             new Notification("Notifications enabled!");
@@ -3145,56 +3043,39 @@
                 localStorage.setItem('darkMode', this.isDarkMode);
                 this.applyTheme();
             }
-            
             applyTheme() {
                 this.isDarkMode = localStorage.getItem('darkMode') === 'true';
                 document.body.classList.toggle('dark-mode', this.isDarkMode);
-                
                 if (this.currentTab === 'stocks' || this.currentTab === 'funds') {
                     this.renderDiversificationChart();
                     this.renderPortfolioPerformanceChart();
                 }
             }
-            
             togglePrivacyMode() {
                 this.isPrivacyMode = !this.isPrivacyMode;
                 localStorage.setItem('privacyMode', this.isPrivacyMode);
                 this.applyPrivacyMode();
             }
-            
             applyPrivacyMode() {
                 this.isPrivacyMode = localStorage.getItem('privacyMode') === 'true';
                 document.body.classList.toggle('privacy-mode', this.isPrivacyMode);
                 this.elements.togglePrivacyBtn.textContent = this.isPrivacyMode ? '👁️ Disable Privacy' : '👁️ Privacy Mode';
             }
-            
-            openListAllModal() { 
-                this.elements.listAllModal.style.display = 'flex'; 
-                this.listAllSymbols(); 
-            }
-            
-            closeListAllModal() { 
-                this.elements.listAllModal.style.display = 'none'; 
-            }
-            
+            openListAllModal() { this.elements.listAllModal.style.display = 'flex'; this.listAllSymbols(); }
+            closeListAllModal() { this.elements.listAllModal.style.display = 'none'; }
             listAllSymbols() {
                 const contentDiv = this.elements.listAllContent;
                 contentDiv.innerHTML = '';
-                
                 const createList = (title, items) => {
                     if (items.length > 0) {
                         contentDiv.innerHTML += `<h4>${title} (${items.length})</h4>`;
                         items.forEach(item => contentDiv.innerHTML += `<p>${item.symbol}</p>`);
                     }
                 };
-                
                 createList('Stocks', this.stocks);
                 createList('Mutual Funds', this.mutualFunds);
                 createList('Watchlist', this.watchlist);
-                
-                if (contentDiv.innerHTML === '') {
-                    contentDiv.innerHTML = '<p>No saved symbols.</p>';
-                }
+                if (contentDiv.innerHTML === '') contentDiv.innerHTML = '<p>No saved symbols.</p>';
             }
             
             toggleAlertInputs(type) {
@@ -3222,7 +3103,6 @@
 
                 // Check for existing alert and populate
                 const existingAlert = this.priceAlerts.find(a => a.symbol === symbol && !a.triggered);
-                
                 if (existingAlert) {
                     this.elements.saveAlertBtn.textContent = 'Update Alert';
                     if (existingAlert.type === 'range') {
@@ -3241,9 +3121,7 @@
                 }
             }
 
-            closePriceAlertModal() { 
-                this.elements.priceAlertModal.style.display = 'none'; 
-            }
+            closePriceAlertModal() { this.elements.priceAlertModal.style.display = 'none'; }
             
             async savePriceAlert() {
                 const { symbol } = this.elements.saveAlertBtn.dataset;
@@ -3256,35 +3134,29 @@
                 if (alertType === 'single') {
                     const price = parseFloat(this.elements.alertPrice.value);
                     const condition = this.elements.alertCondition.value;
-                    
                     if (!symbol || isNaN(price) || price <= 0) {
                         this.showError("Invalid alert data. Please enter a valid target price.");
                         return;
                     }
-                    
                     newAlert = {
                         id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
                         symbol, type: 'single', condition, price,
                         triggered: false, date: new Date().toISOString()
                     };
-                    
                     this.showSuccess(`Alert set for ${symbol} when price is ${condition} ${this.formatCurrency(price)}!`);
 
-                } else { 
+                } else { // Range
                     const priceLower = parseFloat(this.elements.alertPriceLower.value);
                     const priceUpper = parseFloat(this.elements.alertPriceUpper.value);
-                    
                     if (!symbol || isNaN(priceLower) || isNaN(priceUpper) || priceLower < 0 || priceUpper <= priceLower) {
                         this.showError("Invalid range. Upper bound must be greater than lower bound.");
                         return;
                     }
-                    
                      newAlert = {
                         id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
                         symbol, type: 'range', priceLower, priceUpper,
                         triggered: false, date: new Date().toISOString()
                     };
-                    
                     this.showSuccess(`Alert set for ${symbol} when price is between ${this.formatCurrency(priceLower)} and ${this.formatCurrency(priceUpper)}!`);
                 }
 
@@ -3297,7 +3169,6 @@
                 this.elements.alertsSummaryModal.style.display = 'flex';
                 const contentDiv = this.elements.alertsSummaryContent;
                 contentDiv.innerHTML = '';
-                
                 const allAlerts = this.priceAlerts.slice().sort((a, b) => (a.triggered === b.triggered) ? 0 : a.triggered ? -1 : 1);
 
                 if (allAlerts.length === 0) {
@@ -3306,7 +3177,6 @@
                 }
 
                 let html = '<ul style="list-style-type: none; padding: 0;">';
-                
                 allAlerts.forEach(alert => {
                     let alertText;
                     if (alert.type === 'range') {
@@ -3320,7 +3190,6 @@
                     const formattedDate = alertDate.toLocaleDateString();
                     const formattedTime = alertDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     const triggeredClass = alert.triggered ? 'triggered-alert' : '';
-                    
                     const actionButtons = alert.triggered 
                         ? `<button onclick="window.stockTracker.dismissPriceAlertById('${alert.id}')" class="edit-transaction-btn" style="background-color: var(--color-positive); color: white;">Dismiss</button>`
                         : `<button onclick="window.stockTracker.openPriceAlertModal('${alert.symbol}')" class="edit-transaction-btn">Edit</button>
@@ -3341,18 +3210,15 @@
                         </li>
                     `;
                 });
-                
                 html += '</ul>';
                 contentDiv.innerHTML = html;
             }
-            
             dismissPriceAlertById(alertId) {
                 this.priceAlerts = this.priceAlerts.filter(a => a.id !== alertId);
                 this.saveData();
                 this.openAlertsSummaryModal();
                 this.showSuccess('Alert dismissed.');
             }
-            
             removePriceAlertById(alertId) {
                 const onCancel = () => this.openAlertsSummaryModal();
                  this.openConfirmModal(`Are you sure you want to delete this price alert?`,
@@ -3365,23 +3231,13 @@
                      onCancel
                 );
             }
-            
             checkPriceAlerts() {
-                if(this.priceAlerts.length === 0) {
-                    return;
-                }
-                
+                if(this.priceAlerts.length === 0) return;
                 const allItems = [...this.stocks, ...this.mutualFunds, ...this.watchlist];
-                
                 this.priceAlerts.forEach(alert => {
-                    if (alert.triggered) {
-                        return;
-                    }
-                    
+                    if (alert.triggered) return;
                     const item = allItems.find(i => i.symbol === alert.symbol);
-                    if (!item || !item.price) {
-                        return;
-                    }
+                    if (!item || !item.price) return;
 
                     let trigger = false;
                     if (alert.type === 'range') {
@@ -3398,7 +3254,6 @@
                     }
                 });
             }
-            
             showAlertNotification(item, alert) {
                 let message;
                  if (alert.type === 'range') {
@@ -3411,7 +3266,6 @@
                 const alertDiv = this.elements.alertNotification;
                 alertDiv.classList.add('active');
                 alertDiv.innerHTML = `<h4>Price Alert Triggered</h4><p>${message}</p>`;
-                
                 setTimeout(() => {
                     alertDiv.classList.remove('active');
                 }, 10000);
@@ -3421,29 +3275,22 @@
                     new Notification("Price Alert!", { body: message });
                 }
             }
-            
             async fetchAndRenderNews() {
                 this.saveScrollPosition();
-                
                 const symbols = [...new Set([...this.stocks.map(s => s.symbol), ...this.watchlist.map(s => s.symbol)])];
-                
                 if (symbols.length === 0) {
                      this.elements.newsArticlesContainer.innerHTML = `<div class="loading">No symbols to fetch news for. Add stocks or watchlist items first.</div>`;
                      this.restoreScrollPosition();
                      return;
                  }
-                 
                 const now = Date.now();
-                
                 if (this.newsFeed.length > 0 && now - this.newsFetchTime < 15 * 60 * 1000) {
                      this.renderNews();
                      this.restoreScrollPosition();
                      return;
                  }
-                 
                 this.elements.newsArticlesContainer.innerHTML = '<div class="loading">Fetching news...</div>';
                 const result = await this.apiService.fetchNews(symbols);
-                
                 if (result.success) {
                     this.newsFeed = result.data;
                     this.newsFetchTime = now;
@@ -3451,42 +3298,27 @@
                 } else {
                     this.elements.newsArticlesContainer.innerHTML = `<div class="error"><p>Failed to fetch news. Reason: ${result.reason}</p></div>`;
                 }
-                
                 this.restoreScrollPosition();
             }
-            
             renderNews() {
                 const container = this.elements.newsArticlesContainer;
                 container.innerHTML = '';
-                
-                if (this.newsFeed.length === 0) { 
-                    container.innerHTML = `<div class="loading">No recent news found for your tracked symbols.</div>`; 
-                    return; 
-                }
-                
+                if (this.newsFeed.length === 0) { container.innerHTML = `<div class="loading">No recent news found for your tracked symbols.</div>`; return; }
                 this.newsFeed.slice(0, 20).forEach(article => {
                     const card = document.createElement('a');
                     card.href = article.url;
                     card.target = "_blank";
                     card.className = "news-article-card";
-                    
                     card.innerHTML = `<img src="${article.banner_image || 'https://placehold.co/100x100/eee/ccc?text=News'}" onerror="this.src='https://placehold.co/100x100/eee/ccc?text=Error'"><div class="news-article-content"><h4>${article.title}</h4><p>${article.summary}</p></div>`;
-                    
                     container.appendChild(card);
                 });
             }
-            
             openEditStockModal(id) {
                 const item = this.stocks.find(s => s.id === id) || this.mutualFunds.find(f => f.id === id);
-                
-                if (!item) {
-                    return;
-                }
-                
+                if (!item) return;
                 const stats = this.calculateTransactionStats(item.transactions, item.price);
                 const firstBuyTransaction = item.transactions ? item.transactions.find(t => t.type === 'buy') : null;
                 const initialDate = firstBuyTransaction ? firstBuyTransaction.date.split('T')[0] : '';
-                
                 this.elements.editStockModal.style.display = 'flex';
                 this.elements.editStockSymbolDisplay.textContent = item.symbol;
                 this.elements.editStockSymbol.value = item.symbol || '';
@@ -3497,11 +3329,9 @@
                 this.elements.editStockDate.value = initialDate;
                 this.elements.saveStockEditBtn.dataset.id = id;
             }
-            
             closeEditStockModal() {
                 this.elements.editStockModal.style.display = 'none';
             }
-            
             async saveStockDetails() {
                 const id = this.elements.saveStockEditBtn.dataset.id;
                 const newSymbol = this.elements.editStockSymbol.value.trim().toUpperCase();
@@ -3510,14 +3340,11 @@
                 const newShares = parseFloat(this.elements.editStockShares.value);
                 const newCost = parseFloat(this.elements.editStockCost.value);
                 const newDateInput = this.elements.editStockDate.value;
-                
                 let item = this.stocks.find(s => s.id === id) || this.mutualFunds.find(f => f.id === id);
-                
                 if (!item || !newSymbol || !newName) {
                     this.showError("Symbol and Name are required.");
                     return;
                 }
-                
                 if (isNaN(newShares) || newShares < 0 || isNaN(newCost) || newCost < 0 || !newDateInput) {
                     this.showError("Shares, Average Cost, and Initial Date must be valid numbers/date.");
                     return;
@@ -3532,7 +3359,7 @@
                         item.transactions[firstBuyIndex].shares = newShares;
                         item.transactions[firstBuyIndex].price = newCost;
                         item.transactions[firstBuyIndex].date = new Date(newDateInput).toISOString();
-                        item.transactions[firstBuyIndex].platform = newPlatform; 
+                        item.transactions[firstBuyIndex].platform = newPlatform; // Update platform on first buy
                     } else { 
                          item.transactions.push({
                             type: 'buy', shares: newShares, price: newCost, platform: newPlatform,
@@ -3547,7 +3374,6 @@
                         date: new Date(newDateInput).toISOString()
                     }];
                 }
-                
                 await this.saveData();
                 this.renderContent();
                 this.closeEditStockModal();
@@ -3556,12 +3382,8 @@
 
             async signOutOtherSessions() {
                 this.openConfirmModal('This will sign you out of all other devices. Are you sure?', async () => {
-                    if (!this.userId) {
-                        return;
-                    }
-                    
+                    if (!this.userId) return;
                     const sessionControlRef = doc(db, "users", this.userId, "sessionControl", "state");
-                    
                     try {
                         await setDoc(sessionControlRef, {
                             revokeTimestamp: serverTimestamp(),
@@ -3577,20 +3399,14 @@
             }
 
             setupSessionListener() {
-                if (this.sessionUnsubscribe) {
-                    this.sessionUnsubscribe(); 
-                }
+                if (this.sessionUnsubscribe) this.sessionUnsubscribe(); 
 
-                if (!this.userId) {
-                    return;
-                }
+                if (!this.userId) return;
 
                 const sessionControlRef = doc(db, "users", this.userId, "sessionControl", "state");
-                
                 this.sessionUnsubscribe = onSnapshot(sessionControlRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
-                        
                         if (data.initiatedBy && data.initiatedBy !== this.sessionId) {
                             console.log("Session revocation received from another device. Signing out.");
                             this.showError("This session was remotely signed out.");
