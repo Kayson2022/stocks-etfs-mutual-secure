@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -63,7 +62,7 @@
         body.privacy-mode .info-value,
         body.privacy-mode .summary-value,
         body.privacy-mode .total-pl {
-            filter: blur(5px);
+            filter: blur(5px); 
             transition: filter 0.2s ease-in-out;
         }
 
@@ -175,6 +174,7 @@
             padding: 8px;
             background-color: var(--bg-tertiary);
             color: var(--text-secondary);
+            border: 1px solid var(--border-color);
         }
         .btn-icon:hover {
              background-color: var(--border-color);
@@ -438,6 +438,24 @@
             border-top-width: 4px;
             border-top-color: var(--color-negative);
         }
+        /* ADDED: Style for Closed Positions Header and Cards */
+        .closed-header {
+            color: var(--text-secondary);
+            border-bottom-color: var(--text-secondary);
+        }
+        /* The primary visual change for closed positions */
+        .stock-card.closed-position {
+            opacity: 0.6; 
+            border-left: 4px solid var(--text-secondary); 
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .stock-card.closed-position:hover {
+             opacity: 0.8;
+             transform: none;
+             box-shadow: var(--shadow-sm);
+             border-color: var(--border-color);
+        }
+
 
         /* ADDED: Ambient hover effect for grouped cards */
         .gains-header-content .stock-card:hover,
@@ -577,6 +595,11 @@
             border-bottom: none;
             margin-top: 16px;
         }
+        /* ADDED: Style for Closed Positions Header */
+        .closed-header {
+            color: var(--text-secondary);
+            border-bottom-color: var(--text-secondary);
+        }
 
         .group-wrapper {
             /* This is the container for header, summary, content, and footer */
@@ -701,8 +724,11 @@
         .transaction-btn:hover {
             opacity: 0.9;
         }
-        .transaction-btn[style*="background: #ff4757"] {
-            background-color: var(--color-negative) !important;
+        .transaction-btn.buy-btn {
+            background-color: var(--color-positive);
+        }
+        .transaction-btn.sell-btn {
+            background-color: var(--color-negative);
         }
         .add-btn.edit-btn {
              background-color: var(--bg-tertiary) !important;
@@ -1573,7 +1599,7 @@
                     modalRefreshInterval: document.getElementById('modal-refresh-interval'),
                     modalSaveSettingsBtn: document.getElementById('modal-save-settings-btn'),
                     enablePushNotificationsBtn: document.getElementById('enable-push-notifications-btn'),
-                    signOutOtherSessionsBtn: document.getElementById('sign-out-other-sessions-btn'),
+                    signOutOtherSessionsBtn: document.getElementById('signOutOtherSessionsBtn'),
                     diversificationChartContainer: document.getElementById('diversification-chart-container'),
                     diversificationChart: document.getElementById('diversificationChart'),
                     portfolioPerformanceContainer: document.getElementById('portfolio-performance-container'),
@@ -1637,44 +1663,51 @@
                 if (this.elements.portfolioPerformanceContainer) this.elements.resizeObserver.observe(this.elements.portfolioPerformanceContainer);
             }
             setupEventListeners() {
-                this.elements.googleSignInBtn.addEventListener('click', () => this.signIn());
-                this.elements.signOutBtn.addEventListener('click', () => this.signOut());
-                this.elements.addBtn.addEventListener('click', () => this.addItemFromInput('stock'));
-                this.elements.stockInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('stock'); });
-                this.elements.liveUpdateBtn.addEventListener('click', () => this.refreshCurrentTab());
-                this.elements.clearAllBtn.addEventListener('click', () => this.clearAllItems('stock'));
-                this.elements.toggleLiveUpdateBtn.addEventListener('click', () => this.toggleLiveUpdate());
-                this.elements.exportBtn.addEventListener('click', () => this.exportData());
-                this.elements.importFile.addEventListener('change', (e) => this.importData(e));
-                this.elements.portfolioFilter.addEventListener('input', () => this.renderContent());
-                this.elements.platformFilter.addEventListener('change', () => this.renderContent());
-                this.elements.portfolioSort.addEventListener('change', () => this.renderContent());
-                this.elements.addFundBtn.addEventListener('click', () => this.addItemFromInput('fund'));
-                this.elements.mutualFundInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('fund'); });
-                this.elements.addWatchlistBtn.addEventListener('click', () => this.addItemFromInput('watchlist'));
-                this.elements.watchlistInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('watchlist'); });
+                // ADDED: Check for login buttons before adding listeners
+                if(this.elements.googleSignInBtn) this.elements.googleSignInBtn.addEventListener('click', () => this.signIn());
+                if(this.elements.signOutBtn) this.elements.signOutBtn.addEventListener('click', () => this.signOut());
+                
+                // ADDED: Check for core input/button elements
+                if(this.elements.addBtn) this.elements.addBtn.addEventListener('click', () => this.addItemFromInput('stock'));
+                if(this.elements.stockInput) this.elements.stockInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('stock'); });
+                if(this.elements.liveUpdateBtn) this.elements.liveUpdateBtn.addEventListener('click', () => this.refreshCurrentTab());
+                if(this.elements.clearAllBtn) this.elements.clearAllBtn.addEventListener('click', () => this.clearAllItems('stock'));
+                if(this.elements.toggleLiveUpdateBtn) this.elements.toggleLiveUpdateBtn.addEventListener('click', () => this.toggleLiveUpdate());
+                if(this.elements.exportBtn) this.elements.exportBtn.addEventListener('click', () => this.exportData());
+                if(this.elements.importFile) this.elements.importFile.addEventListener('change', (e) => this.importData(e));
+                if(this.elements.portfolioFilter) this.elements.portfolioFilter.addEventListener('input', () => this.renderContent());
+                if(this.elements.platformFilter) this.elements.platformFilter.addEventListener('change', () => this.renderContent());
+                if(this.elements.portfolioSort) this.elements.portfolioSort.addEventListener('change', () => this.renderContent());
+                if(this.elements.addFundBtn) this.elements.addFundBtn.addEventListener('click', () => this.addItemFromInput('fund'));
+                if(this.elements.mutualFundInput) this.elements.mutualFundInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('fund'); });
+                if(this.elements.addWatchlistBtn) this.elements.addWatchlistBtn.addEventListener('click', () => this.addItemFromInput('watchlist'));
+                if(this.elements.watchlistInput) this.elements.watchlistInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('watchlist'); });
+                
                 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', (e) => { const tabId = e.target.getAttribute('onclick').split("'")[1].replace('window.stockTracker.',''); this.switchTab(tabId); }));
-                this.elements.modalSaveBtn.addEventListener('click', () => this.saveTransaction());
-                this.elements.settingsBtn.addEventListener('click', () => this.openSettingsModal());
-                this.elements.closeSettingsBtn.addEventListener('click', () => this.closeSettingsModal());
-                this.elements.modalSaveSettingsBtn.addEventListener('click', () => this.saveSettings());
-                this.elements.enablePushNotificationsBtn.addEventListener('click', () => this.enablePushNotifications());
-                this.elements.signOutOtherSessionsBtn.addEventListener('click', () => this.signOutOtherSessions());
-                this.elements.confirmModalCancelBtn.addEventListener('click', () => this.closeConfirmModal(true));
-                this.elements.confirmModalConfirmBtn.addEventListener('click', () => this.handleConfirmAction());
-                this.elements.listAllBtn.addEventListener('click', () => this.openListAllModal());
-                this.elements.closeListAllBtn.addEventListener('click', () => this.closeListAllModal());
-                this.elements.toggleDarkModeBtn.addEventListener('click', () => this.toggleDarkMode());
-                this.elements.togglePrivacyBtn.addEventListener('click', () => this.togglePrivacyMode());
-                this.elements.saveAlertBtn.addEventListener('click', () => this.savePriceAlert());
-                this.elements.updateAllFundsBtn.addEventListener('click', () => this.refreshFunds());
-                this.elements.clearAllFundsBtn.addEventListener('click', () => this.clearAllItems('fund'));
-                this.elements.updateWatchlistBtn.addEventListener('click', () => this.refreshWatchlist());
-                this.elements.clearWatchlistBtn.addEventListener('click', () => this.clearAllItems('watchlist'));
-                this.elements.closeEditStockBtn.addEventListener('click', () => this.closeEditStockModal());
-                this.elements.saveStockEditBtn.addEventListener('click', () => this.saveStockDetails());
-                this.elements.viewAlertsBtn.addEventListener('click', () => this.openAlertsSummaryModal());
-                this.elements.closeAlertsSummaryBtn.addEventListener('click', () => this.elements.alertsSummaryModal.style.display = 'none');
+                
+                if(this.elements.modalSaveBtn) this.elements.modalSaveBtn.addEventListener('click', () => this.saveTransaction());
+                if(this.elements.settingsBtn) this.elements.settingsBtn.addEventListener('click', () => this.openSettingsModal());
+                if(this.elements.closeSettingsBtn) this.elements.closeSettingsBtn.addEventListener('click', () => this.closeSettingsModal());
+                if(this.elements.modalSaveSettingsBtn) this.elements.modalSaveSettingsBtn.addEventListener('click', () => this.saveSettings());
+                if(this.elements.enablePushNotificationsBtn) this.elements.enablePushNotificationsBtn.addEventListener('click', () => this.enablePushNotifications());
+                if(this.elements.signOutOtherSessionsBtn) this.elements.signOutOtherSessionsBtn.addEventListener('click', () => this.signOutOtherSessions());
+                
+                if(this.elements.confirmModalCancelBtn) this.elements.confirmModalCancelBtn.addEventListener('click', () => this.closeConfirmModal(true));
+                if(this.elements.confirmModalConfirmBtn) this.elements.confirmModalConfirmBtn.addEventListener('click', () => this.handleConfirmAction());
+                
+                if(this.elements.listAllBtn) this.elements.listAllBtn.addEventListener('click', () => this.openListAllModal());
+                if(this.elements.closeListAllBtn) this.elements.closeListAllBtn.addEventListener('click', () => this.closeListAllModal());
+                if(this.elements.toggleDarkModeBtn) this.elements.toggleDarkModeBtn.addEventListener('click', () => this.toggleDarkMode());
+                if(this.elements.togglePrivacyBtn) this.elements.togglePrivacyBtn.addEventListener('click', () => this.togglePrivacyMode());
+                if(this.elements.saveAlertBtn) this.elements.saveAlertBtn.addEventListener('click', () => this.savePriceAlert());
+                if(this.elements.updateAllFundsBtn) this.elements.updateAllFundsBtn.addEventListener('click', () => this.refreshFunds());
+                if(this.elements.clearAllFundsBtn) this.elements.clearAllFundsBtn.addEventListener('click', () => this.clearAllItems('fund'));
+                if(this.elements.updateWatchlistBtn) this.elements.updateWatchlistBtn.addEventListener('click', () => this.refreshWatchlist());
+                if(this.elements.clearWatchlistBtn) this.elements.clearWatchlistBtn.addEventListener('click', () => this.clearAllItems('watchlist'));
+                if(this.elements.closeEditStockBtn) this.elements.closeEditStockBtn.addEventListener('click', () => this.closeEditStockModal());
+                if(this.elements.saveStockEditBtn) this.elements.saveStockEditBtn.addEventListener('click', () => this.saveStockDetails());
+                if(this.elements.viewAlertsBtn) this.elements.viewAlertsBtn.addEventListener('click', () => this.openAlertsSummaryModal());
+                if(this.elements.closeAlertsSummaryBtn) this.elements.closeAlertsSummaryBtn.addEventListener('click', () => this.elements.alertsSummaryModal.style.display = 'none');
                 
                 if (this.elements.alertType) {
                     this.elements.alertType.addEventListener('change', (e) => this.toggleAlertInputs(e.target.value));
@@ -1743,7 +1776,8 @@
                         window.scrollTo(0, parseInt(scrollPosition));
                     }
                 });
-                this.elements.stocksGrid.addEventListener('click', (e) => this.handleCardAction(e));
+                // ADDED: Check for stocksGrid before adding card action listener
+                if(this.elements.stocksGrid) this.elements.stocksGrid.addEventListener('click', (e) => this.handleCardAction(e));
             }
             saveScrollPosition() {
                 this.lastScrollPosition = window.scrollY;
@@ -1932,7 +1966,9 @@
                     if (isGrouping) {
                         this.renderGroupedByPlatform(sortedItems, grid, type);
                     } else if (sortBy === 'performance') {
+                        // === START Grouping Logic Implementation ===
                         this.renderGroupedStocks(sortedItems, grid, type);
+                        // === END Grouping Logic Implementation ===
                     } else {
                         this.renderCards(sortedItems, grid, type);
                     }
@@ -2367,20 +2403,64 @@
                     }
                 });
             }
+
+            // ==================================================================
+            // === Grouping Logic for Sold Off Positions (Closed Positions) ===
+            // ==================================================================
             renderGroupedStocks(items, container, type) {
-                const gains = items.filter(s => (s.changePercent || 0) >= 0).sort((a, b) => b.changePercent - a.changePercent);
-                const losses = items.filter(s => (s.changePercent || 0) < 0).sort((a, b) => a.changePercent - b.changePercent);
-                if (items.length === 0) { 
-                    if (container.classList.contains('group-content')) return;
-                    container.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your portfolio is empty.</div>`; 
-                    return; 
+                // 1. Calculate stats and split into Active vs. Closed
+                const activeItems = [];
+                const closedPositions = [];
+                const floatingPointEpsilon = 0.0001; 
+
+                items.forEach(item => {
+                    const stats = this.calculateTransactionStats(item.transactions, item.price);
+                    
+                    // Check if total shares are virtually zero AND it has transaction history
+                    if (Math.abs(stats.totalSharesOwned) < floatingPointEpsilon && item.transactions && item.transactions.length > 0) {
+                        closedPositions.push(item);
+                    } else if (stats.totalSharesOwned >= floatingPointEpsilon) {
+                        activeItems.push(item);
+                    }
+                    // Items with 0 shares and no history (just added as symbol) are implicitly ignored here.
+                });
+                
+                // 2. Group Closed Positions (Always appear first)
+                if (closedPositions.length > 0) {
+                    this.createGroup(
+                        '🔒 Closed Positions (Sold Off)', 
+                        closedPositions, 
+                        'closed-header', 
+                        container, 
+                        type, 
+                        this.getGroupSummary(closedPositions, 'closed')
+                    );
                 }
-                const biggestGain = gains.length > 0 ? [gains[0]] : [];
-                if (biggestGain.length > 0) this.createGroup('🚀 Biggest Gain Today', biggestGain, 'biggest-gain-header', container, type, this.getGroupSummary(biggestGain, 'biggest-gain'));
-                const otherGains = gains.filter(s => biggestGain.length === 0 || s.id !== biggestGain[0].id);
-                this.createGroup('📈 Gains Today', otherGains, 'gains-header', container, type, this.getGroupSummary(otherGains, 'gains'));
-                this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
+
+                // 3. Group Active Items by Performance (Only if there are active items)
+                if (activeItems.length > 0) {
+                    const gains = activeItems.filter(s => (s.changePercent || 0) >= 0).sort((a, b) => b.changePercent - a.changePercent);
+                    const losses = activeItems.filter(s => (s.changePercent || 0) < 0).sort((a, b) => a.changePercent - b.changePercent);
+                    
+                    const biggestGain = gains.length > 0 ? [gains[0]] : [];
+                    
+                    if (biggestGain.length > 0) {
+                        this.createGroup('🚀 Biggest Gain Today', biggestGain, 'biggest-gain-header', container, type, this.getGroupSummary(biggestGain, 'biggest-gain'));
+                    }
+                    
+                    const otherGains = gains.filter(s => biggestGain.length === 0 || s.id !== biggestGain[0].id);
+                    
+                    this.createGroup('📈 Gains Today', otherGains, 'gains-header', container, type, this.getGroupSummary(otherGains, 'gains'));
+                    this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
+                } else if (closedPositions.length === 0) {
+                    // Only show 'empty portfolio' message if neither active nor closed positions exist
+                    container.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your portfolio is empty.</div>`; 
+                }
             }
+            // ==================================================================
+            // === END Grouping Logic for Sold Off Positions (Closed Positions) ===
+            // ==================================================================
+
             renderGroupedByPlatform(items, container, type) {
                 if (items.length === 0) { 
                     if (container.classList.contains('group-content')) return;
@@ -2436,6 +2516,16 @@
                         summaryText += `\nTotal P/L: <span class="${totalPLClass}">${this.formatCurrency(totalPL)}</span> (<span class="${totalPLClass}">${this.formatNumber(totalPLPercent, 2)}%</span>)`;
                         summaryText += `\nTotal Change Today: <span class="${totalChangeTodayClass}">${this.formatCurrency(totalChangeToday)}</span>`;
                     }
+                } else if (type === 'closed') {
+                    let totalRealizedPL = 0;
+                    items.forEach(item => {
+                        const stats = this.calculateTransactionStats(item.transactions, item.price);
+                        totalRealizedPL += stats.realizedPL;
+                    });
+                    const totalPLClass = totalRealizedPL >= 0 ? 'positive' : 'negative';
+                    summaryTitle = `Total Realized P/L: ${this.formatCurrency(totalRealizedPL)}`;
+                    summaryText = `This group contains ${items.length} positions you have completely sold. Their realized profit/loss is preserved in the card view.`;
+
                 } else {
                     let totalChangeToday = 0;
                     let totalValue = 0;
@@ -2456,7 +2546,7 @@
                     const totalPLClass = totalPLUnrealized >= 0 ? 'positive' : 'negative';
                     summaryText = `Total Value: ${this.formatCurrency(totalValue)}\n`;
                     summaryText += `Total Unrealized P/L: <span class="${totalPLClass}">${this.formatCurrency(totalPLUnrealized)}</span> (<span class="${totalPLClass}">${this.formatNumber(totalPLPercent, 2)}%</span>)\n`;
-                    summaryText += `Total Change Today: <span class="${totalChangeClass}">${this.formatCurrency(totalChangeToday)}</span>`;
+                    summaryText += `Total Change Today: <span class="${totalChangeTodayClass}">${this.formatCurrency(totalChangeToday)}</span>`;
                 }
                 return { title: summaryTitle, text: summaryText };
             }
@@ -2530,6 +2620,18 @@
                     card.dataset.type = type;
                     card.dataset.symbol = item.symbol;
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
+
+                    // === START Card State Logic ===
+                    // Check if it's a closed position based on shares owned and transaction existence
+                    const floatingPointEpsilon = 0.0001; 
+                    const isClosedPosition = (type === 'stock' || type === 'fund') && 
+                                             Math.abs(stats.totalSharesOwned) < floatingPointEpsilon && 
+                                             item.transactions && item.transactions.length > 0;
+
+                    if (isClosedPosition) {
+                        card.classList.add('closed-position');
+                    }
+                    // === END Card State Logic ===
                     
                     let stockInfoHTML = '';
                     let transactionDetailsHTML = '';
@@ -2550,18 +2652,19 @@
                             <canvas id="chart-${item.id}"></canvas>
                         </div>`;
                     
-                    if ( (type === 'stock' || type === 'fund') && stats.totalSharesOwned < 0.0001 && item.transactions && item.transactions.length > 0) {
-                        card.style.opacity = "0.7";
+                    if (isClosedPosition) {
                         const realizedPL = stats.realizedPL;
                         const realizedClass = realizedPL >= 0 ? 'positive' : 'negative';
+                        
                         stockInfoHTML = `
                             <div class="info-row" style="text-align: center; display: block; margin-bottom: 10px;">
-                                <span class="info-label" style="font-weight: bold; font-size: 1.1em;">Position Closed</span>
+                                <span class="info-label" style="font-weight: bold; font-size: 1.1em; color: var(--text-primary);">POSITION CLOSED</span>
                             </div>
                             <div class="info-row">
                                 <span class="info-label">Realized P/L</span>
                                 <span class="info-value ${realizedClass}" style="font-size: 1.2em;">${this.formatCurrency(realizedPL)}</span>
                             </div>`;
+                            
                     } else {
                         const totalPL = stats.unrealizedPL;
                         const totalPLPercent = stats.costOfRemainingShares > 0 ? (totalPL / stats.costOfRemainingShares) * 100 : 0;
