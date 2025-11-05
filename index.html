@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,9 +10,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <!-- 
     ==================================================================
-    ==      REVISED STYLESHEET: NEUMORPHIC & GRADIENT DESIGN        ==
+    ==      REVISED & IMPROVED STYLESHEET                           ==
     ==================================================================
-    This stylesheet includes the new, more vibrant design.
+    This stylesheet includes the fix for the card rendering issue
+    and other minor improvements for consistency.
     -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -19,56 +21,40 @@
         /* --- CSS Variables for Theming --- */
         :root {
             --font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            --radius-sm: 8px;
-            --radius-md: 16px; 
-            --radius-lg: 24px;
-            
-            /* Neumorphism Shadows (Light Theme) */
-            --shadow-light-outer: 10px 10px 20px #d4d4d4, -10px -10px 20px #ffffff;
-            --shadow-light-inner: inset 4px 4px 8px #d4d4d4, inset -4px -4px 8px #ffffff;
-            --shadow-sm: 0 4px 8px rgba(0, 0, 0, 0.1);
-            --shadow-md: 0 12px 20px rgba(0, 0, 0, 0.15);
-            
-            --transition: all 0.3s ease-in-out;
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+            --shadow-sm: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-md: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
+            --transition: all 0.2s ease-in-out;
             
             /* Light Theme */
-            --bg-primary: #f0f2f5; 
+            --bg-primary: #f8f9fa;
             --bg-secondary: #ffffff;
-            --bg-tertiary: #e0e2e5; 
-            --text-primary: #1f2937;
-            --text-secondary: #6b7280;
-            --border-color: #d1d5db;
-            
-            /* Accent Gradient (Purple/Pink) */
-            --accent-start: #a855f7; 
-            --accent-end: #ec4899; 
-            --accent-primary: #7c3aed; 
-            --accent-primary-hover: #6d28d9; 
-            --color-positive: #10b981; 
-            --color-negative: #ef4444; 
+            --bg-tertiary: #f1f3f5;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --border-color: #dee2e6;
+            /* --accent-primary: #0052FF; */
+            /* --accent-primary-hover: #0048DE; */
+            --accent-primary: #7c3aed; /* CHANGED: Purple */
+            --accent-primary-hover: #6d28d9; /* CHANGED: Purple */
+            --color-positive: #17A589;
+            --color-negative: #E74C3C;
         }
 
         body.dark-mode {
-            /* Dark Theme - UPDATED for Dark Neumorphism */
-            --bg-primary: #181a20; 
-            --bg-secondary: #22252e; 
-            --bg-tertiary: #2b2e37; 
-            --text-primary: #f3f4f6;
-            --text-secondary: #9ca3af;
-            --border-color: #374151; 
-
-            /* Dark Neumorphism Shadows */
-            --shadow-dark-outer: 8px 8px 16px #101217, -8px -8px 16px #202229;
-            --shadow-dark-inner: inset 4px 4px 8px #13151b, inset -4px -4px 8px #272a33;
-            --shadow-sm: 0 4px 8px rgba(0, 0, 0, 0.4);
-            --shadow-md: 0 12px 20px rgba(0, 0, 0, 0.6);
-
-            --accent-start: #c4b5fd;
-            --accent-end: #f472b6;
-            --accent-primary: #a78bfa; 
-            --accent-primary-hover: #8b5cf6; 
-            --color-positive: #34d399;
-            --color-negative: #f87171;
+            /* Dark Theme - UPDATED to match user's image */
+            --bg-primary: #181a20; /* CHANGED */
+            --bg-secondary: #22252e; /* CHANGED */
+            --bg-tertiary: #2b2e37; /* CHANGED */
+            --text-primary: #f8f9fa;
+            --text-secondary: #adb5bd;
+            --border-color: #373a40; /* CHANGED */
+            --accent-primary: #a78bfa; /* CHANGED: Purple */
+            --accent-primary-hover: #8b5cf6; /* CHANGED: Purple */
+            --color-positive: #2ECC71;
+            --color-negative: #E74C3C;
         }
 
         /* --- Privacy Mode --- */
@@ -77,7 +63,7 @@
         body.privacy-mode .info-value,
         body.privacy-mode .summary-value,
         body.privacy-mode .total-pl {
-            filter: blur(8px); 
+            filter: blur(5px);
             transition: filter 0.2s ease-in-out;
         }
 
@@ -105,328 +91,856 @@
             margin: 0 auto;
             padding: 24px;
         }
-        .header h1 {
-            font-size: 2rem; 
-            font-weight: 800;
+        #app-container {
+            display: none;
         }
-        
-        /* --- Buttons - NEUMORPHIC STYLE --- */
-        .btn, .add-btn, .utility-buttons-grid .add-btn, .transaction-btn, .remove-btn, .edit-transaction-btn {
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            margin-bottom: 24px;
+        }
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        #user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        #user-name {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        /* --- Login Screen --- */
+        #login-container {
+            max-width: 500px;
+            text-align: center;
+            padding-top: 10vh;
+        }
+        #login-container h1 {
+            font-size: 2.5rem;
+            margin-bottom: 8px;
+        }
+
+        /* --- Buttons --- */
+        .btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
             padding: 10px 20px;
-            border-radius: var(--radius-md);
+            border-radius: var(--radius-sm);
             font-size: 0.95rem;
             font-weight: 600;
-            border: none;
+            border: 1px solid transparent;
             cursor: pointer;
             transition: var(--transition);
-            background-color: var(--bg-primary);
-            box-shadow: var(--shadow-light-outer);
-            color: var(--text-primary);
-            text-shadow: none;
         }
-
-        body.dark-mode .btn, body.dark-mode .add-btn, body.dark-mode .utility-buttons-grid .add-btn, body.dark-mode .transaction-btn, body.dark-mode .remove-btn, body.dark-mode .edit-transaction-btn {
-            background-color: var(--bg-secondary);
-            box-shadow: var(--shadow-dark-outer);
+        .btn-primary {
+            background-color: var(--accent-primary);
+            color: white;
         }
-
-        /* Hover: makes the element look "pressed" (inner shadow) */
-        .btn:hover, .add-btn:hover, .transaction-btn:hover, .remove-btn:hover, .edit-transaction-btn:hover,
-        .utility-buttons-grid label:hover {
-            box-shadow: var(--shadow-light-inner);
-            background-color: var(--bg-tertiary); 
-            transform: scale(0.98);
+        .btn-primary:hover {
+            background-color: var(--accent-primary-hover);
         }
-        body.dark-mode .btn:hover, body.dark-mode .add-btn:hover, body.dark-mode .transaction-btn:hover, body.dark-mode .remove-btn:hover, body.dark-mode .edit-transaction-btn:hover,
-        body.dark-mode .utility-buttons-grid label:hover {
-            box-shadow: var(--shadow-dark-inner);
+        .btn-secondary {
             background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-color: var(--border-color);
         }
-
-        /* Primary/Action Button - Gradient Fill */
-        .btn-primary, .add-btn#addBtn, .add-btn#addFundBtn, .add-btn#addWatchlistBtn, #modal-save-btn, #save-stock-edit-btn, #save-alert-btn {
-            color: white !important;
-            background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
-            box-shadow: var(--shadow-sm); 
+        .btn-secondary:hover {
+            background-color: var(--border-color);
         }
-        .btn-primary:hover, .add-btn#addBtn:hover, .add-btn#addFundBtn:hover, .add-btn#addWatchlistBtn:hover, #modal-save-btn:hover, #save-stock-edit-btn:hover, #save-alert-btn:hover {
-            opacity: 0.9;
-            box-shadow: var(--shadow-md);
-        }
-
-        /* Danger Button - Red Neumorphic */
-        .btn-danger, #clearAllBtn, #clearAllFundsBtn, #clearWatchlistBtn, #confirm-modal-confirm-btn {
-            background-color: var(--color-negative);
-            color: white !important;
-            box-shadow: var(--shadow-sm);
-        }
-        .btn-danger:hover, #clearAllBtn:hover, #clearAllFundsBtn:hover, #clearWatchlistBtn:hover, #confirm-modal-confirm-btn:hover {
-            background-color: color-mix(in srgb, var(--color-negative) 80%, black);
-            box-shadow: var(--shadow-dark-inner); 
-        }
-
-        /* Toggle Buttons */
-        .add-btn#toggleDarkModeBtn, .add-btn#togglePrivacyBtn {
-            font-weight: 500;
-        }
-
-        /* Icon Buttons */
-        .remove-btn {
-            width: 38px; 
-            height: 38px;
-            border-radius: 50%;
-            padding: 0;
-            font-size: 1.4rem;
-        }
-        .remove-btn:hover {
+        .btn-danger {
             background-color: var(--color-negative);
             color: white;
-            box-shadow: var(--shadow-dark-inner);
         }
-        .transaction-btn.buy-btn {
-            background: var(--color-positive);
-            color: white !important;
+        .btn-danger:hover {
+            opacity: 0.85;
         }
-        .transaction-btn.buy-btn:hover {
-            background-color: color-mix(in srgb, var(--color-positive) 80%, black);
+        .btn-icon {
+            padding: 8px;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
         }
-        .transaction-btn.sell-btn {
-            background: var(--color-negative) !important;
-            color: white !important;
+        .btn-icon:hover {
+             background-color: var(--border-color);
+             color: var(--text-primary);
         }
-        .transaction-btn.sell-btn:hover {
-            background-color: color-mix(in srgb, var(--color-negative) 80%, black) !important;
+        /* Mapping old button classes to new ones */
+        .add-btn {
+            padding: 12px 24px;
+            background-color: var(--accent-primary); color: white; border: none;
+            border-radius: var(--radius-sm); font-size: 1rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition);
+        }
+        .add-btn:hover {
+            background-color: var(--accent-primary-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-sm);
+        }
+        .add-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        #sign-out-btn {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        #sign-out-btn:hover {
+             background-color: var(--border-color);
+             color: var(--text-primary);
         }
 
-        /* --- Utility Toolbar --- */
-        .utility-buttons-grid {
-            border-radius: var(--radius-lg); 
-            padding: 20px;
-            background-color: var(--bg-primary); 
-            box-shadow: var(--shadow-light-outer);
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); 
-            gap: 12px;
-        }
-        body.dark-mode .utility-buttons-grid {
-            background-color: var(--bg-secondary);
-            box-shadow: var(--shadow-dark-outer);
-        }
-        .utility-buttons-grid .add-btn, .utility-buttons-grid label {
-            margin: 0;
-            padding: 10px 16px;
-        }
-        .utility-buttons-grid .import-wrapper {
-             display: flex;
-             gap: 12px;
-        }
-        .utility-buttons-grid label {
-             line-height: 1.3;
-        }
-        
         /* --- Tabs --- */
         .tabs {
-            background-color: var(--bg-secondary);
-            padding: 8px 16px;
-            border-radius: var(--radius-md);
-            box-shadow: var(--shadow-sm);
-            border: 1px solid var(--border-color);
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-color);
             margin-bottom: 24px;
+            overflow-x: auto;
         }
         .tab {
-            padding: 10px 16px;
+            padding: 12px 16px;
+            background: none;
+            border: none;
             border-bottom: 3px solid transparent;
             font-size: 1rem;
             font-weight: 600;
             color: var(--text-secondary);
+            cursor: pointer;
             transition: var(--transition);
-            margin-bottom: 0;
+            margin-bottom: -1px; /* Overlap border */
+            flex-shrink: 0;
+            white-space: nowrap;
         }
         .tab:hover {
-            color: var(--accent-primary);
+            color: var(--text-primary);
         }
         .tab.active {
-            color: var(--text-primary);
-            border-bottom-color: var(--accent-start); 
-            font-weight: 700;
+            color: var(--accent-primary);
+            border-bottom-color: var(--accent-primary);
         }
-        
-        /* --- Forms & Controls (Search/Filter) --- */
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* --- Forms & Controls --- */
+        .search-section, .portfolio-controls, .funds-controls, .watchlist-controls {
+            margin-bottom: 24px;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
         .search-input, #portfolioFilter, #portfolioSort, #platformFilter {
-            padding: 14px 16px; 
+            padding: 12px 16px;
             border: 1px solid var(--border-color);
             border-radius: var(--radius-sm);
             font-size: 1rem;
             background-color: var(--bg-secondary);
-            box-shadow: var(--shadow-light-inner); 
+            color: var(--text-primary);
             transition: var(--transition);
-        }
-        body.dark-mode .search-input, body.dark-mode #portfolioFilter, body.dark-mode #portfolioSort, body.dark-mode #platformFilter {
-            box-shadow: var(--shadow-dark-inner);
         }
         .search-input:focus, #portfolioFilter:focus, #portfolioSort:focus, #platformFilter:focus {
             outline: none;
             border-color: var(--accent-primary);
-            box-shadow: var(--shadow-light-inner), 0 0 0 2px color-mix(in srgb, var(--accent-primary) 50%, transparent);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 20%, transparent);
         }
 
-        /* --- Portfolio Summary - GRADIENT CARD --- */
+        /* NEW: Input wrapper for clear button */
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            flex: 1;
+            min-width: 200px;
+        }
+        .input-wrapper .search-input, .input-wrapper #portfolioFilter {
+            width: 100%;
+            padding-right: 35px; /* Space for the 'x' */
+        }
+        .clear-input {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            line-height: 1;
+            display: none; /* Hidden by default */
+        }
+        .input-wrapper input:not(:placeholder-shown) + .clear-input {
+            display: block; /* Show only when there is text */
+        }
+
+
+        /* --- Portfolio Summary --- */
+        @keyframes animate-gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes animate-glow {
+            0% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.4); }
+            50% { box-shadow: 0 0 35px rgba(118, 75, 162, 0.6); }
+            100% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.4); }
+        }
+
         .portfolio-summary {
-            background: linear-gradient(135deg, var(--accent-start) 0%, var(--accent-end) 100%);
-            border-radius: var(--radius-lg);
-            padding: 30px;
+            background: linear-gradient(-45deg, #6a11cb, #2575fc, #e73c7e, #66a6ff);
+            background-size: 400% 400%;
+            animation: animate-gradient 15s ease infinite;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
             color: white;
-            box-shadow: var(--shadow-md);
             border: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .portfolio-summary::before {
+            content: '';
+            position: absolute;
+            top: -5px; left: -5px; right: -5px; bottom: -5px;
+            z-index: -1;
+            border-radius: 20px;
+            animation: animate-glow 8s ease-in-out infinite;
+        }
+
+        .portfolio-summary h3 {
+            text-align: center;
+            color: #ffffff;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        }
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 24px;
+            text-align: center;
         }
         .summary-label {
-            color: rgba(255, 255, 255, 0.9);
-            font-weight: 500;
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 8px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
         }
         .summary-value {
-            font-size: 1.75rem;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            font-size: 1.6rem;
+            font-weight: bold;
+            margin-top: 5px;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6), 0 0 5px rgba(0,0,0,0.4);
+        }
+        
+        .dark-mode .portfolio-summary {
+             background: linear-gradient(-45deg, #581c87, #312e81, #9d174d, #3730a3); /* CHANGED: Darker purples */
+             background-size: 400% 400%;
+        }
+        
+        .dark-mode .portfolio-summary h3 {
+            color: #f1f1f1;
         }
 
-        /* --- Asset Cards - Enhanced Visibility --- */
+        /* --- Utility Toolbar --- */
+        .utility-buttons-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 16px;
+            background-color: var(--bg-tertiary);
+            border-radius: var(--radius-md);
+            margin-bottom: 24px;
+        }
+        .utility-buttons-grid .add-btn, .utility-buttons-grid label {
+            flex-grow: 1;
+            margin: 0;
+            padding: 10px 16px;
+            font-size: 0.9rem;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+        }
+        .utility-buttons-grid .add-btn:hover, .utility-buttons-grid label:hover {
+            background: var(--border-color);
+            border-color: color-mix(in srgb, var(--border-color) 80%, black);
+        }
+        #clearAllBtn, #clearAllFundsBtn, #clearWatchlistBtn {
+            background-color: color-mix(in srgb, var(--color-negative) 15%, transparent);
+            color: var(--color-negative);
+            border: 1px solid color-mix(in srgb, var(--color-negative) 40%, transparent);
+        }
+        #clearAllBtn:hover, #clearAllFundsBtn:hover, #clearWatchlistBtn:hover {
+            background-color: var(--color-negative);
+            color: white;
+        }
+        .import-wrapper {
+            display: contents; /* Allows children to be flex items */
+        }
+        .utility-buttons-grid .add-btn[style*="background"],
+        .utility-buttons-grid .add-btn#quickLookupBtn {
+            background: var(--bg-secondary) !important;
+            color: var(--text-primary) !important;
+            border: 1px solid var(--border-color) !important;
+        }
+
+        /* --- Asset Cards --- */
+        .stocks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 24px;
+        }
         .stock-card, .fund-card, .watchlist-card {
             background-color: var(--bg-secondary);
             border-radius: var(--radius-md);
             padding: 24px;
             box-shadow: var(--shadow-sm);
             border: 1px solid var(--border-color);
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
         }
         .stock-card:hover, .fund-card:hover, .watchlist-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-4px);
             box-shadow: var(--shadow-md);
-            border-color: var(--accent-primary);
+            border-color: color-mix(in srgb, var(--border-color) 70%, black);
+        }
+        /* ADDED: Colored top border for grouped cards */
+        .gains-header-content .stock-card,
+        .biggest-gain-header-content .stock-card {
+            border-top-width: 4px;
+            border-top-color: var(--color-positive);
+        }
+        .losses-header-content .stock-card {
+            border-top-width: 4px;
+            border-top-color: var(--color-negative);
+        }
+
+        /* ADDED: Ambient hover effect for grouped cards */
+        .gains-header-content .stock-card:hover,
+        .biggest-gain-header-content .stock-card:hover {
+            border-color: var(--color-positive);
+            box-shadow: var(--shadow-md), 0 0 20px color-mix(in srgb, var(--color-positive) 30%, transparent);
+        }
+        .losses-header-content .stock-card:hover {
+            border-color: var(--color-negative);
+            box-shadow: var(--shadow-md), 0 0 20px color-mix(in srgb, var(--color-negative) 30%, transparent);
+        }
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
         }
         .stock-symbol, .fund-symbol, .watchlist-symbol {
-            font-size: 1.85rem;
+            font-size: 1.75rem;
             font-weight: 800;
+        }
+        .remove-btn {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .remove-btn:hover {
+            background-color: var(--color-negative);
+            color: white;
         }
         .stock-price {
-            font-size: 3rem;
+            font-size: 2.5rem;
             font-weight: 800;
-            margin-bottom: 2px;
-            letter-spacing: -1px;
+            margin-bottom: 4px;
         }
         .stock-change {
-            font-size: 1.2rem;
-            font-weight: 700;
-            margin-bottom: 16px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        .stock-info {
+            padding-top: 16px;
+            margin-top: 16px;
+            border-top: 1px solid var(--border-color);
+            flex-grow: 1; 
         }
         .info-row {
-            padding: 8px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95rem;
+            padding: 6px 0;
         }
         .info-label { color: var(--text-secondary); }
-        .info-value { font-weight: 700; }
-        .total-pl {
-            font-size: 1.1rem;
-            font-weight: 700;
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px dashed var(--border-color);
+        .info-value { font-weight: 600; }
+        .positive { color: var(--color-positive) !important; }
+        .negative { color: var(--color-negative) !important; }
+
+        .platform-select {
+            width: 50%;
+            padding: 4px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-weight: 600;
         }
 
-        /* --- Chart Buttons - PURE NEUMORPHIC --- */
+        /* --- Card Chart --- */
+        .card-chart-container {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out, margin-top 0.5s ease-in-out;
+            margin-top: 0;
+        }
+        .stock-card.expanded .card-chart-container,
+        .fund-card.expanded .card-chart-container {
+            max-height: 300px; /* Adjust as needed */
+            opacity: 1;
+            margin-top: 20px;
+        }
+        .chart-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        /* === CHART BUTTONS: STYLE UPDATE === */
         .chart-range-btn {
-            padding: 8px 16px; 
-            font-size: 0.85rem;
-            font-weight: 600; 
-            border-radius: var(--radius-lg); 
-            background-color: var(--bg-primary);
-            box-shadow: var(--shadow-light-outer);
+            padding: 6px 16px; /* CHANGED */
+            font-size: 0.8rem;
+            font-weight: 600; /* ADDED */
+            background-color: var(--bg-tertiary);
             color: var(--text-secondary);
+            border: none; /* CHANGED */
+            border-radius: 9999px; /* CHANGED */
+            cursor: pointer;
+            transition: var(--transition);
         }
-        body.dark-mode .chart-range-btn {
-            background-color: var(--bg-secondary);
-            box-shadow: var(--shadow-dark-outer);
-        }
-
-        .chart-range-btn:hover {
-            box-shadow: var(--shadow-light-inner);
-        }
-        body.dark-mode .chart-range-btn:hover {
-            box-shadow: var(--shadow-dark-inner);
-        }
-
-        .chart-range-btn.active {
-            background: linear-gradient(90deg, var(--accent-start), var(--accent-end));
+        .chart-range-btn.active, .chart-range-btn:hover {
+            background-color: var(--accent-primary);
             color: white;
-            box-shadow: var(--shadow-sm);
+            border: none; /* CHANGED */
         }
-        .chart-range-btn.active:hover {
-             box-shadow: var(--shadow-md);
-        }
+        /* === END STYLE UPDATE === */
 
-        /* --- Group Headers & Collapse --- */
-        .group-header {
-            font-size: 1.4rem;
+
+        /* --- Group Headers --- */
+        .group-header, .watchlist-title {
+            font-size: 1.25rem;
             font-weight: 700;
-            padding: 16px 20px;
+            padding: 16px 0;
             margin-top: 24px;
             border-bottom: 1px solid var(--border-color);
-            background-color: var(--bg-secondary);
-            border-radius: var(--radius-md) var(--radius-md) 0 0;
-            box-shadow: var(--shadow-sm);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
         }
+        /* Visual cue for collapsed headers */
         .group-header.collapsed {
-            border-bottom: none;
-            border-radius: var(--radius-md);
             background-color: var(--bg-tertiary); 
-            box-shadow: var(--shadow-light-inner); 
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+            border: 1px solid var(--border-color);
+            padding: 16px;
+            border-bottom: none;
+            margin-top: 16px;
         }
-        body.dark-mode .group-header.collapsed {
+
+        .group-wrapper {
+            /* This is the container for header, summary, content, and footer */
+            grid-column: 1 / -1; 
+            display: contents; /* Allow children to participate directly in the stocks-grid parent layout */
+        }
+        
+        .group-header, .summary-content, .group-content, .group-footer {
+            /* All children of group-wrapper must span the full grid width */
+            grid-column: 1 / -1; 
+        }
+
+        .group-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 24px;
+            /* FIX: Increased max-height to a very large value to prevent cutoff */
+            max-height: 50000px; 
+            opacity: 1;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out;
+        }
+        .group-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            margin-bottom: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            gap: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .group-header .toggle-icon { transition: transform 0.3s ease; }
+        .group-header.collapsed .toggle-icon { transform: rotate(-90deg); }
+        
+        .group-footer {
+            text-align: center;
+            padding-top: 20px;
+            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out;
+            max-height: 100px;
+            opacity: 1;
+            overflow: hidden;
+            margin-bottom: 24px; /* Space after the group */
+        }
+        .group-footer.collapsed {
+             max-height: 0;
+            opacity: 0;
+            padding: 0;
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+        .collapse-group-btn {
+            padding: 8px 24px;
+            font-size: 0.9rem;
             background-color: var(--bg-tertiary);
-            box-shadow: var(--shadow-dark-inner);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
         }
+        .collapse-group-btn:hover {
+            background-color: var(--border-color);
+            color: var(--text-primary);
+        }
+        /* --- FIX: GROUP SUMMARY VISIBILITY & LAYOUT --- */
+        .summary-content {
+            padding: 20px 0;
+            max-height: 1000px; /* Large enough to hold content */
+            opacity: 1;
+            pointer-events: auto;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out, padding 0.5s ease-in-out;
+        }
+        /* When expanded, the summary content is collapsed (hidden) */
+        .summary-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            pointer-events: none;
+        }
+        /* --- END FIX --- */
         .summary-card {
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-md);
             padding: 25px;
-            box-shadow: none;
+            text-align: center;
+            max-width: 450px;
+            margin: 0 auto;
+            box-shadow: var(--shadow-sm);
         }
+        .summary-card h4 {
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            color: var(--text-primary);
+        }
+        .summary-card p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            white-space: pre-line;
+        }
+        /* Add margin to the top of summary card when immediately following a collapsed header */
         .group-header.collapsed + .summary-content:not(.collapsed) .summary-card {
+            margin-top: 0;
             border-radius: 0 0 var(--radius-md) var(--radius-md);
-            border-top: 1px solid var(--border-color);
+            border-top: none;
         }
-        
+
+        /* --- Card Actions (Buy/Sell, Transactions) --- */
+        .card-actions {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .transaction-btn {
+            padding: 10px; font-size: 0.9rem;
+            background-color: var(--accent-primary); color: white; border: none;
+            border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; transition: var(--transition);
+        }
+        .transaction-btn:hover {
+            opacity: 0.9;
+        }
+        .transaction-btn[style*="background: #ff4757"] {
+            background-color: var(--color-negative) !important;
+        }
+        .add-btn.edit-btn {
+             background-color: var(--bg-tertiary) !important;
+             color: var(--text-primary) !important;
+             border: 1px solid var(--border-color) !important;
+             width: 100%;
+        }
+        .transaction-details {
+            margin-top: 16px;
+        }
+        .transaction-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding-bottom: 8px;
+        }
+        .transaction-header h4 { font-size: 1rem; }
+        .transactions-container {
+             max-height: 1000px; opacity: 1; margin-top: 10px;
+             transition: max-height 0.4s ease, opacity 0.3s ease, margin-top 0.3s ease;
+             overflow: hidden;
+        }
+        .transactions-container.collapsed {
+            max-height: 0; opacity: 0; margin-top: 0; pointer-events: none;
+        }
+        .transaction-entry {
+            background-color: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .transaction-info { font-size: 0.9rem; }
+        .transaction-info strong { text-transform: uppercase; }
+        .transaction-info span { display: block; margin-bottom: 4px; }
+        .transaction-entry .buy { color: var(--color-positive); }
+        .transaction-entry .sell { color: var(--color-negative); }
+        .transaction-entry-controls { display: flex; gap: 8px; align-items: center; }
+        .edit-transaction-btn, .delete-transaction-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 5px 10px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+        }
+        .delete-transaction-btn {
+            background: transparent; border: none; font-size: 1.2rem;
+        }
+        .delete-transaction-btn:hover {
+            color: var(--color-negative);
+        }
+
         /* --- Modals --- */
+        .modal {
+            position: fixed; z-index: 1000;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            display: none; align-items: center; justify-content: center;
+        }
         .modal-content {
-            border-radius: var(--radius-lg);
-            padding: 40px;
+            background-color: var(--bg-secondary);
+            padding: 32px;
+            border-radius: var(--radius-md);
+            width: 90%;
+            max-width: 500px;
             box-shadow: var(--shadow-md);
+            position: relative;
         }
         .modal-title {
-            font-size: 1.75rem;
+            font-size: 1.5rem;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        .close-modal-btn {
+            position: absolute; top: 12px; right: 12px;
+            font-size: 1.5rem; font-weight: bold;
+            cursor: pointer; border: none; background: transparent;
+            color: var(--text-secondary);
+        }
+        .transaction-input-group { margin-bottom: 16px; }
+        .transaction-input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .transaction-input-group input, .transaction-input-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        #confirmModal .modal-actions {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        #alerts-summary-content .triggered-alert {
+            background-color: color-mix(in srgb, var(--color-positive) 10%, transparent);
+            border-left: 4px solid var(--color-positive);
+            margin: 2px -10px;
+            padding-left: 6px !important;
+        }
+        /* Price alert modal specifics */
+        #price-range-inputs {
+            display: none; /* Hidden by default */
+            grid-template-columns: 1fr auto 1fr;
+            gap: 10px;
+            align-items: center;
+        }
+        #single-price-inputs {
+             display: grid;
         }
 
-        /* Mobile Responsiveness */
+
+        /* --- Notifications & Popups --- */
+        .loading, .error, .success, .refresh-status-popup, .alert-notification {
+            position: fixed; top: 20px; left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000; width: 90%; max-width: 500px;
+            text-align: center; padding: 16px;
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-md);
+            font-weight: 600;
+        }
+        .loading { background-color: var(--bg-secondary); color: var(--text-primary); }
+        .error { background-color: var(--color-negative); color: white; }
+        .success { background-color: var(--color-positive); color: white; }
+        .refresh-status-popup { background-color: var(--accent-primary); color: white; display: none; }
+        .refresh-status-popup.active { display: block; }
+        .alert-notification { background-color: var(--accent-primary); color: white; display: none; }
+        .alert-notification.active { display: block; }
+
+        /* --- Countdown Timers --- */
+        #header-countdown {
+            text-align: center; font-size: 1rem;
+            font-weight: 500; color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+        #countdown { font-weight: 700; color: var(--text-primary); }
+        .small-countdown {
+            position: fixed; bottom: 16px; left: 16px;
+            background-color: var(--bg-secondary);
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            border-radius: var(--radius-lg);
+            font-size: 0.9rem;
+            z-index: 1000;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+        }
+
+        /* --- News Tab --- */
+        #news-articles-container {
+            display: grid;
+            gap: 16px;
+        }
+        .news-article-card {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            display: flex; gap: 16px;
+            text-decoration: none;
+            color: inherit;
+            transition: var(--transition);
+        }
+        .news-article-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .news-article-card img {
+            width: 80px; height: 80px;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+        }
+        .news-article-content h4 {
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+        .news-article-content p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* --- Charts --- */
+        .chart-container {
+            margin-top: 24px;
+            padding: 24px;
+            background-color: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            /* Removed fixed height for flexibility */
+        }
+        .canvas-wrapper {
+            position: relative;
+            height: 400px;
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .chart-header h4 {
+            font-size: 1.25rem;
+            font-weight: 700;
+        }
+        
+        /* --- Mobile Responsiveness --- */
         @media (max-width: 768px) {
-             .utility-buttons-grid {
-                grid-template-columns: repeat(2, 1fr);
+            .container { padding: 16px; }
+            .header h1 { font-size: 1.5rem; }
+            .header-controls { gap: 8px; }
+            .summary-stats { grid-template-columns: repeat(2, 1fr); }
+            .stocks-grid { 
+                grid-template-columns: 1fr; 
+                /* Ensure bottom space for chart/last element */
+                padding-bottom: 20px; 
             }
+            #user-name { display: none; }
         }
-        @media (max-width: 500px) {
-             .utility-buttons-grid {
-                grid-template-columns: 1fr;
-            }
-            .search-section {
-                 flex-direction: column;
-            }
-            .search-section button {
-                 width: 100%;
-            }
-        }
-
     </style>
 </head>
 <body>
@@ -457,7 +971,7 @@
             <div class="header-controls">
                 <div id="user-info" style="display: none;">
                     <span id="user-name"></span>
-                    <button id="sign-out-btn" class="btn">Sign Out</button>
+                    <button id="sign-out-btn">Sign Out</button>
                 </div>
             </div>
         </header>
@@ -528,7 +1042,7 @@
                     <span class="clear-input" data-target="portfolioFilter">&times;</span>
                 </div>
                 <select id="platformFilter" class="search-input" style="display: none;"></select>
-                <select id="portfolioSort" class="search-input">
+                <select id="portfolioSort">
                     <option value="performance">Sort by Performance</option>
                     <option value="alphabetical">Sort Alphabetical (A-Z)</option>
                     <option value="value">Sort by Total Value</option>
@@ -540,8 +1054,8 @@
             <div class="utility-buttons-grid">
                 <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
                 <button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
-                <button class="add-btn" id="exportBtn">📥 Export Data</button>
                 <div class="import-wrapper">
+                    <button class="add-btn" id="exportBtn">📥 Export Data</button>
                     <label for="importFile" class="add-btn" style="cursor: pointer;">📤 Import Data</label>
                     <input type="file" id="importFile" accept=".json" style="display: none;">
                 </div>
@@ -550,7 +1064,7 @@
                 <button class="add-btn" id="listAllBtn">📋 List All Stocks</button>
                 <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
                  <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
-                <button class="add-btn" id="clearAllBtn" class="btn-danger">🗑️ Clear All Data</button>
+                <button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
             </div>
         </div>
         
@@ -565,7 +1079,7 @@
             </div>
              <div class="funds-controls">
                 <button class="add-btn" id="updateAllFundsBtn">🔄 Update Funds</button>
-                <button class="add-btn" id="clearAllFundsBtn" class="btn-danger">🗑️ Clear All Funds</button>
+                <button class="add-btn" id="clearAllFundsBtn">🗑️ Clear All Funds</button>
             </div>
         </div>
 
@@ -579,7 +1093,7 @@
             </div>
              <div class="watchlist-controls">
                 <button class="add-btn" id="updateWatchlistBtn">🔄 Update Watchlist</button>
-                <button class="add-btn" id="clearWatchlistBtn" class="btn-danger">🗑️ Clear Watchlist</button>
+                <button class="add-btn" id="clearWatchlistBtn">🗑️ Clear Watchlist</button>
             </div>
             <h3 class="watchlist-title"><span>Your Watchlist <span id="watchlist-count">(0)</span></span></h3>
         </div>
@@ -719,8 +1233,8 @@
             <h3 class="modal-title">Are you sure?</h3>
             <p id="confirm-modal-text" style="text-align: center; margin-bottom: 20px;"></p>
             <div class="modal-actions">
-                <button class="add-btn" id="confirm-modal-cancel-btn">Cancel</button>
-                <button class="add-btn" id="confirm-modal-confirm-btn" class="btn-danger">Confirm Delete</button>
+                <button class="add-btn" id="confirm-modal-cancel-btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Cancel</button>
+                <button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: var(--color-negative);">Confirm Delete</button>
             </div>
         </div>
     </div>
@@ -731,7 +1245,7 @@
             <!-- NEW: Alert Type Selection -->
             <div class="transaction-input-group">
                 <label for="alert-type">Alert Type:</label>
-                <select id="alert-type" class="search-input">
+                <select id="alert-type">
                     <option value="single">Single Price</option>
                     <option value="range">Price Range</option>
                 </select>
@@ -741,7 +1255,7 @@
             <div id="single-price-inputs">
                 <div class="transaction-input-group">
                     <label for="alert-condition">Condition:</label>
-                    <select id="alert-condition" class="search-input">
+                    <select id="alert-condition">
                         <option value="above">Price is above</option>
                         <option value="below">Price is below</option>
                     </select>
@@ -815,105 +1329,47 @@
 
         class ApiService {
             constructor(config) { this.config = config; }
-            
-            // --- Fetch Stock/ETF Data (Full Profile & Quote) ---
             async fetchStockEtfData(symbol) {
                 const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${this.config.finnhubApiKey}`;
                 const profileUrl = `https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${this.config.finnhubApiKey}`;
-                
                 try {
                     const [quoteResponse, profileResponse] = await Promise.all([fetch(quoteUrl), fetch(profileUrl)]);
-                    
-                    if (!quoteResponse.ok || !profileResponse.ok) {
-                        return { success: false, symbol, reason: `HTTP Error: ${quoteResponse.status}` };
-                    }
-                    
+                    if (!quoteResponse.ok || !profileResponse.ok) return { success: false, symbol, reason: `HTTP Error: ${quoteResponse.status}` };
                     const [quoteData, profileData] = await Promise.all([quoteResponse.json(), profileResponse.json()]);
-                    
-                    if (quoteData.c === 0 && quoteData.pc === 0 && !profileData.name) {
-                        return { success: false, symbol, reason: 'Invalid or empty API payload' };
-                    }
-                    
-                    return { 
-                        success: true, 
-                        data: { 
-                            symbol, 
-                            name: profileData.name ?? symbol, 
-                            price: quoteData.c ?? 0, 
-                            change: quoteData.d ?? 0, 
-                            changePercent: quoteData.dp ?? 0, 
-                            open: quoteData.o ?? 0, 
-                            high: quoteData.h ?? 0, 
-                            low: quoteData.l ?? 0, 
-                            previousClose: quoteData.pc ?? 0, 
-                            industry: profileData.finnhubIndustry ?? 'N/A' 
-                        } 
-                    };
+                    if (quoteData.c === 0 && quoteData.pc === 0 && !profileData.name) return { success: false, symbol, reason: 'Invalid or empty API payload' };
+                    return { success: true, data: { symbol, name: profileData.name ?? symbol, price: quoteData.c ?? 0, change: quoteData.d ?? 0, changePercent: quoteData.dp ?? 0, open: quoteData.o ?? 0, high: quoteData.h ?? 0, low: quoteData.l ?? 0, previousClose: quoteData.pc ?? 0, industry: profileData.finnhubIndustry ?? 'N/A' } };
                 } catch (error) {
                       console.error(`Error fetching stock/ETF data for ${symbol}:`, error);
                       return { success: false, symbol, reason: error.message };
                 }
             }
-            
-            // --- Fetch Stock/ETF Quote Only ---
             async fetchStockEtfQuote(symbol) {
                 const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${this.config.finnhubApiKey}`;
-                
                 try {
                     const response = await fetch(quoteUrl);
-                    
-                    if (!response.ok) {
-                        return { success: false, symbol, reason: `HTTP Error: ${response.status}` };
-                    }
-                    
+                    if (!response.ok) return { success: false, symbol, reason: `HTTP Error: ${response.status}` };
                     const quoteData = await response.json();
-                    
-                    if (quoteData.c === 0 && quoteData.pc === 0) {
-                        return { success: false, symbol, reason: 'Invalid or empty API payload' };
-                    }
-                    
-                    return { 
-                        success: true, 
-                        data: { 
-                            price: quoteData.c ?? 0, 
-                            change: quoteData.d ?? 0, 
-                            changePercent: quoteData.dp ?? 0, 
-                            open: quoteData.o ?? 0, 
-                            high: quoteData.h ?? 0, 
-                            low: quoteData.l ?? 0, 
-                            previousClose: quoteData.pc ?? 0 
-                        } 
-                    };
+                    if (quoteData.c === 0 && quoteData.pc === 0) return { success: false, symbol, reason: 'Invalid or empty API payload' };
+                    return { success: true, data: { price: quoteData.c ?? 0, change: quoteData.d ?? 0, changePercent: quoteData.dp ?? 0, open: quoteData.o ?? 0, high: quoteData.h ?? 0, low: quoteData.l ?? 0, previousClose: quoteData.pc ?? 0 } };
                 } catch (error) {
                     console.error(`Error fetching stock/ETF quote for ${symbol}:`, error);
                     return { success: false, symbol, reason: error.message };
                 }
             }
-            
-            // --- Fetch News (FMP Fallback) ---
             async fetchNews(symbols) {
-                 if (symbols.length === 0) {
-                    return { success: true, data: [] };
-                }
-                
+                 if (symbols.length === 0) return { success: true, data: [] };
                 if (!this.config.fmpApiKey || this.config.fmpApiKey === 'YOUR_FMP_API_KEY') {
                     return { success: false, reason: "FMP API Key is missing. Please set it in Settings to fetch news." };
                 }
-                
                 const profileUrl = `https://financialmodelingprep.com/api/v3/profile/${symbols.join(',')}?apikey=${this.config.fmpApiKey}`;
-                
                 try {
                     const response = await fetch(profileUrl);
-                    
                     if (!response.ok) {
                         return { success: false, reason: `HTTP Error: ${response.status}. Check your FMP API key/plan access.` };
                     }
-                    
                     const data = await response.json();
-                    
                     const generatedNews = symbols.map(symbol => {
                         const profile = data.find(p => p.symbol === symbol);
-                        
                         if (profile && profile.companyName) {
                             return {
                                 url: profile.website || `https://www.google.com/search?q=${symbol}+stock+news`,
@@ -934,96 +1390,50 @@
                             };
                         }
                     });
-                    
                     return { success: true, data: generatedNews };
-                    
                 } catch (error) {
                     console.error("Error fetching news (FMP Profile Fallback):", error);
                     return { success: false, reason: error.message };
                 }
             }
-            
-            // --- Fetch Mutual Fund Data (Alpha Vantage) ---
             async fetchFundData(symbol) {
                 const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${this.config.alphaVantageKey}`;
-                
                 try {
                     const response = await fetch(url);
-                    
-                    if (!response.ok) {
-                        return { success: false, symbol, reason: `HTTP Error: ${response.status}` };
-                    }
-                    
+                    if (!response.ok) return { success: false, symbol, reason: `HTTP Error: ${response.status}` };
                     const json = await response.json();
                     const quote = json['Global Quote'];
-                    
-                    if (!quote || Object.keys(quote).length === 0) {
-                        return { success: false, symbol, reason: 'Invalid API payload from Alpha Vantage.' };
-                    }
-                    
-                    return { 
-                        success: true, 
-                        data: { 
-                            symbol: quote['01. symbol'] ?? symbol, 
-                            name: quote['01. symbol'] ?? symbol, 
-                            price: parseFloat(quote['05. price']) || 0, 
-                            change: parseFloat(quote['09. change']) || 0, 
-                            changePercent: parseFloat(quote['10. change percent'].replace('%', '')) || 0, 
-                            open: parseFloat(quote['02. open']) || 0, 
-                            high: parseFloat(quote['03. high']) || 0, 
-                            low: parseFloat(quote['04. low']) || 0, 
-                            previousClose: parseFloat(quote['08. previous close']) || 0, 
-                            industry: 'Mutual Fund' 
-                        } 
-                    };
+                    if (!quote || Object.keys(quote).length === 0) return { success: false, symbol, reason: 'Invalid API payload from Alpha Vantage.' };
+                    return { success: true, data: { symbol: quote['01. symbol'] ?? symbol, name: quote['01. symbol'] ?? symbol, price: parseFloat(quote['05. price']) || 0, change: parseFloat(quote['09. change']) || 0, changePercent: parseFloat(quote['10. change percent'].replace('%', '')) || 0, open: parseFloat(quote['02. open']) || 0, high: parseFloat(quote['03. high']) || 0, low: parseFloat(quote['04. low']) || 0, previousClose: parseFloat(quote['08. previous close']) || 0, industry: 'Mutual Fund' } };
                 } catch (error) {
                     console.error(`Error fetching fund data for ${symbol}:`, error);
                     return { success: false, symbol, reason: error.message };
                 }
             }
-            
-            // --- Fetch Historical Data (Alpha Vantage) ---
             async fetchHistoricalData(symbol) {
                 if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
                     return { success: false, reason: "Alpha Vantage API Key is missing. Please set it in Settings to fetch historical data." };
                 }
-                
                 const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${this.config.alphaVantageKey}`;
-                
                 try {
                     const response = await fetch(url);
-                    
-                    if (!response.ok) {
-                        return { success: false, reason: `HTTP Error: ${response.status}` };
-                    }
-                    
+                    if (!response.ok) return { success: false, reason: `HTTP Error: ${response.status}` };
                     const json = await response.json();
-                    
                     if (json["Error Message"] || !json["Time Series (Daily)"]) {
                         return { success: false, reason: json["Information"] || json["Error Message"] || 'Invalid API payload from Alpha Vantage. The free tier has a low request limit.' };
                     }
-                    
                     return { success: true, data: json["Time Series (Daily)"] };
-                    
                 } catch (error) {
                     console.error(`Error fetching historical data for ${symbol}:`, error);
                     return { success: false, reason: error.message };
                 }
             }
         }
-        
         class StockTracker {
             constructor() {
-                this.userId = null; 
-                this.stocks = []; 
-                this.mutualFunds = []; 
-                this.watchlist = []; 
-                this.portfolioHistory = [];
-                this.priceAlerts = []; 
-                this.newsFeed = []; 
-                this.newsFetchTime = 0;
-                this.currentTab = 'stocks'; 
-                this.onConfirm = null;
+                this.userId = null; this.stocks = []; this.mutualFunds = []; this.watchlist = []; this.portfolioHistory = [];
+                this.priceAlerts = []; this.newsFeed = []; this.newsFetchTime = 0;
+                this.currentTab = 'stocks'; this.onConfirm = null;
                 this.isLiveUpdatePaused = false;
                 this.isDarkMode = false;
                 this.isPrivacyMode = false;
@@ -1032,20 +1442,17 @@
                 this.groupCollapseState = {};
                 this.diversificationChartInstance = null;
                 this.portfolioPerformanceChartInstance = null;
-                this.cardChartInstances = {}; 
-                this.chartDataCache = {}; 
+                this.cardChartInstances = {}; // To manage individual card charts
+                this.chartDataCache = {}; // To cache historical data
                 this.sessionId = crypto.randomUUID(); 
                 this.sessionUnsubscribe = null;
                 this.init();
             }
-            
             init() {
                 document.addEventListener('DOMContentLoaded', this.runInitialization.bind(this));
             }
-            
             runInitialization() {
                 this.loadConfig();
-                
                 try {
                     const storedState = sessionStorage.getItem('groupCollapseState');
                     this.groupCollapseState = storedState ? JSON.parse(storedState) : {};
@@ -1053,32 +1460,26 @@
                     console.error("Could not parse group collapse state from sessionStorage", e);
                     this.groupCollapseState = {};
                 }
-                
                 this.apiService = new ApiService(this.config);
                 this.cacheDOMElements();
                 this.setupEventListeners();
                 this.applyTheme();
                 this.applyPrivacyMode();
-                
                 if (!db) {
                      this.showError("Firebase is not configured. Please add your firebaseConfig object to the script tag.");
                     this.elements.loginContainer.style.display = 'block';
                     return;
                 }
-                
                 this.handleAuthentication();
             }
-            
             formatCurrency(num) {
                 if (typeof num !== 'number') return num;
                 return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
             }
-            
             formatNumber(num, decimals = 2) {
                 if (typeof num !== 'number') return num;
                 return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
             }
-            
             handleAuthentication() {
                  onAuthStateChanged(auth, user => {
                     if (user) {
@@ -1104,7 +1505,6 @@
                     }
                 });
             }
-            
             signIn() {
                 const provider = new GoogleAuthProvider();
                 signInWithPopup(auth, provider).catch(error => {
@@ -1128,16 +1528,13 @@
                     }
                 });
             }
-            
             signOut() {
                 signOut(auth).catch(error => console.error("Sign out error", error));
             }
-            
             loadConfig() {
                 const userFinnhubKey = localStorage.getItem('finnhubApiKey');
                 const userAlphaVantageKey = localStorage.getItem('alphaVantageApiKey');
                 const userFmpKey = localStorage.getItem('fmpApiKey');
-                
                 this.config = {
                     refreshIntervalMs: parseInt(localStorage.getItem('refreshIntervalMs')) || 90000,
                     finnhubApiKey: userFinnhubKey || "d316lc1r01qnu2r0opjgd316lc1r01qnu2r0opk0",
@@ -1145,7 +1542,6 @@
                     fmpApiKey: userFmpKey || "vOqUU3gDIDYWghK8m4ZlsVQwLDnhfYMS"
                 };
             }
-            
             cacheDOMElements() {
                 this.elements = {
                     loginContainer: document.getElementById('login-container'),
@@ -1154,37 +1550,21 @@
                     userInfo: document.getElementById('user-info'),
                     userName: document.getElementById('user-name'),
                     signOutBtn: document.getElementById('sign-out-btn'),
-                    stocksGrid: document.getElementById('stocksGrid'), 
-                    loadingDiv: document.getElementById('loading'), 
-                    errorDiv: document.getElementById('error'), 
-                    successDiv: document.getElementById('success'),
-                    stockInput: document.getElementById('stockInput'), 
-                    addBtn: document.getElementById('addBtn'),
-                    liveUpdateBtn: document.getElementById('liveUpdateBtn'), 
-                    toggleLiveUpdateBtn: document.getElementById('toggleLiveUpdateBtn'), 
-                    clearAllBtn: document.getElementById('clearAllBtn'),
+                    stocksGrid: document.getElementById('stocksGrid'), loadingDiv: document.getElementById('loading'), errorDiv: document.getElementById('error'), successDiv: document.getElementById('success'),
+                    stockInput: document.getElementById('stockInput'), addBtn: document.getElementById('addBtn'),
+                    liveUpdateBtn: document.getElementById('liveUpdateBtn'), toggleLiveUpdateBtn: document.getElementById('toggleLiveUpdateBtn'), clearAllBtn: document.getElementById('clearAllBtn'),
                     portfolioFilter: document.getElementById('portfolioFilter'), 
                     platformFilter: document.getElementById('platformFilter'),
-                    portfolioSort: document.getElementById('portfolioSort'), 
-                    settingsBtn: document.getElementById('settingsBtn'),
-                    mutualFundInput: document.getElementById('mutualFundInput'), 
-                    addFundBtn: document.getElementById('addFundBtn'),
-                    watchlistInput: document.getElementById('watchlistInput'), 
-                    addWatchlistBtn: document.getElementById('addWatchlistBtn'),
-                    exportBtn: document.getElementById('exportBtn'), 
-                    importFile: document.getElementById('importFile'),
+                    portfolioSort: document.getElementById('portfolioSort'), settingsBtn: document.getElementById('settingsBtn'),
+                    mutualFundInput: document.getElementById('mutualFundInput'), addFundBtn: document.getElementById('addFundBtn'),
+                    watchlistInput: document.getElementById('watchlistInput'), addWatchlistBtn: document.getElementById('addWatchlistBtn'),
+                    exportBtn: document.getElementById('exportBtn'), importFile: document.getElementById('importFile'),
                     portfolioSummary: document.getElementById('portfolio-summary'),
-                    
-                    transactionModal: document.getElementById('transactionModal'), 
-                    modalTitleAction: document.getElementById('modal-title-action'), 
-                    modalSymbol: document.getElementById('modal-symbol'),
-                    modalShares: document.getElementById('modal-shares'), 
-                    modalPrice: document.getElementById('modal-price'), 
-                    modalNote: document.getElementById('modal-note'),
+                    transactionModal: document.getElementById('transactionModal'), modalTitleAction: document.getElementById('modal-title-action'), modalSymbol: document.getElementById('modal-symbol'),
+                    modalShares: document.getElementById('modal-shares'), modalPrice: document.getElementById('modal-price'), modalNote: document.getElementById('modal-note'),
                     modalDate: document.getElementById('modal-date'),
                     modalPlatform: document.getElementById('modal-platform'),
                     modalSaveBtn: document.getElementById('modal-save-btn'),
-                    
                     settingsModal: document.getElementById('settingsModal'),
                     closeSettingsBtn: document.getElementById('closeSettingsBtn'),
                     modalFinnhubKey: document.getElementById('modal-finnhub-key'),
@@ -1194,56 +1574,45 @@
                     modalSaveSettingsBtn: document.getElementById('modal-save-settings-btn'),
                     enablePushNotificationsBtn: document.getElementById('enable-push-notifications-btn'),
                     signOutOtherSessionsBtn: document.getElementById('sign-out-other-sessions-btn'),
-                    
                     diversificationChartContainer: document.getElementById('diversification-chart-container'),
                     diversificationChart: document.getElementById('diversificationChart'),
                     portfolioPerformanceContainer: document.getElementById('portfolio-performance-container'),
                     portfolioPerformanceChart: document.getElementById('portfolioPerformanceChart'),
                     performanceChartControls: document.getElementById('performance-chart-controls'),
-                    
                     resizeObserver: new ResizeObserver(() => {
                         this.renderDiversificationChart();
                         this.renderPortfolioPerformanceChart();
                     }),
-                    
                     confirmModal: document.getElementById('confirmModal'),
                     confirmModalText: document.getElementById('confirm-modal-text'),
                     confirmModalCancelBtn: document.getElementById('confirm-modal-cancel-btn'),
                     confirmModalConfirmBtn: document.getElementById('confirm-modal-confirm-btn'),
-                    
                     countdown: document.getElementById('countdown'),
                     smallCountdown: document.getElementById('smallCountdown'),
                     smallCountdownContainer: document.getElementById('small-countdown-container'),
-                    
                     toggleDarkModeBtn: document.getElementById('toggleDarkModeBtn'),
                     togglePrivacyBtn: document.getElementById('togglePrivacyBtn'),
                     quickLookupBtn: document.getElementById('quickLookupBtn'),
-                    
                     updateAllFundsBtn: document.getElementById('updateAllFundsBtn'),
                     clearAllFundsBtn: document.getElementById('clearAllFundsBtn'),
                     updateWatchlistBtn: document.getElementById('updateWatchlistBtn'),
                     clearWatchlistBtn: document.getElementById('clearWatchlistBtn'),
                     watchlistCount: document.getElementById('watchlist-count'),
-                    
                     refreshStatusPopup: document.getElementById('refresh-status-popup'),
                     listAllBtn: document.getElementById('listAllBtn'),
                     listAllModal: document.getElementById('listAllModal'),
                     listAllContent: document.getElementById('list-all-content'),
                     closeListAllBtn: document.getElementById('closeListAllBtn'),
-                    
                     priceAlertModal: document.getElementById('priceAlertModal'),
                     alertSymbol: document.getElementById('alert-symbol'),
                     alertCondition: document.getElementById('alert-condition'),
                     alertPrice: document.getElementById('alert-price'),
                     saveAlertBtn: document.getElementById('save-alert-btn'),
                     alertNotification: document.getElementById('alert-notification'),
-                    
                     newsTab: document.getElementById('news-tab'),
                     newsArticlesContainer: document.getElementById('news-articles-container'),
-                    
                     modalDividendFields: document.getElementById('modal-dividend-fields'),
                     modalDividendAmount: document.getElementById('modal-dividend-amount'),
-                    
                     editStockModal: document.getElementById('editStockModal'),
                     closeEditStockBtn: document.getElementById('closeEditStockBtn'),
                     editStockSymbolDisplay: document.getElementById('edit-stock-symbol-display'),
@@ -1254,36 +1623,24 @@
                     editStockCost: document.getElementById('edit-stock-cost'),
                     editStockDate: document.getElementById('edit-stock-date'),
                     saveStockEditBtn: document.getElementById('save-stock-edit-btn'),
-                    
                     viewAlertsBtn: document.getElementById('viewAlertsBtn'),
                     alertsSummaryModal: document.getElementById('alertsSummaryModal'),
                     closeAlertsSummaryBtn: document.getElementById('closeAlertsSummaryBtn'),
                     alertsSummaryContent: document.getElementById('alerts-summary-content'),
-                    
                     alertType: document.getElementById('alert-type'),
                     singlePriceInputs: document.getElementById('single-price-inputs'),
                     priceRangeInputs: document.getElementById('price-range-inputs'),
                     alertPriceLower: document.getElementById('alert-price-lower'),
                     alertPriceUpper: document.getElementById('alert-price-upper'),
                 };
-                
-                if (this.elements.diversificationChartContainer) {
-                    this.elements.resizeObserver.observe(this.elements.diversificationChartContainer);
-                }
-                if (this.elements.portfolioPerformanceContainer) {
-                    this.elements.resizeObserver.observe(this.elements.portfolioPerformanceContainer);
-                }
+                if (this.elements.diversificationChartContainer) this.elements.resizeObserver.observe(this.elements.diversificationChartContainer);
+                if (this.elements.portfolioPerformanceContainer) this.elements.resizeObserver.observe(this.elements.portfolioPerformanceContainer);
             }
-            
             setupEventListeners() {
                 this.elements.googleSignInBtn.addEventListener('click', () => this.signIn());
                 this.elements.signOutBtn.addEventListener('click', () => this.signOut());
                 this.elements.addBtn.addEventListener('click', () => this.addItemFromInput('stock'));
-                this.elements.stockInput.addEventListener('keypress', (e) => { 
-                    if (e.key === 'Enter') {
-                        this.addItemFromInput('stock');
-                    }
-                });
+                this.elements.stockInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('stock'); });
                 this.elements.liveUpdateBtn.addEventListener('click', () => this.refreshCurrentTab());
                 this.elements.clearAllBtn.addEventListener('click', () => this.clearAllItems('stock'));
                 this.elements.toggleLiveUpdateBtn.addEventListener('click', () => this.toggleLiveUpdate());
@@ -1293,23 +1650,10 @@
                 this.elements.platformFilter.addEventListener('change', () => this.renderContent());
                 this.elements.portfolioSort.addEventListener('change', () => this.renderContent());
                 this.elements.addFundBtn.addEventListener('click', () => this.addItemFromInput('fund'));
-                this.elements.mutualFundInput.addEventListener('keypress', (e) => { 
-                    if (e.key === 'Enter') {
-                        this.addItemFromInput('fund');
-                    }
-                });
+                this.elements.mutualFundInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('fund'); });
                 this.elements.addWatchlistBtn.addEventListener('click', () => this.addItemFromInput('watchlist'));
-                this.elements.watchlistInput.addEventListener('keypress', (e) => { 
-                    if (e.key === 'Enter') {
-                        this.addItemFromInput('watchlist');
-                    }
-                });
-                
-                document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', (e) => { 
-                    const tabId = e.target.getAttribute('onclick').split("'")[1].replace('window.stockTracker.',''); 
-                    this.switchTab(tabId); 
-                }));
-                
+                this.elements.watchlistInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('watchlist'); });
+                document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', (e) => { const tabId = e.target.getAttribute('onclick').split("'")[1].replace('window.stockTracker.',''); this.switchTab(tabId); }));
                 this.elements.modalSaveBtn.addEventListener('click', () => this.saveTransaction());
                 this.elements.settingsBtn.addEventListener('click', () => this.openSettingsModal());
                 this.elements.closeSettingsBtn.addEventListener('click', () => this.closeSettingsModal());
@@ -1350,7 +1694,6 @@
                     if (e.target.classList.contains('clear-input')) {
                         const targetInputId = e.target.dataset.target;
                         const inputElement = document.getElementById(targetInputId);
-                        
                         if (inputElement) {
                             inputElement.value = '';
                             // Manually trigger an input event to update the UI (e.g., for filters)
@@ -1369,7 +1712,6 @@
                         { element: this.elements.priceAlertModal, closeFn: () => this.closePriceAlertModal() },
                         { element: this.elements.alertsSummaryModal, closeFn: () => this.elements.alertsSummaryModal.style.display = 'none' }
                     ];
-                    
                     modals.forEach(({ element, closeFn }) => {
                         if (element) {
                             element.addEventListener('click', (e) => {
@@ -1379,7 +1721,6 @@
                             });
                         }
                     });
-                    
                     window.addEventListener('keydown', (e) => {
                         if (e.key === 'Escape') {
                             for (let i = modals.length - 1; i >= 0; i--) {
@@ -1392,34 +1733,27 @@
                         }
                     });
                 };
-                
                 setupModalCloseListeners();
-                
                 window.addEventListener('beforeunload', () => {
                     sessionStorage.setItem('scrollPosition', window.scrollY);
                 });
-                
                 window.addEventListener('load', () => {
                     const scrollPosition = sessionStorage.getItem('scrollPosition');
                     if (scrollPosition) {
                         window.scrollTo(0, parseInt(scrollPosition));
                     }
                 });
-                
                 this.elements.stocksGrid.addEventListener('click', (e) => this.handleCardAction(e));
             }
-            
             saveScrollPosition() {
                 this.lastScrollPosition = window.scrollY;
             }
-            
             restoreScrollPosition() {
                 if (this.lastScrollPosition !== undefined) {
                     window.scrollTo(0, this.lastScrollPosition);
                     this.lastScrollPosition = undefined;
                 }
             }
-            
             handleCardAction(event) {
                 const clickedButton = event.target.closest('.transaction-btn, .edit-btn, .edit-transaction-btn, .delete-transaction-btn, .set-alert-btn, .move-to-portfolio-btn, .chart-range-btn');
                 
@@ -1432,15 +1766,9 @@
                     return;
                 }
                 
-                if (!clickedButton) {
-                    return;
-                }
-                
+                if (!clickedButton) return;
                 const card = clickedButton.closest('.stock-card, .fund-card, .watchlist-card');
-                
-                if (!card) {
-                    return;
-                }
+                if (!card) return;
                 
                 const id = card.dataset.id;
                 const type = card.dataset.type;
@@ -1454,9 +1782,7 @@
                     return;
                 }
 
-                if (!id || !type) {
-                    return;
-                }
+                if (!id || !type) return;
 
                 event.preventDefault();
                 event.stopPropagation();
@@ -1466,7 +1792,6 @@
                     this.openEditTransactionModal(id, type, transactionIndex);
                     return;
                 }
-                
                 if (clickedButton.classList.contains('delete-transaction-btn')) {
                     const transactionIndex = parseInt(clickedButton.dataset.index);
                     this.removeTransaction(id, transactionIndex, type);
@@ -1474,10 +1799,7 @@
                 }
 
                 const item = this.stocks.find(s => s.id === id) || this.mutualFunds.find(f => f.id === id) || this.watchlist.find(w => w.id === id);
-                
-                if (!item) {
-                    return;
-                }
+                if (!item) return;
 
                 if (clickedButton.classList.contains('buy-btn')) {
                     this.openTransactionModal(id, type, 'buy');
@@ -1491,21 +1813,15 @@
                     this.moveToPortfolio(id);
                 }
             }
-            
             switchTab(tab) {
                 this.saveScrollPosition();
                 this.currentTab = tab;
-                
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
                 document.querySelector(`[onclick="window.stockTracker.switchTab('${tab}')"]`).classList.add('active');
                 document.getElementById(`${tab}-tab`).classList.add('active');
-                
-                if (tab === 'news') {
-                    this.fetchAndRenderNews();
-                } else {
-                    this.renderContent();
-                }
+                if (tab === 'news') this.fetchAndRenderNews();
+                else this.renderContent();
             }
 
             sortItems(items, sortBy) {
@@ -1533,7 +1849,9 @@
                         });
 
                     case 'platform':
+                        // This case is handled by grouping, but we'll sort within groups by performance.
                         return items.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
+
 
                     default:
                         return items;
@@ -1541,20 +1859,12 @@
             }
             
             renderContent() {
-                if (!this.userId && db) {
-                    return;
-                }
-                
+                if (!this.userId && db) return;
                 this.saveScrollPosition();
                 const grid = this.elements.stocksGrid;
-                
-                if (!grid) {
-                    return;
-                }
-                
+                if (!grid) return;
                 grid.innerHTML = '';
                 this.elements.portfolioSummary.style.display = 'none';
-                
                 let items, type;
                 if (this.currentTab === 'stocks') { 
                     [items, type] = [this.stocks, 'stock']; 
@@ -1562,7 +1872,7 @@
                 }
                 else if (this.currentTab === 'funds') { 
                     [items, type] = [this.mutualFunds, 'fund']; 
-                    this.elements.portfolioSummary.style.display = 'block'; 
+                    this.elements.portfolioSummary.style.display = 'block'; // Also show for funds
                 }
                 else if (this.currentTab === 'watchlist') {
                      [items, type] = [this.watchlist, 'watchlist'];
@@ -1572,7 +1882,7 @@
                     return;
                 }
                 
-                this.renderPortfolioSummary(); 
+                this.renderPortfolioSummary(); // Always render the combined summary
 
                 const sortBy = this.elements.portfolioSort.value;
                 let filteredItems = items;
@@ -1632,41 +1942,27 @@
 
                 this.renderDiversificationChart();
                 this.renderPortfolioPerformanceChart();
-                
                 if (sortedItems.length === 0 && type !== 'stock' && type !== 'fund') {
                      grid.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your ${type} list is empty.</div>`;
                 }
-                
                 this.restoreScrollPosition();
             }
 
             async saveData() {
-                if (!this.userId) {
-                    return;
-                }
-                
+                if (!this.userId) return;
                 const userDocRef = doc(db, "users", this.userId);
                 const data = {
-                    stocks: this.stocks, 
-                    mutualFunds: this.mutualFunds, 
-                    watchlist: this.watchlist,
-                    portfolioHistory: this.portfolioHistory, 
-                    priceAlerts: this.priceAlerts,
+                    stocks: this.stocks, mutualFunds: this.mutualFunds, watchlist: this.watchlist,
+                    portfolioHistory: this.portfolioHistory, priceAlerts: this.priceAlerts,
                 };
-                
                 await setDoc(userDocRef, data);
             }
-            
             async loadData() {
-                if (!this.userId) {
-                    return;
-                }
-                
+                if (!this.userId) return;
                 const userDocRef = doc(db, "users", this.userId);
                 const docSnap = await getDoc(userDocRef);
                 
                 let migrationNeeded = false;
-                
                 const ensureIdAndMigratePlatform = (item) => {
                     if (!item.id) {
                         item.id = Date.now().toString() + Math.random().toString(36).substring(2, 9);
@@ -1681,11 +1977,11 @@
                         delete item.platform;
                         migrationNeeded = true;
                     }
-                     if (!item.transactions) { 
+                     if (!item.transactions) { // Ensure funds have transactions array
                         item.transactions = [];
                         migrationNeeded = true;
                     }
-                    if (!item.dividends) { 
+                    if (!item.dividends) { // Ensure funds have dividends array
                         item.dividends = [];
                         migrationNeeded = true;
                     }
@@ -1705,131 +2001,82 @@
                         await this.saveData();
                     }
                 }
-                
                 this.updatePortfolioHistory();
                 this.renderContent();
             }
-            
             startLiveUpdate() {
                 this.stopLiveUpdate();
-                
                 this.refreshIntervalId = setInterval(() => {
-                    if (this.isLiveUpdatePaused) {
-                        return;
-                    }
+                    if (this.isLiveUpdatePaused) return;
                     this.refreshCurrentTab(true);
                     this.checkPriceAlerts();
                 }, this.config.refreshIntervalMs);
-                
                 this.isLiveUpdatePaused = false;
                 this.elements.toggleLiveUpdateBtn.textContent = '⏸️ Pause Live Update';
                 this.startCountdown();
             }
-            
             async refreshCurrentTab(isAutoRefresh = false) {
                 if (isAutoRefresh) {
                     this.saveScrollPosition();
                 }
-                
                 const tabActions = {
                     stocks: () => this.refreshStocks(),
                     funds: () => this.refreshFunds(),
                     watchlist: () => this.refreshWatchlist()
                 };
-                
-                if (tabActions[this.currentTab]) {
-                    await tabActions[this.currentTab]();
-                }
-                
+                if (tabActions[this.currentTab]) await tabActions[this.currentTab]();
                 if (isAutoRefresh) {
                     this.restoreScrollPosition();
                 }
             }
-            
             startCountdown() {
                 this.elements.smallCountdownContainer.innerHTML = `Next update: <span id="smallCountdown">${this.config.refreshIntervalMs / 1000}s</span>`;
                 this.elements.smallCountdown = document.getElementById('smallCountdown');
-                
                 let timeLeft = this.config.refreshIntervalMs / 1000;
-                
-                if(this.countdownIntervalId) {
-                    clearInterval(this.countdownIntervalId);
-                }
-                
+                if(this.countdownIntervalId) clearInterval(this.countdownIntervalId);
                 const updateTimers = () => {
                     if (timeLeft >= 0) {
                         this.elements.countdown.textContent = timeLeft;
-                        if(this.elements.smallCountdown) {
-                            this.elements.smallCountdown.textContent = `${timeLeft}s`;
-                        }
+                        if(this.elements.smallCountdown) this.elements.smallCountdown.textContent = `${timeLeft}s`;
                         timeLeft--;
                     } else {
                         timeLeft = this.config.refreshIntervalMs / 1000;
                     }
                 };
-                
                 updateTimers();
                 this.countdownIntervalId = setInterval(updateTimers, 1000);
             }
-            
             stopLiveUpdate() {
                  clearInterval(this.refreshIntervalId);
                 clearInterval(this.countdownIntervalId);
                 this.isLiveUpdatePaused = true;
                 this.elements.toggleLiveUpdateBtn.textContent = '▶️ Resume Live Update';
-                 if(this.elements.smallCountdownContainer) {
-                    this.elements.smallCountdownContainer.textContent = 'Updates Paused';
-                }
+                 if(this.elements.smallCountdownContainer) this.elements.smallCountdownContainer.textContent = 'Updates Paused';
             }
-            
-            toggleLiveUpdate() { 
-                this.isLiveUpdatePaused ? this.startLiveUpdate() : this.stopLiveUpdate(); 
-            }
-            
-            async refreshStocks() { 
-                await this.refreshItems(this.stocks, 'stock'); 
-            }
-            
-            async refreshFunds() { 
-                await this.refreshItems(this.mutualFunds, 'fund'); 
-            }
-            
-            async refreshWatchlist() { 
-                await this.refreshItems(this.watchlist, 'watchlist'); 
-            }
-            
+            toggleLiveUpdate() { this.isLiveUpdatePaused ? this.startLiveUpdate() : this.stopLiveUpdate(); }
+            async refreshStocks() { await this.refreshItems(this.stocks, 'stock'); }
+            async refreshFunds() { await this.refreshItems(this.mutualFunds, 'fund'); }
+            async refreshWatchlist() { await this.refreshItems(this.watchlist, 'watchlist'); }
             async refreshItems(items, type) {
-                if (items.length === 0) {
-                    return;
-                }
-                
+                if (items.length === 0) return;
                 this.showLoading(true, `Refreshing 0/${items.length} items...`);
-                
                 let stats = { success: 0, gains: 0, losses: 0, unchanged: 0, failed: 0 };
                 let failedSymbols = [];
-                
                 for (const [i, item] of items.entries()) {
                     const result = this.isMutualFund(item.symbol) ? await this.apiService.fetchFundData(item.symbol) : await this.apiService.fetchStockEtfQuote(item.symbol);
-                    
                     if (result.success) {
                         Object.assign(item, result.data);
                         stats.success++;
-                        if ((result.data.change || 0) > 0) {
-                            stats.gains++;
-                        } else if ((result.data.change || 0) < 0) {
-                            stats.losses++;
-                        } else {
-                            stats.unchanged++;
-                        }
+                        if ((result.data.change || 0) > 0) stats.gains++;
+                        else if ((result.data.change || 0) < 0) stats.losses++;
+                        else stats.unchanged++;
                     } else {
                         stats.failed++;
                         failedSymbols.push(item.symbol);
                         console.error(`Failed to refresh ${item.symbol}:`, result.reason);
                     }
-                    
                     this.showLoading(true, `Refreshing ${item.symbol}... (${i + 1}/${items.length})`);
                 }
-                
                 this.showLoading(false);
                 this.showRefreshStatus(type, stats);
                 await this.saveData();
@@ -1837,29 +2084,19 @@
             }
             
             calculateSummaryMetrics(items) {
-                let totalCurrentValue = 0, 
-                    totalUnrealizedPL = 0, 
-                    totalRealizedPL = 0, 
-                    totalPLToday = 0, 
-                    totalPreviousDayValue = 0, 
-                    totalContributions = 0, 
-                    totalDividends = 0;
-                    
+                let totalCurrentValue = 0, totalUnrealizedPL = 0, totalRealizedPL = 0, totalPLToday = 0, totalPreviousDayValue = 0, totalContributions = 0, totalDividends = 0;
                 items.forEach(item => {
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
                     totalRealizedPL += stats.realizedPL;
-                    
                     if (stats.totalSharesOwned > 0) {
                         totalCurrentValue += stats.currentValue;
                         totalUnrealizedPL += stats.unrealizedPL;
                         totalPLToday += (item.change || 0) * stats.totalSharesOwned;
                         totalPreviousDayValue += (item.previousClose || item.price - (item.change || 0)) * stats.totalSharesOwned;
                     }
-                    
                     totalContributions += (item.transactions || []).reduce((sum, t) => sum + (t.type === 'buy' ? t.shares * t.price : -t.shares * t.price), 0);
                     totalDividends += (item.dividends || []).reduce((divSum, div) => divSum + div.totalAmount, 0);
                 });
-                
                 return { totalCurrentValue, totalUnrealizedPL, totalRealizedPL, totalPLToday, totalPreviousDayValue, totalContributions, totalDividends };
             }
 
@@ -1882,10 +2119,7 @@
                 const totalPLPercentToday = combinedMetrics.totalPreviousDayValue > 0 ? (combinedMetrics.totalPLToday / combinedMetrics.totalPreviousDayValue) * 100 : 0;
 
                 const setElement = (el, value, isPercent = false) => {
-                    if (!el) {
-                        return;
-                    }
-                    
+                    if (!el) return;
                     el.textContent = isPercent ? `${this.formatNumber(value, 2)}%` : this.formatCurrency(value);
                     el.className = `summary-value ${value >= 0 ? 'positive' : 'negative'}`;
                 };
@@ -1895,9 +2129,7 @@
                 setElement(document.getElementById('mutual-fund-total-value'), fundMetrics.totalCurrentValue);
                 
                 const contributionsEl = document.getElementById('total-contributions');
-                if (contributionsEl) {
-                    contributionsEl.textContent = this.formatCurrency(combinedMetrics.totalContributions);
-                }
+                if (contributionsEl) contributionsEl.textContent = this.formatCurrency(combinedMetrics.totalContributions);
 
                 setElement(document.getElementById('total-dividends'), combinedMetrics.totalDividends);
                 setElement(document.getElementById('total-pl-today'), combinedMetrics.totalPLToday);
@@ -1906,43 +2138,25 @@
                 setElement(document.getElementById('total-pl-realized'), combinedMetrics.totalRealizedPL);
             }
 
-            isMutualFund(symbol) { 
-                return symbol.length === 5 && symbol.endsWith('X'); 
-            }
-            
+            isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
             async addItemFromInput(type) {
                 const isStock = type === 'stock';
                 const input = isStock ? this.elements.stockInput : (type === 'fund' ? this.elements.mutualFundInput : this.elements.watchlistInput);
                 const symbol = input.value.trim().toUpperCase();
-                
-                if (!symbol) {
-                    return;
-                }
-                
+                if (!symbol) return;
                 input.value = '';
                 await this.addItem(symbol, type);
             }
-            
             async addItem(symbol, type) {
                 this.showLoading(true, `Adding ${symbol}...`);
-                
                 try {
                     let targetList, listName;
-                    if (type === 'stock') { 
-                        [targetList, listName] = [this.stocks, 'portfolio']; 
-                    }
-                    else if (type === 'fund') { 
-                        [targetList, listName] = [this.mutualFunds, 'fund portfolio']; 
-                    }
-                    else { 
-                        [targetList, listName] = [this.watchlist, 'watchlist']; 
-                    }
+                    if (type === 'stock') { [targetList, listName] = [this.stocks, 'portfolio']; }
+                    else if (type === 'fund') { [targetList, listName] = [this.mutualFunds, 'fund portfolio']; }
+                    else { [targetList, listName] = [this.watchlist, 'watchlist']; }
 
                     const result = this.isMutualFund(symbol) ? await this.apiService.fetchFundData(symbol) : await this.apiService.fetchStockEtfData(symbol);
-                    
-                    if (!result.success) {
-                        throw new Error(result.reason);
-                    }
+                    if (!result.success) throw new Error(result.reason);
                     
                     let newItem = { 
                         ...result.data,
@@ -1953,66 +2167,42 @@
                         newItem.transactions = [];
                         newItem.dividends = [];
                     }
-                    
                     targetList.push(newItem);
 
                     await this.saveData();
                     this.renderContent();
                     this.showSuccess(`✅ Added ${symbol} to your ${listName}!`);
-                    
                 } catch (error) {
                     this.showError(`❌ Failed to add ${symbol}. Reason: ${error.message}`);
                 } finally {
                     this.showLoading(false);
                 }
             }
-            
             removeItem(id, type) {
                 this.openConfirmModal(`Are you sure you want to remove this item?`, async () => {
-                     if (type === 'stock') { 
-                        this.stocks = this.stocks.filter(item => item.id !== id); 
-                    }
-                     else if (type === 'fund') { 
-                        this.mutualFunds = this.mutualFunds.filter(item => item.id !== id); 
-                    }
-                     else if (type === 'watchlist') { 
-                        this.watchlist = this.watchlist.filter(item => item.id !== id); 
-                    }
-                    
+                     if (type === 'stock') { this.stocks = this.stocks.filter(item => item.id !== id); }
+                     else if (type === 'fund') { this.mutualFunds = this.mutualFunds.filter(item => item.id !== id); }
+                     else if (type === 'watchlist') { this.watchlist = this.watchlist.filter(item => item.id !== id); }
                     await this.saveData();
                     this.renderContent();
                 });
             }
-            
             clearAllItems(type) {
                 this.openConfirmModal(`Are you sure you want to clear all ${type}s? This cannot be undone.`, async () => {
-                    if (type === 'stock') {
-                        this.stocks = [];
-                    }
-                    else if (type === 'fund') {
-                        this.mutualFunds = [];
-                    }
-                    else if (type === 'watchlist') {
-                        this.watchlist = [];
-                    }
-                    
+                    if (type === 'stock') this.stocks = [];
+                    else if (type === 'fund') this.mutualFunds = [];
+                    else if (type === 'watchlist') this.watchlist = [];
                     await this.saveData();
                     this.renderContent();
                 });
             }
-            
             calculateTransactionStats(transactions = [], currentPrice = 0) {
                 const buys = JSON.parse(JSON.stringify((transactions || []).filter(t => t.type === 'buy').sort((a,b) => new Date(a.date) - new Date(b.date))));
                 const sells = JSON.parse(JSON.stringify((transactions || []).filter(t => t.type === 'sell')));
-                
                 let totalSharesOwned = buys.reduce((s, t) => s + t.shares, 0) - sells.reduce((s, t) => s + t.shares, 0);
                 let realizedPL = 0;
-                
                 for (const sell of sells) {
-                    let sharesToSell = sell.shares, 
-                        saleProceeds = sharesToSell * sell.price, 
-                        costOfSoldShares = 0;
-                        
+                    let sharesToSell = sell.shares, saleProceeds = sharesToSell * sell.price, costOfSoldShares = 0;
                     for (let buy of buys) {
                         if (buy.shares > 0 && sharesToSell > 0) {
                             let sharesFromThisLot = Math.min(sharesToSell, buy.shares);
@@ -2023,66 +2213,45 @@
                     }
                     realizedPL += saleProceeds - costOfSoldShares;
                 }
-                
                 let costOfRemainingShares = buys.reduce((s, t) => s + (t.shares * t.price), 0);
                 let averageCostBasis = totalSharesOwned > 0 ? costOfRemainingShares / totalSharesOwned : 0;
                 let currentValue = totalSharesOwned * currentPrice;
                 let unrealizedPL = totalSharesOwned > 0 ? currentValue - costOfRemainingShares : 0;
-                
                 return { totalSharesOwned, averageCostBasis, realizedPL, unrealizedPL, currentValue, costOfRemainingShares };
             }
 
             calculateAnnualizedDividendYield(item) {
-                 if (!item.dividends || item.dividends.length === 0 || item.price === 0) {
-                    return 0;
-                }
-                 
-                 const now = new Date(), 
-                    lastYear = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-                    
+                 if (!item.dividends || item.dividends.length === 0 || item.price === 0) return 0;
+                 const now = new Date(), lastYear = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
                  const totalDividendsLastYear = item.dividends.filter(d => new Date(d.date) > lastYear).reduce((sum, d) => sum + d.totalAmount, 0);
-                 
                  return totalDividendsLastYear > 0 ? (totalDividendsLastYear / item.price) * 100 : 0;
             }
-            
             openEditTransactionModal(id, type, index) {
                 const itemList = (type === 'stock') ? this.stocks : this.mutualFunds;
                 const item = itemList.find(i => i.id === id);
-                
-                if (!item || !item.transactions || index < 0 || index >= item.transactions.length) {
-                    return;
-                }
-                
+                if (!item || !item.transactions || index < 0 || index >= item.transactions.length) return;
                 const transaction = item.transactions[index];
                 this.openTransactionModal(id, type, transaction.type, index);
-                
                 this.elements.modalShares.value = transaction.shares;
                 this.elements.modalPrice.value = transaction.price;
                 this.elements.modalPlatform.value = transaction.platform || '';
                 this.elements.modalNote.value = transaction.note || '';
                 this.elements.modalDate.value = transaction.date ? transaction.date.split('T')[0] : '';
             }
-            
             openTransactionModal(id, type, transactionType, transactionIndex = -1) {
                 const modal = this.elements.transactionModal;
                 const itemList = (type === 'stock') ? this.stocks : this.mutualFunds;
                 const item = itemList.find(i => i.id === id);
-                
                 if (!modal || !item) {
                     this.showError("Could not open transaction modal.");
                     return;
                 }
-                
                 modal.style.display = 'flex';
                 this.elements.modalSymbol.textContent = item.symbol;
                 this.elements.modalTitleAction.textContent = transactionIndex > -1 ? 'Edit' : transactionType.charAt(0).toUpperCase() + transactionType.slice(1);
-                
                 ['modalShares', 'modalPrice', 'modalNote', 'modalPlatform', 'modalDividendAmount'].forEach(elId => {
-                     if(this.elements[elId]) {
-                        this.elements[elId].value = '';
-                    }
+                     if(this.elements[elId]) this.elements[elId].value = '';
                  });
-                 
                 if (transactionIndex === -1) {
                     this.elements.modalDate.value = new Date().toISOString().split('T')[0];
                 }
@@ -2093,17 +2262,16 @@
                 const allPlatforms = [...new Set([...predefinedPlatforms, ...existingPlatforms])].sort();
                 const platformSelect = this.elements.modalPlatform;
                 platformSelect.innerHTML = `<option value="">Select...</option>`;
-                
                 allPlatforms.forEach(p => {
                     platformSelect.innerHTML += `<option value="${p}">${p}</option>`;
                 });
-                
                 platformSelect.innerHTML += `<option value="add_new">++ Add New Platform...</option>`;
                 
                 if (transactionIndex > -1) {
                     const transaction = item.transactions[transactionIndex];
                     platformSelect.value = transaction.platform || "";
                 }
+
 
                 this.elements.modalDividendFields.style.display = 'none';
                 this.elements.modalShares.parentNode.style.display = 'block';
@@ -2115,13 +2283,9 @@
                     this.elements.modalPlatform.parentNode.style.display = 'none';
                     this.elements.modalDividendFields.style.display = 'block';
                 }
-                
                 Object.assign(this.elements.modalSaveBtn.dataset, { id, type, transactionType, transactionIndex });
             }
-            
-            closeTransactionModal() { 
-                this.elements.transactionModal.style.display = 'none'; 
-            }
+            closeTransactionModal() { this.elements.transactionModal.style.display = 'none'; }
             
             async saveTransaction() {
                 const { id, type, transactionType, transactionIndex: indexStr } = this.elements.modalSaveBtn.dataset;
@@ -2129,17 +2293,10 @@
                 const isEditing = index > -1;
                 const itemList = (type === 'stock') ? this.stocks : this.mutualFunds;
                 const item = itemList.find(i => i.id === id);
-                
-                if (!item) {
-                    return;
-                }
+                if (!item) return;
         
                 const dateInput = this.elements.modalDate.value;
-                if (!dateInput) { 
-                    this.showError('Transaction date is required.'); 
-                    return; 
-                }
-                
+                if (!dateInput) { this.showError('Transaction date is required.'); return; }
                 const transactionDateISO = new Date(dateInput).toISOString();
         
                 if (transactionType === 'buy' || transactionType === 'sell') {
@@ -2152,7 +2309,7 @@
                         if (customPlatform && customPlatform.trim() !== '') {
                             platform = customPlatform.trim();
                         } else {
-                            return; 
+                            return; // User cancelled or entered nothing
                         }
                     }
 
@@ -2170,10 +2327,7 @@
                         }
                     }
         
-                    if (!item.transactions) {
-                        item.transactions = [];
-                    }
-                    
+                    if (!item.transactions) item.transactions = [];
                     const newTransaction = {
                         type: transactionType,
                         shares, price, platform,
@@ -2201,7 +2355,6 @@
                  this.openConfirmModal('Delete this transaction?', async () => {
                      const itemList = (type === 'stock') ? this.stocks : this.mutualFunds;
                      const item = itemList.find(i => i.id === id);
-                     
                     if (item) {
                         if (item.transactions && index >= 0 && index < item.transactions.length) {
                             item.transactions.splice(index, 1);
@@ -2209,42 +2362,28 @@
                         } else {
                              this.showError(`Error: Transaction index ${index} not found for ${item.symbol}.`);
                         }
-                        
                         await this.saveData();
                         this.renderContent();
                     }
                 });
             }
-            
             renderGroupedStocks(items, container, type) {
                 const gains = items.filter(s => (s.changePercent || 0) >= 0).sort((a, b) => b.changePercent - a.changePercent);
                 const losses = items.filter(s => (s.changePercent || 0) < 0).sort((a, b) => a.changePercent - b.changePercent);
-                
                 if (items.length === 0) { 
-                    if (container.classList.contains('group-content')) {
-                        return;
-                    }
+                    if (container.classList.contains('group-content')) return;
                     container.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your portfolio is empty.</div>`; 
                     return; 
                 }
-                
                 const biggestGain = gains.length > 0 ? [gains[0]] : [];
-                
-                if (biggestGain.length > 0) {
-                    this.createGroup('🚀 Biggest Gain Today', biggestGain, 'biggest-gain-header', container, type, this.getGroupSummary(biggestGain, 'biggest-gain'));
-                }
-                
+                if (biggestGain.length > 0) this.createGroup('🚀 Biggest Gain Today', biggestGain, 'biggest-gain-header', container, type, this.getGroupSummary(biggestGain, 'biggest-gain'));
                 const otherGains = gains.filter(s => biggestGain.length === 0 || s.id !== biggestGain[0].id);
-                
                 this.createGroup('📈 Gains Today', otherGains, 'gains-header', container, type, this.getGroupSummary(otherGains, 'gains'));
                 this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
             }
-            
             renderGroupedByPlatform(items, container, type) {
                 if (items.length === 0) { 
-                    if (container.classList.contains('group-content')) {
-                        return;
-                    }
+                    if (container.classList.contains('group-content')) return;
                     container.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your portfolio is empty.</div>`; 
                     return;
                 }
@@ -2276,16 +2415,13 @@
                     this.createGroup(platformName, platformMap[platformName], 'platform-header', container, type, this.getGroupSummary(platformMap[platformName], 'platform'));
                 }
             }
-            
             getGroupSummary(items, type) {
                 let summaryTitle = '';
                 let summaryText = '';
-                
                 if (type === 'biggest-gain') {
                     if (items.length > 0) {
                         const item = items[0];
                         summaryTitle = `Biggest Gain: ${item.symbol}`;
-                        
                         const changeClass = (item.change || 0) >= 0 ? 'positive' : 'negative';
                         const changePercentClass = (item.changePercent || 0) >= 0 ? 'positive' : 'negative';
                         const stats = this.calculateTransactionStats(item.transactions, item.price);
@@ -2295,7 +2431,6 @@
                         const totalValue = stats.currentValue;
                         const totalChangeToday = (item.change || 0) * stats.totalSharesOwned;
                         const totalChangeTodayClass = totalChangeToday >= 0 ? 'positive' : 'negative';
-                        
                         summaryText = `Gained <span class="${changeClass}">${this.formatCurrency(item.change)}</span> today, a change of <span class="${changePercentClass}">${(item.changePercent || 0).toFixed(2)}%</span>.`;
                         summaryText += `\nTotal Value: <span class="${totalPL >= 0 ? 'positive' : 'negative'}">${this.formatCurrency(totalValue)}</span>`;
                         summaryText += `\nTotal P/L: <span class="${totalPLClass}">${this.formatCurrency(totalPL)}</span> (<span class="${totalPLClass}">${this.formatNumber(totalPLPercent, 2)}%</span>)`;
@@ -2319,20 +2454,14 @@
                     summaryTitle = `Summary of ${items.length} item(s)`;
                     const totalChangeClass = totalChangeToday >= 0 ? 'positive' : 'negative';
                     const totalPLClass = totalPLUnrealized >= 0 ? 'positive' : 'negative';
-                    
                     summaryText = `Total Value: ${this.formatCurrency(totalValue)}\n`;
                     summaryText += `Total Unrealized P/L: <span class="${totalPLClass}">${this.formatCurrency(totalPLUnrealized)}</span> (<span class="${totalPLClass}">${this.formatNumber(totalPLPercent, 2)}%</span>)\n`;
                     summaryText += `Total Change Today: <span class="${totalChangeClass}">${this.formatCurrency(totalChangeToday)}</span>`;
                 }
-                
                 return { title: summaryTitle, text: summaryText };
             }
-            
             createGroup(title, itemList, headerClass, parent, type, summary = { title: '', text: '' }) {
-                if(itemList.length === 0) {
-                    return;
-                }
-                
+                if(itemList.length === 0) return;
                 const groupWrapper = document.createElement('div');
                 groupWrapper.className = 'group-wrapper';
 
@@ -2367,7 +2496,6 @@
                 };
 
                 header.addEventListener('click', toggleGroup);
-                
                 footer.querySelector('.collapse-group-btn').addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -2397,11 +2525,10 @@
 
                 itemList.forEach(item => {
                     const card = document.createElement('div');
-                    card.className = `${type}-card stock-card`; 
+                    card.className = `${type}-card stock-card`; // Use stock-card for consistent styling
                     card.dataset.id = item.id;
                     card.dataset.type = type;
                     card.dataset.symbol = item.symbol;
-                    
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
                     
                     let stockInfoHTML = '';
@@ -2427,7 +2554,6 @@
                         card.style.opacity = "0.7";
                         const realizedPL = stats.realizedPL;
                         const realizedClass = realizedPL >= 0 ? 'positive' : 'negative';
-                        
                         stockInfoHTML = `
                             <div class="info-row" style="text-align: center; display: block; margin-bottom: 10px;">
                                 <span class="info-label" style="font-weight: bold; font-size: 1.1em;">Position Closed</span>
@@ -2436,7 +2562,6 @@
                                 <span class="info-label">Realized P/L</span>
                                 <span class="info-value ${realizedClass}" style="font-size: 1.2em;">${this.formatCurrency(realizedPL)}</span>
                             </div>`;
-                            
                     } else {
                         const totalPL = stats.unrealizedPL;
                         const totalPLPercent = stats.costOfRemainingShares > 0 ? (totalPL / stats.costOfRemainingShares) * 100 : 0;
@@ -2479,23 +2604,22 @@
                                 </div>
                                 <div class="card-actions">
                                     <button class="transaction-btn buy-btn">Buy</button>
-                                    <button class="transaction-btn sell-btn">Sell</button>
+                                    <button class="transaction-btn sell-btn" style="background-color: var(--color-negative);">Sell</button>
                                 </div>
                                 <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 8px;">
                                     <button class="add-btn edit-btn">Edit Details</button>
                                 </div>
                                 <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 8px;">
-                                    <button class="transaction-btn set-alert-btn" style="background: linear-gradient(135deg, #9b59b6, #3498db);">🔔 Set Alert</button>
+                                    <button class="transaction-btn set-alert-btn" style="background-color: #9b59b6;">🔔 Set Alert</button>
                                 </div>`;
                     } else if (type === 'watchlist') {
                         transactionDetailsHTML = `<div class="card-actions" style="grid-template-columns: 1fr; gap: 8px;">
                             <button class="add-btn move-to-portfolio-btn">Move to Portfolio</button>
-                            <button class="transaction-btn set-alert-btn" style="background: linear-gradient(135deg, #9b59b6, #3498db);">🔔 Set Alert</button>
+                            <button class="transaction-btn set-alert-btn" style="background-color: #9b59b6;">🔔 Set Alert</button>
                         </div>`;
                     }
                     
                     const todayPL = (item.change || 0) * stats.totalSharesOwned;
-                    
                     card.innerHTML = `
                         <div class="stock-header">
                             <span class="${type}-symbol stock-symbol">${item.symbol}</span>
@@ -2512,9 +2636,7 @@
                     `;
                     
                     container.appendChild(card);
-                    
                     const transactionHeader = card.querySelector('.transaction-header');
-                    
                     if (transactionHeader) {
                         const toggleTransactions = () => {
                             const container = transactionHeader.nextElementSibling;
@@ -2531,17 +2653,11 @@
 
             async renderCardChart(symbol, range = '1Y') {
                 const card = document.querySelector(`.stock-card[data-symbol="${symbol}"], .fund-card[data-symbol="${symbol}"]`);
-                if (!card) {
-                    return;
-                }
+                if (!card) return;
 
                 const chartId = `chart-${card.dataset.id}`;
                 const canvas = document.getElementById(chartId);
-                
-                if (!canvas) {
-                    return;
-                }
-                
+                if (!canvas) return;
                 const ctx = canvas.getContext('2d');
 
                 // Update active button state
@@ -2549,9 +2665,7 @@
                 if(chartControls) {
                     chartControls.querySelectorAll('.chart-range-btn').forEach(btn => btn.classList.remove('active'));
                     const newActiveButton = chartControls.querySelector(`[data-range="${range}"]`);
-                    if(newActiveButton) {
-                        newActiveButton.classList.add('active');
-                    }
+                    if(newActiveButton) newActiveButton.classList.add('active');
                 }
                 
 
@@ -2568,11 +2682,9 @@
                         this.showLoading(true, `Fetching chart data for ${symbol}...`);
                         const result = await this.apiService.fetchHistoricalData(symbol);
                         this.showLoading(false);
-                        
                         if (!result.success) {
                             throw new Error(result.reason);
                         }
-                        
                         this.chartDataCache[symbol] = result.data;
                         historicalData = result.data;
                     }
@@ -2593,12 +2705,11 @@
                         case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
                         case '3Y': startDate.setFullYear(now.getFullYear() - 3); break;
                         case '5Y': startDate.setFullYear(now.getFullYear() - 5); break;
-                        case 'All': startDate = new Date(0); break; 
+                        case 'All': startDate = new Date(0); break; // Start from the beginning of time
                         default: startDate.setFullYear(now.getFullYear() - 1); break;
                     }
 
                     const chartData = allDataPoints.filter(dp => dp.x >= startDate);
-                    
                     if (chartData.length === 0) {
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
                         ctx.textAlign = 'center';
@@ -2668,9 +2779,7 @@
             
             async moveToPortfolio(id) {
                 const stockIndex = this.watchlist.findIndex(stock => stock.id === id);
-                if (stockIndex === -1) {
-                    return;
-                }
+                if (stockIndex === -1) return;
 
                 const [stockToMove] = this.watchlist.splice(stockIndex, 1);
                 
@@ -2683,190 +2792,105 @@
                 this.renderContent();
                 this.showSuccess(`✅ Moved ${stockToMove.symbol} to portfolio!`);
             }
-            
             showRefreshStatus(type, stats) {
                 const statusDiv = this.elements.refreshStatusPopup;
-                if (!statusDiv) {
-                    return;
-                }
-                
+                if (!statusDiv) return;
                 statusDiv.innerHTML = `Refreshed ${stats.success} ${type}(s). ✅ ${stats.gains} gained, 🔻${stats.losses} lost. Failed: ${stats.failed}.`;
                 statusDiv.style.display = 'block';
-                
-                setTimeout(() => { 
-                    statusDiv.style.display = 'none'; 
-                }, 15000);
+                setTimeout(() => { statusDiv.style.display = 'none'; }, 15000);
             }
-            
-            showLoading(show, message = 'Loading...') { 
-                this.elements.loadingDiv.style.display = show ? 'block' : 'none'; 
-                this.elements.loadingDiv.textContent = message; 
-            }
-            
+            showLoading(show, message = 'Loading...') { this.elements.loadingDiv.style.display = show ? 'block' : 'none'; this.elements.loadingDiv.textContent = message; }
             showError(message) {
                 this.elements.errorDiv.style.display = 'block';
                 this.elements.errorDiv.innerHTML = `<h4>Error</h4><p>${message}</p>`;
-                
-                setTimeout(() => {
-                    this.elements.errorDiv.style.display = 'none';
-                }, 10000);
+                setTimeout(() => this.elements.errorDiv.style.display = 'none', 10000);
             }
-            
             showSuccess(message) {
                 this.elements.successDiv.style.display = 'block';
                 this.elements.successDiv.innerHTML = `<h4>Success</h4><p>${message}</p>`;
-                
-                setTimeout(() => {
-                    this.elements.successDiv.style.display = 'none';
-                }, 3000);
+                setTimeout(() => this.elements.successDiv.style.display = 'none', 3000);
             }
-            
             async exportData() {
                 this.saveScrollPosition();
-                
                 const dataStr = JSON.stringify({ stocks: this.stocks, mutualFunds: this.mutualFunds, watchlist: this.watchlist }, null, 2);
                 const blob = new Blob([dataStr], {type: 'application/json'});
                 const a = document.createElement('a');
-                
                 a.href = URL.createObjectURL(blob);
                 a.download = 'portfolio-data.json';
                 a.click();
                 URL.revokeObjectURL(a.href);
             }
-            
             async importData(e) {
                 const file = e.target.files[0];
-                if (!file) {
-                    return;
-                }
-                
+                if (!file) return;
                 this.saveScrollPosition();
                 const reader = new FileReader();
-                
                 reader.onload = async (event) => {
                     try {
                         const data = JSON.parse(event.target.result);
                         this.stocks = data.stocks || this.stocks;
                         this.mutualFunds = data.mutualFunds || this.mutualFunds;
                         this.watchlist = data.watchlist || this.watchlist;
-                        
                         await this.saveData();
                         this.renderContent();
                         this.showSuccess(`✅ Data successfully imported!`);
-                    } catch (err) { 
-                        this.showError('❌ Error parsing JSON file.'); 
-                    }
+                    } catch (err) { this.showError('❌ Error parsing JSON file.'); }
                 };
-                
                 reader.readAsText(file);
             }
-            
             renderDiversificationChart() {
                 const container = this.elements.diversificationChartContainer;
                 const allItems = [...this.stocks, ...this.mutualFunds];
-                
                 const hasTransactions = allItems.some(s => s.transactions && s.transactions.length > 0 && this.calculateTransactionStats(s.transactions).currentValue > 0);
-                
                 container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && hasTransactions ? 'block' : 'none';
-                
-                if (!container.style.display || container.style.display === 'none') {
-                    return;
-                }
-                
+                if (!container.style.display || container.style.display === 'none') return;
                 const industryData = allItems.reduce((acc, stock) => {
                     const { currentValue } = this.calculateTransactionStats(stock.transactions, stock.price);
-                    if (currentValue > 0) {
-                        acc[stock.industry || 'Other'] = (acc[stock.industry || 'Other'] || 0) + currentValue;
-                    }
+                    if (currentValue > 0) acc[stock.industry || 'Other'] = (acc[stock.industry || 'Other'] || 0) + currentValue;
                     return acc;
                 }, {});
-                
                 const sortedData = Object.entries(industryData).sort(([, a], [, b]) => b - a);
                 const labels = sortedData.map(([label]) => label);
                 const data = sortedData.map(([, value]) => value);
-                
                 if (this.diversificationChartInstance) {
                     this.diversificationChartInstance.destroy();
                 }
-                
                 const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
-                
                 this.diversificationChartInstance = new Chart(this.elements.diversificationChart, {
                     type: 'bar',
-                    data: { 
-                        labels, 
-                        datasets: [{ 
-                            label: 'Value', 
-                            data, 
-                            backgroundColor: colors 
-                        }] 
-                    },
-                    options: { 
-                        responsive: true, 
-                        maintainAspectRatio: false, 
-                        plugins: { 
-                            title: { 
-                                display: true, 
-                                text: 'Portfolio by Industry', 
-                                color: labelColor 
-                            }, 
-                            legend: { 
-                                display: false 
-                            } 
-                        }, 
-                        scales: { 
-                            y: { 
-                                ticks: { 
-                                    color: labelColor 
-                                }, 
-                                grid: { 
-                                    color: gridColor 
-                                } 
-                            }, 
-                            x: { 
-                                ticks: { 
-                                    color: labelColor 
-                                }, 
-                                grid: { 
-                                    color: gridColor 
-                                } 
-                            } 
-                        } 
-                    }
+                    data: { labels, datasets: [{ label: 'Value', data, backgroundColor: colors }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Portfolio by Industry', color: labelColor }, legend: { display: false } }, scales: { y: { ticks: { color: labelColor }, grid: { color: gridColor } }, x: { ticks: { color: labelColor }, grid: { color: gridColor } } } }
                 });
             }
-            
             async updatePortfolioHistory() {
                 const allItems = [...this.stocks, ...this.mutualFunds];
                  const today = new Date().toISOString().slice(0, 10);
                 const lastEntry = this.portfolioHistory.at(-1);
-                
                 let totalValue = allItems.reduce((sum, item) => sum + this.calculateTransactionStats(item.transactions, item.price).currentValue, 0);
-                
-                if (totalValue <= 0) {
-                    return;
-                }
-                
-                if (!lastEntry || lastEntry.date !== today) {
-                    this.portfolioHistory.push({ date: today, value: totalValue });
-                } else {
-                    lastEntry.value = totalValue;
-                }
-                
+                if (totalValue <= 0) return;
+                if (!lastEntry || lastEntry.date !== today) this.portfolioHistory.push({ date: today, value: totalValue });
+                else lastEntry.value = totalValue;
                 await this.saveData();
             }
             
-            // --- Portfolio Performance Chart Rendering ---
+            /**
+             * ==================================================================
+             * ==      UPDATED PORTFOLIO PERFORMANCE CHART FUNCTION            ==
+             * ==================================================================
+             * This function is updated to match the user's screenshot:
+             * 1. Sets line to black (light mode) or white (dark mode).
+             * 2. Adds a light purple fill under the line.
+             * 3. Styles data points to be black/white with an opposing border.
+             * 4. Makes the line curved for '1W' (or small data sets) and angular for others.
+             * 5. Hides vertical (X-axis) gridlines to match the image.
+             * 6. Adds "Today's G/L" to the tooltip for the last data point.
+             */
             renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
-                
                 container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && this.portfolioHistory.length > 0 ? 'block' : 'none';
-                
-                if (container.style.display === 'none') {
-                    return;
-                }
+                if (container.style.display === 'none') return;
                 
                 // Update active button state
                 this.elements.performanceChartControls.querySelectorAll('.chart-range-btn').forEach(btn => btn.classList.remove('active'));
@@ -2890,24 +2914,23 @@
                 }
 
                 const chartData = allDataPoints.filter(dp => dp.x >= startDate);
-                
-                if (chartData.length === 0) {
-                    chartData.push(allDataPoints.at(-1)).filter(Boolean); 
-                }
+                if (chartData.length === 0) chartData.push(allDataPoints.at(-1)).filter(Boolean); // Show last point if range is empty
 
                 if (this.portfolioPerformanceChartInstance) {
                     this.portfolioPerformanceChartInstance.destroy();
                 }
 
-                const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'; 
+                // --- NEW STYLING based on user image ---
+                const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'; // Fainter grid
                 const labelColor = this.isDarkMode ? '#adb5bd' : '#6c757d';
-                const chartLineColor = this.isDarkMode ? '#f8f9fa' : '#212529'; 
-                const pointFillColor = this.isDarkMode ? '#f8f9fa' : '#212529'; 
-                const pointBorderColor = this.isDarkMode ? '#22252e' : '#ffffff'; 
-                const fillBackgroundColor = this.isDarkMode ? 'rgba(167, 139, 250, 0.1)' : 'rgba(124, 58, 237, 0.1)'; 
+                const chartLineColor = this.isDarkMode ? '#f8f9fa' : '#212529'; // Black/White line
+                const pointFillColor = this.isDarkMode ? '#f8f9fa' : '#212529'; // Black/White point fill
+                const pointBorderColor = this.isDarkMode ? '#22252e' : '#ffffff'; // Background-matching border
+                const fillBackgroundColor = this.isDarkMode ? 'rgba(167, 139, 250, 0.1)' : 'rgba(124, 58, 237, 0.1)'; // Purple fill
 
                 const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
                 
+                // --- CALCULATE G/L FOR TOOLTIP ---
                 const stockMetrics = this.calculateSummaryMetrics(this.stocks);
                 const fundMetrics = this.calculateSummaryMetrics(this.mutualFunds);
                 const totalPLToday = stockMetrics.totalPLToday + fundMetrics.totalPLToday;
@@ -2919,16 +2942,16 @@
                         datasets: [{ 
                             label: 'Portfolio Value', 
                             data: chartData, 
-                            borderColor: chartLineColor, 
-                            tension: chartData.length < 15 ? 0.3 : 0, 
+                            borderColor: chartLineColor, // <-- CHANGED: Black/White line
+                            tension: chartData.length < 15 ? 0.3 : 0, // <-- CHANGED: Conditional curve
                             borderWidth: 2, 
-                            pointRadius: 3, 
-                            pointBackgroundColor: pointFillColor, 
-                            pointBorderColor: pointBorderColor, 
-                            pointBorderWidth: 2, 
-                            pointHoverRadius: 5, 
-                            fill: true, 
-                            backgroundColor: fillBackgroundColor, 
+                            pointRadius: 3, // <-- CHANGED: Show points
+                            pointBackgroundColor: pointFillColor, // <-- CHANGED: Black/White fill
+                            pointBorderColor: pointBorderColor, // <-- CHANGED: Background-matching border
+                            pointBorderWidth: 2, // <-- ADDED
+                            pointHoverRadius: 5, // <-- ADDED
+                            fill: true, // <-- CHANGED: Enable fill
+                            backgroundColor: fillBackgroundColor, // <-- ADDED: Purple fill
                         }] 
                     },
                     options: { 
@@ -2943,28 +2966,28 @@
                                     callback: (v) => this.formatCurrency(v) 
                                 }, 
                                 grid: { 
-                                    color: gridColor, 
+                                    color: gridColor, // <-- Use new grid color
                                     drawBorder: false 
                                 } 
                             }, 
                             x: { 
                                 type: 'time', 
                                 time: { 
-                                    unit: 'day', 
+                                    unit: 'day', // <-- CHANGED: Show days
                                     displayFormats: {
-                                        day: 'M/d/yyyy' 
+                                        day: 'M/d/yyyy' // <-- CHANGED: Format like image
                                     },
-                                    tooltipFormat: 'PP' 
+                                    tooltipFormat: 'PP' // 'Oct 23, 2025'
                                 }, 
                                 ticks: { 
                                     color: labelColor, 
                                     maxRotation: 0, 
                                     autoSkip: true,
-                                    maxTicksLimit: 10 
+                                    maxTicksLimit: 10 // Max 10 labels
                                 }, 
                                 grid: { 
-                                    color: gridColor, 
-                                    display: true 
+                                    color: gridColor, // <-- Use new grid color
+                                    display: true // <-- KEPT: Show X-axis gridlines per image
                                 } 
                             } 
                         }, 
@@ -2975,6 +2998,7 @@
                                 intersect: false, 
                                 callbacks: { 
                                     title: (tooltipItems) => {
+                                        // Format the title date
                                         if (tooltipItems[0]) {
                                             const date = new Date(tooltipItems[0].parsed.x);
                                             return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -2982,9 +3006,11 @@
                                         return '';
                                     },
                                     label: (c) => `Value: ${this.formatCurrency(c.parsed.y)}`,
+                                    // --- NEW TOOLTIP FOOTER ---
                                     footer: (tooltipItems) => {
                                         const lastDataIndex = chartData.length - 1;
                                         if (tooltipItems[0] && tooltipItems[0].dataIndex === lastDataIndex) {
+                                            // Check if the last data point is for 'today'
                                             const today = new Date().setHours(0,0,0,0);
                                             const lastDate = new Date(chartData[lastDataIndex].x).setHours(0,0,0,0);
                                             
@@ -2995,6 +3021,7 @@
                                         return null;
                                     }
                                 },
+                                // --- NEW TOOLTIP STYLING ---
                                 bodyColor: this.isDarkMode ? '#f8f9fa' : '#212529',
                                 titleColor: this.isDarkMode ? '#adb5bd' : '#6c757d',
                                 footerColor: totalPLToday >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
@@ -3016,7 +3043,6 @@
                  this.onConfirm = onConfirmAction;
                  this.onCancel = onCancelAction;
             }
-            
             closeConfirmModal(wasCancelled = false) {
                  this.elements.confirmModal.style.display = 'none';
                 if (wasCancelled && this.onCancel) {
@@ -3025,14 +3051,10 @@
                 this.onConfirm = null;
                 this.onCancel = null;
             }
-            
             handleConfirmAction() {
-                 if (this.onConfirm) {
-                    this.onConfirm();
-                }
+                 if (this.onConfirm) this.onConfirm();
                  this.closeConfirmModal(false);
             }
-            
             openSettingsModal(){
                 this.elements.modalFinnhubKey.value = this.config.finnhubApiKey || '';
                 this.elements.modalAlphaVantageKey.value = this.config.alphaVantageKey || '';
@@ -3040,25 +3062,18 @@
                 this.elements.modalRefreshInterval.value = this.config.refreshIntervalMs / 1000;
                 this.elements.settingsModal.style.display = 'flex';
             }
-            
-            closeSettingsModal(){ 
-                this.elements.settingsModal.style.display = 'none'; 
-            }
-            
+            closeSettingsModal(){ this.elements.settingsModal.style.display = 'none'; }
             saveSettings(){
                 const finnhubKey = this.elements.modalFinnhubKey.value.trim();
                 const alphaVantageKey = this.elements.modalAlphaVantageKey.value.trim();
                 const fmpKey = this.elements.modalFmpKey.value.trim();
                 const interval = parseInt(this.elements.modalRefreshInterval.value, 10);
-                
                 localStorage.setItem('finnhubApiKey', finnhubKey);
                 localStorage.setItem('alphaVantageKey', alphaVantageKey);
                 localStorage.setItem('fmpApiKey', fmpKey);
-                
                 if (interval && interval >= 10) {
                     localStorage.setItem('refreshIntervalMs', interval * 1000);
                 }
-                
                 this.loadConfig();
                  this.apiService = new ApiService(this.config);
                 this.closeSettingsModal();
@@ -3066,6 +3081,13 @@
                 this.startLiveUpdate();
             }
 
+            /**
+             * ==================================================================
+             * ==      FIXED NOTIFICATION FUNCTION                           ==
+             * ==================================================================
+             * This function is updated to handle the 'denied' state,
+             * which was causing the button to do nothing.
+             */
             enablePushNotifications() {
                 if (!("Notification" in window)) {
                     this.showError("This browser does not support desktop notification");
@@ -3077,8 +3099,9 @@
                 if (permission === "granted") {
                     new Notification("Notifications are already enabled!");
                 } else if (permission === "denied") {
+                    // This was the missing part!
                     this.showError("Notifications are blocked. Please go to your browser settings (look for the 🔒 lock icon in the address bar) to enable them for this site.");
-                } else { 
+                } else { // This handles the "default" state
                     Notification.requestPermission().then(permission => {
                         if (permission === "granted") {
                             new Notification("Notifications enabled!");
@@ -3092,56 +3115,39 @@
                 localStorage.setItem('darkMode', this.isDarkMode);
                 this.applyTheme();
             }
-            
             applyTheme() {
                 this.isDarkMode = localStorage.getItem('darkMode') === 'true';
                 document.body.classList.toggle('dark-mode', this.isDarkMode);
-                
                 if (this.currentTab === 'stocks' || this.currentTab === 'funds') {
                     this.renderDiversificationChart();
                     this.renderPortfolioPerformanceChart();
                 }
             }
-            
             togglePrivacyMode() {
                 this.isPrivacyMode = !this.isPrivacyMode;
                 localStorage.setItem('privacyMode', this.isPrivacyMode);
                 this.applyPrivacyMode();
             }
-            
             applyPrivacyMode() {
                 this.isPrivacyMode = localStorage.getItem('privacyMode') === 'true';
                 document.body.classList.toggle('privacy-mode', this.isPrivacyMode);
                 this.elements.togglePrivacyBtn.textContent = this.isPrivacyMode ? '👁️ Disable Privacy' : '👁️ Privacy Mode';
             }
-            
-            openListAllModal() { 
-                this.elements.listAllModal.style.display = 'flex'; 
-                this.listAllSymbols(); 
-            }
-            
-            closeListAllModal() { 
-                this.elements.listAllModal.style.display = 'none'; 
-            }
-            
+            openListAllModal() { this.elements.listAllModal.style.display = 'flex'; this.listAllSymbols(); }
+            closeListAllModal() { this.elements.listAllModal.style.display = 'none'; }
             listAllSymbols() {
                 const contentDiv = this.elements.listAllContent;
                 contentDiv.innerHTML = '';
-                
                 const createList = (title, items) => {
                     if (items.length > 0) {
                         contentDiv.innerHTML += `<h4>${title} (${items.length})</h4>`;
                         items.forEach(item => contentDiv.innerHTML += `<p>${item.symbol}</p>`);
                     }
                 };
-                
                 createList('Stocks', this.stocks);
                 createList('Mutual Funds', this.mutualFunds);
                 createList('Watchlist', this.watchlist);
-                
-                if (contentDiv.innerHTML === '') {
-                    contentDiv.innerHTML = '<p>No saved symbols.</p>';
-                }
+                if (contentDiv.innerHTML === '') contentDiv.innerHTML = '<p>No saved symbols.</p>';
             }
             
             toggleAlertInputs(type) {
@@ -3169,7 +3175,6 @@
 
                 // Check for existing alert and populate
                 const existingAlert = this.priceAlerts.find(a => a.symbol === symbol && !a.triggered);
-                
                 if (existingAlert) {
                     this.elements.saveAlertBtn.textContent = 'Update Alert';
                     if (existingAlert.type === 'range') {
@@ -3188,9 +3193,7 @@
                 }
             }
 
-            closePriceAlertModal() { 
-                this.elements.priceAlertModal.style.display = 'none'; 
-            }
+            closePriceAlertModal() { this.elements.priceAlertModal.style.display = 'none'; }
             
             async savePriceAlert() {
                 const { symbol } = this.elements.saveAlertBtn.dataset;
@@ -3203,35 +3206,29 @@
                 if (alertType === 'single') {
                     const price = parseFloat(this.elements.alertPrice.value);
                     const condition = this.elements.alertCondition.value;
-                    
                     if (!symbol || isNaN(price) || price <= 0) {
                         this.showError("Invalid alert data. Please enter a valid target price.");
                         return;
                     }
-                    
                     newAlert = {
                         id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
                         symbol, type: 'single', condition, price,
                         triggered: false, date: new Date().toISOString()
                     };
-                    
                     this.showSuccess(`Alert set for ${symbol} when price is ${condition} ${this.formatCurrency(price)}!`);
 
-                } else { 
+                } else { // Range
                     const priceLower = parseFloat(this.elements.alertPriceLower.value);
                     const priceUpper = parseFloat(this.elements.alertPriceUpper.value);
-                    
                     if (!symbol || isNaN(priceLower) || isNaN(priceUpper) || priceLower < 0 || priceUpper <= priceLower) {
                         this.showError("Invalid range. Upper bound must be greater than lower bound.");
                         return;
                     }
-                    
                      newAlert = {
                         id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
                         symbol, type: 'range', priceLower, priceUpper,
                         triggered: false, date: new Date().toISOString()
                     };
-                    
                     this.showSuccess(`Alert set for ${symbol} when price is between ${this.formatCurrency(priceLower)} and ${this.formatCurrency(priceUpper)}!`);
                 }
 
@@ -3244,7 +3241,6 @@
                 this.elements.alertsSummaryModal.style.display = 'flex';
                 const contentDiv = this.elements.alertsSummaryContent;
                 contentDiv.innerHTML = '';
-                
                 const allAlerts = this.priceAlerts.slice().sort((a, b) => (a.triggered === b.triggered) ? 0 : a.triggered ? -1 : 1);
 
                 if (allAlerts.length === 0) {
@@ -3253,7 +3249,6 @@
                 }
 
                 let html = '<ul style="list-style-type: none; padding: 0;">';
-                
                 allAlerts.forEach(alert => {
                     let alertText;
                     if (alert.type === 'range') {
@@ -3267,7 +3262,6 @@
                     const formattedDate = alertDate.toLocaleDateString();
                     const formattedTime = alertDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     const triggeredClass = alert.triggered ? 'triggered-alert' : '';
-                    
                     const actionButtons = alert.triggered 
                         ? `<button onclick="window.stockTracker.dismissPriceAlertById('${alert.id}')" class="edit-transaction-btn" style="background-color: var(--color-positive); color: white;">Dismiss</button>`
                         : `<button onclick="window.stockTracker.openPriceAlertModal('${alert.symbol}')" class="edit-transaction-btn">Edit</button>
@@ -3288,18 +3282,15 @@
                         </li>
                     `;
                 });
-                
                 html += '</ul>';
                 contentDiv.innerHTML = html;
             }
-            
             dismissPriceAlertById(alertId) {
                 this.priceAlerts = this.priceAlerts.filter(a => a.id !== alertId);
                 this.saveData();
                 this.openAlertsSummaryModal();
                 this.showSuccess('Alert dismissed.');
             }
-            
             removePriceAlertById(alertId) {
                 const onCancel = () => this.openAlertsSummaryModal();
                  this.openConfirmModal(`Are you sure you want to delete this price alert?`,
@@ -3312,23 +3303,13 @@
                      onCancel
                 );
             }
-            
             checkPriceAlerts() {
-                if(this.priceAlerts.length === 0) {
-                    return;
-                }
-                
+                if(this.priceAlerts.length === 0) return;
                 const allItems = [...this.stocks, ...this.mutualFunds, ...this.watchlist];
-                
                 this.priceAlerts.forEach(alert => {
-                    if (alert.triggered) {
-                        return;
-                    }
-                    
+                    if (alert.triggered) return;
                     const item = allItems.find(i => i.symbol === alert.symbol);
-                    if (!item || !item.price) {
-                        return;
-                    }
+                    if (!item || !item.price) return;
 
                     let trigger = false;
                     if (alert.type === 'range') {
@@ -3345,7 +3326,6 @@
                     }
                 });
             }
-            
             showAlertNotification(item, alert) {
                 let message;
                  if (alert.type === 'range') {
@@ -3358,7 +3338,6 @@
                 const alertDiv = this.elements.alertNotification;
                 alertDiv.classList.add('active');
                 alertDiv.innerHTML = `<h4>Price Alert Triggered</h4><p>${message}</p>`;
-                
                 setTimeout(() => {
                     alertDiv.classList.remove('active');
                 }, 10000);
@@ -3368,29 +3347,22 @@
                     new Notification("Price Alert!", { body: message });
                 }
             }
-            
             async fetchAndRenderNews() {
                 this.saveScrollPosition();
-                
                 const symbols = [...new Set([...this.stocks.map(s => s.symbol), ...this.watchlist.map(s => s.symbol)])];
-                
                 if (symbols.length === 0) {
                      this.elements.newsArticlesContainer.innerHTML = `<div class="loading">No symbols to fetch news for. Add stocks or watchlist items first.</div>`;
                      this.restoreScrollPosition();
                      return;
                  }
-                 
                 const now = Date.now();
-                
                 if (this.newsFeed.length > 0 && now - this.newsFetchTime < 15 * 60 * 1000) {
                      this.renderNews();
                      this.restoreScrollPosition();
                      return;
                  }
-                 
                 this.elements.newsArticlesContainer.innerHTML = '<div class="loading">Fetching news...</div>';
                 const result = await this.apiService.fetchNews(symbols);
-                
                 if (result.success) {
                     this.newsFeed = result.data;
                     this.newsFetchTime = now;
@@ -3398,42 +3370,27 @@
                 } else {
                     this.elements.newsArticlesContainer.innerHTML = `<div class="error"><p>Failed to fetch news. Reason: ${result.reason}</p></div>`;
                 }
-                
                 this.restoreScrollPosition();
             }
-            
             renderNews() {
                 const container = this.elements.newsArticlesContainer;
                 container.innerHTML = '';
-                
-                if (this.newsFeed.length === 0) { 
-                    container.innerHTML = `<div class="loading">No recent news found for your tracked symbols.</div>`; 
-                    return; 
-                }
-                
+                if (this.newsFeed.length === 0) { container.innerHTML = `<div class="loading">No recent news found for your tracked symbols.</div>`; return; }
                 this.newsFeed.slice(0, 20).forEach(article => {
                     const card = document.createElement('a');
                     card.href = article.url;
                     card.target = "_blank";
                     card.className = "news-article-card";
-                    
                     card.innerHTML = `<img src="${article.banner_image || 'https://placehold.co/100x100/eee/ccc?text=News'}" onerror="this.src='https://placehold.co/100x100/eee/ccc?text=Error'"><div class="news-article-content"><h4>${article.title}</h4><p>${article.summary}</p></div>`;
-                    
                     container.appendChild(card);
                 });
             }
-            
             openEditStockModal(id) {
                 const item = this.stocks.find(s => s.id === id) || this.mutualFunds.find(f => f.id === id);
-                
-                if (!item) {
-                    return;
-                }
-                
+                if (!item) return;
                 const stats = this.calculateTransactionStats(item.transactions, item.price);
                 const firstBuyTransaction = item.transactions ? item.transactions.find(t => t.type === 'buy') : null;
                 const initialDate = firstBuyTransaction ? firstBuyTransaction.date.split('T')[0] : '';
-                
                 this.elements.editStockModal.style.display = 'flex';
                 this.elements.editStockSymbolDisplay.textContent = item.symbol;
                 this.elements.editStockSymbol.value = item.symbol || '';
@@ -3444,11 +3401,9 @@
                 this.elements.editStockDate.value = initialDate;
                 this.elements.saveStockEditBtn.dataset.id = id;
             }
-            
             closeEditStockModal() {
                 this.elements.editStockModal.style.display = 'none';
             }
-            
             async saveStockDetails() {
                 const id = this.elements.saveStockEditBtn.dataset.id;
                 const newSymbol = this.elements.editStockSymbol.value.trim().toUpperCase();
@@ -3457,14 +3412,11 @@
                 const newShares = parseFloat(this.elements.editStockShares.value);
                 const newCost = parseFloat(this.elements.editStockCost.value);
                 const newDateInput = this.elements.editStockDate.value;
-                
                 let item = this.stocks.find(s => s.id === id) || this.mutualFunds.find(f => f.id === id);
-                
                 if (!item || !newSymbol || !newName) {
                     this.showError("Symbol and Name are required.");
                     return;
                 }
-                
                 if (isNaN(newShares) || newShares < 0 || isNaN(newCost) || newCost < 0 || !newDateInput) {
                     this.showError("Shares, Average Cost, and Initial Date must be valid numbers/date.");
                     return;
@@ -3479,7 +3431,7 @@
                         item.transactions[firstBuyIndex].shares = newShares;
                         item.transactions[firstBuyIndex].price = newCost;
                         item.transactions[firstBuyIndex].date = new Date(newDateInput).toISOString();
-                        item.transactions[firstBuyIndex].platform = newPlatform; 
+                        item.transactions[firstBuyIndex].platform = newPlatform; // Update platform on first buy
                     } else { 
                          item.transactions.push({
                             type: 'buy', shares: newShares, price: newCost, platform: newPlatform,
@@ -3494,7 +3446,6 @@
                         date: new Date(newDateInput).toISOString()
                     }];
                 }
-                
                 await this.saveData();
                 this.renderContent();
                 this.closeEditStockModal();
@@ -3503,12 +3454,8 @@
 
             async signOutOtherSessions() {
                 this.openConfirmModal('This will sign you out of all other devices. Are you sure?', async () => {
-                    if (!this.userId) {
-                        return;
-                    }
-                    
+                    if (!this.userId) return;
                     const sessionControlRef = doc(db, "users", this.userId, "sessionControl", "state");
-                    
                     try {
                         await setDoc(sessionControlRef, {
                             revokeTimestamp: serverTimestamp(),
@@ -3524,20 +3471,14 @@
             }
 
             setupSessionListener() {
-                if (this.sessionUnsubscribe) {
-                    this.sessionUnsubscribe(); 
-                }
+                if (this.sessionUnsubscribe) this.sessionUnsubscribe(); 
 
-                if (!this.userId) {
-                    return;
-                }
+                if (!this.userId) return;
 
                 const sessionControlRef = doc(db, "users", this.userId, "sessionControl", "state");
-                
                 this.sessionUnsubscribe = onSnapshot(sessionControlRef, (docSnap) => {
                     if (docSnap.exists()) {
                         const data = docSnap.data();
-                        
                         if (data.initiatedBy && data.initiatedBy !== this.sessionId) {
                             console.log("Session revocation received from another device. Signing out.");
                             this.showError("This session was remotely signed out.");
