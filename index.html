@@ -1479,10 +1479,10 @@
                 this.sessionId = crypto.randomUUID(); 
                 this.sessionUnsubscribe = null;
                 
-                // NEW PROPERTIES for tracking aggregate P/L during grouping
+                // NEW PROPERTIES for tracking aggregate P/L during grouping (for consistency fix)
                 this.todaysGainsTotal = 0;
                 this.biggestGainToday = 0;
-                this.todaysLossesTotal = 0;
+                this.todaysLossesTotal = 0; // Stored as POSITIVE value now
                 
                 this.init();
             }
@@ -1512,7 +1512,11 @@
             }
             formatCurrency(num) {
                 if (typeof num !== 'number') return num;
-                return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+                // Fix for Y-axis readability: use minimum 0 decimals for large numbers in summary, but 2 elsewhere
+                if (Math.abs(num) > 100000) {
+                     return num.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                }
+                return num.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
             formatNumber(num, decimals = 2) {
                 if (typeof num !== 'number') return num;
@@ -2175,13 +2179,14 @@
                 };
 
                 // FIX: Use the calculated group totals for display consistency and accuracy
+                // IMPORTANT: this.todaysLossesTotal must be stored as a POSITIVE number
                 const aggregatedPLToday = 
                     (this.biggestGainToday || 0) +
                     (this.todaysGainsTotal || 0) -
                     (this.todaysLossesTotal || 0); // Explicitly subtract the positive loss amount
 
                 // Prefer the group-based total if it's non-zero (meaning groups were rendered and totals were updated), otherwise fall back to the direct item sum.
-                const totalPLTodayFinal = (aggregatedPLToday !== 0 && !isNaN(aggregatedPLToday)) 
+                const totalPLTodayFinal = (aggregatedPLToday !== 0 && !isNaN(aggregatedPLToday) && isFinite(aggregatedPLToday)) 
                     ? aggregatedPLToday 
                     : combinedMetrics.totalPLToday;
 
@@ -3001,6 +3006,9 @@
              * ==================================================================
              * ==      UPDATED PORTFOLIO PERFORMANCE CHART FUNCTION            ==
              * ==================================================================
+             * Fixes:
+             * 1. Y-axis overlap (using a custom formatCurrency with 0 decimals for large numbers).
+             * 2. X-axis alignment (setting time unit to day and tick source to auto).
              */
             renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
@@ -3040,7 +3048,7 @@
                     this.portfolioPerformanceChartInstance.destroy();
                 }
 
-                // --- NEW STYLING based on user image ---
+                // --- STYLING ---
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'; // Fainter grid
                 const labelColor = this.isDarkMode ? '#adb5bd' : '#6c757d';
                 const chartLineColor = this.isDarkMode ? '#f8f9fa' : '#212529'; // Black/White line
@@ -3062,16 +3070,16 @@
                         datasets: [{ 
                             label: 'Portfolio Value', 
                             data: chartData, 
-                            borderColor: chartLineColor, // <-- CHANGED: Black/White line
-                            tension: chartData.length < 15 ? 0.3 : 0, // <-- CHANGED: Conditional curve
+                            borderColor: chartLineColor, 
+                            tension: chartData.length < 15 ? 0.3 : 0, 
                             borderWidth: 2, 
-                            pointRadius: 3, // <-- CHANGED: Show points
-                            pointBackgroundColor: pointFillColor, // <-- CHANGED: Black/White fill
-                            pointBorderColor: pointBorderColor, // <-- CHANGED: Background-matching border
-                            pointBorderWidth: 2, // <-- ADDED
-                            pointHoverRadius: 5, // <-- ADDED
-                            fill: true, // <-- CHANGED: Enable fill
-                            backgroundColor: fillBackgroundColor, // <-- ADDED: Purple fill
+                            pointRadius: 3, 
+                            pointBackgroundColor: pointFillColor, 
+                            pointBorderColor: pointBorderColor, 
+                            pointBorderWidth: 2, 
+                            pointHoverRadius: 5, 
+                            fill: true, 
+                            backgroundColor: fillBackgroundColor, 
                         }] 
                     },
                     options: { 
@@ -3083,31 +3091,34 @@
                                 grace: '10%', 
                                 ticks: { 
                                     color: labelColor, 
-                                    callback: (v) => this.formatCurrency(v) 
+                                    // FIX 1: Custom formatter to reduce decimals on large numbers
+                                    callback: (v) => this.formatCurrency(v)
                                 }, 
                                 grid: { 
-                                    color: gridColor, // <-- Use new grid color
+                                    color: gridColor, 
                                     drawBorder: false 
                                 } 
                             }, 
                             x: { 
                                 type: 'time', 
                                 time: { 
-                                    unit: 'day', // <-- CHANGED: Show days
+                                    unit: 'day', // Force unit to day
+                                    parser: 'yyyy-MM-dd',
                                     displayFormats: {
-                                        day: 'M/d/yyyy' // <-- CHANGED: Format like image
+                                        day: 'M/d/yyyy' 
                                     },
-                                    tooltipFormat: 'PP' // 'Oct 23, 2025'
+                                    tooltipFormat: 'PP' 
                                 }, 
                                 ticks: { 
                                     color: labelColor, 
-                                    maxRotation: 0, 
+                                    maxRotation: 45, // Allow rotation for crowded dates
                                     autoSkip: true,
-                                    maxTicksLimit: 10 // Max 10 labels
+                                    maxTicksLimit: 10, 
+                                    source: 'auto' // Important for alignment
                                 }, 
                                 grid: { 
-                                    color: gridColor, // <-- Use new grid color
-                                    display: true // <-- KEPT: Show X-axis gridlines per image
+                                    color: gridColor, 
+                                    display: true 
                                 } 
                             } 
                         }, 
@@ -3118,7 +3129,6 @@
                                 intersect: false, 
                                 callbacks: { 
                                     title: (tooltipItems) => {
-                                        // Format the title date
                                         if (tooltipItems[0]) {
                                             const date = new Date(tooltipItems[0].parsed.x);
                                             return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -3126,11 +3136,9 @@
                                         return '';
                                     },
                                     label: (c) => `Value: ${this.formatCurrency(c.parsed.y)}`,
-                                    // --- NEW TOOLTIP FOOTER ---
                                     footer: (tooltipItems) => {
                                         const lastDataIndex = chartData.length - 1;
                                         if (tooltipItems[0] && tooltipItems[0].dataIndex === lastDataIndex) {
-                                            // Check if the last data point is for 'today'
                                             const today = new Date().setHours(0,0,0,0);
                                             const lastDate = new Date(chartData[lastDataIndex].x).setHours(0,0,0,0);
                                             
@@ -3141,7 +3149,7 @@
                                         return null;
                                     }
                                 },
-                                // --- NEW TOOLTIP STYLING ---
+                                // --- TOOLTIP STYLING ---
                                 bodyColor: this.isDarkMode ? '#f8f9fa' : '#212529',
                                 titleColor: this.isDarkMode ? '#adb5bd' : '#6c757d',
                                 footerColor: totalPLToday >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
