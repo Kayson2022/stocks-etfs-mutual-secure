@@ -2179,7 +2179,7 @@
                 };
 
                 // FIX: Use the calculated group totals for display consistency and accuracy
-                // IMPORTANT: this.todaysLossesTotal must be stored as a POSITIVE number
+                // IMPORTANT: this.todaysLossesTotal is stored as a POSITIVE number
                 const aggregatedPLToday = 
                     (this.biggestGainToday || 0) +
                     (this.todaysGainsTotal || 0) -
@@ -3092,7 +3092,11 @@
                                 ticks: { 
                                     color: labelColor, 
                                     // FIX 1: Custom formatter to reduce decimals on large numbers
-                                    callback: (v) => this.formatCurrency(v)
+                                    callback: (v) => {
+                                        if (v >= 1000000) return '$' + (v / 1000000).toFixed(1) + 'M';
+                                        if (v >= 1000) return '$' + (v / 1000).toFixed(0) + 'K';
+                                        return this.formatCurrency(v);
+                                    }
                                 }, 
                                 grid: { 
                                     color: gridColor, 
@@ -3103,18 +3107,21 @@
                                 type: 'time', 
                                 time: { 
                                     unit: 'day', // Force unit to day
-                                    parser: 'yyyy-MM-dd',
+                                    round: 'day',
                                     displayFormats: {
-                                        day: 'M/d/yyyy' 
+                                        day: 'M/d/yy' // Simpler format for axis labels
                                     },
-                                    tooltipFormat: 'PP' 
+                                    tooltipFormat: 'PP' // 'Oct 23, 2025'
                                 }, 
                                 ticks: { 
                                     color: labelColor, 
                                     maxRotation: 45, // Allow rotation for crowded dates
                                     autoSkip: true,
                                     maxTicksLimit: 10, 
-                                    source: 'auto' // Important for alignment
+                                    source: 'auto', // Important for alignment
+                                    callback: function(value) { // Custom date formatting for axis labels
+                                        return new Date(value).toLocaleDateString('en-US', {month: 'numeric', day: 'numeric', year: '2-digit'});
+                                    }
                                 }, 
                                 grid: { 
                                     color: gridColor, 
@@ -3127,11 +3134,13 @@
                             tooltip: { 
                                 mode: 'index', 
                                 intersect: false, 
+                                // FIX 2: Custom tooltip formatting
                                 callbacks: { 
                                     title: (tooltipItems) => {
                                         if (tooltipItems[0]) {
                                             const date = new Date(tooltipItems[0].parsed.x);
-                                            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                                            // Format as M/D/YYYY
+                                            return date.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
                                         }
                                         return '';
                                     },
@@ -3150,10 +3159,10 @@
                                     }
                                 },
                                 // --- TOOLTIP STYLING ---
-                                bodyColor: this.isDarkMode ? '#f8f9fa' : '#212529',
-                                titleColor: this.isDarkMode ? '#adb5bd' : '#6c757d',
-                                footerColor: totalPLToday >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
                                 backgroundColor: this.isDarkMode ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
+                                titleColor: this.isDarkMode ? 'var(--text-secondary)' : 'var(--text-primary)',
+                                bodyColor: this.isDarkMode ? 'var(--text-primary)' : 'var(--text-primary)',
+                                footerColor: totalPLToday >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
                                 borderColor: 'var(--border-color)',
                                 borderWidth: 1,
                                 padding: 10,
