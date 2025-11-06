@@ -1478,6 +1478,12 @@
                 this.chartDataCache = {}; // To cache historical data
                 this.sessionId = crypto.randomUUID(); 
                 this.sessionUnsubscribe = null;
+                
+                // NEW PROPERTIES for tracking aggregate P/L during grouping
+                this.todaysGainsTotal = 0;
+                this.biggestGainToday = 0;
+                this.todaysLossesTotal = 0;
+                
                 this.init();
             }
             init() {
@@ -1965,6 +1971,11 @@
 
                 const sortedItems = this.sortItems([...filteredItems], sortBy);
                 
+                // Reset P/L totals before rendering groups
+                this.todaysGainsTotal = 0;
+                this.biggestGainToday = 0;
+                this.todaysLossesTotal = 0;
+
                 if (type === 'stock' || type === 'fund') {
                     const isGrouping = sortBy === 'platform' && (this.elements.platformFilter ? this.elements.platformFilter.value : 'All Platforms') === 'All Platforms';
                     if (isGrouping) {
@@ -2149,6 +2160,7 @@
             }
 
             renderPortfolioSummary() {
+                // Get metric sums from individual lists (stocks/funds)
                 const stockMetrics = this.calculateSummaryMetrics(this.stocks);
                 const fundMetrics = this.calculateSummaryMetrics(this.mutualFunds);
 
@@ -2156,15 +2168,23 @@
                     totalCurrentValue: stockMetrics.totalCurrentValue + fundMetrics.totalCurrentValue,
                     totalUnrealizedPL: stockMetrics.totalUnrealizedPL + fundMetrics.totalUnrealizedPL,
                     totalRealizedPL: stockMetrics.totalRealizedPL + fundMetrics.totalRealizedPL,
-                    totalPLToday: stockMetrics.totalPLToday + fundMetrics.totalPLToday,
+                    totalPLToday: stockMetrics.totalPLToday + fundMetrics.totalPLToday, // Base total P/L
                     totalPreviousDayValue: stockMetrics.totalPreviousDayValue + fundMetrics.totalPreviousDayValue,
                     totalContributions: stockMetrics.totalContributions + fundMetrics.totalContributions,
                     totalDividends: stockMetrics.totalDividends + fundMetrics.totalDividends
                 };
 
+                // FIX: Use the calculated group totals for display accuracy, if they are available
+                // The combined P/L from the groups should be more accurate for display consistency
+                const aggregatedPLToday = this.biggestGainToday + this.todaysGainsTotal + this.todaysLossesTotal;
+                
+                // If aggregatedPLToday is non-zero (meaning groups have been rendered and populated), use it.
+                // Otherwise, rely on the raw calculation from combinedMetrics.
+                const totalPLTodayFinal = aggregatedPLToday !== 0 ? aggregatedPLToday : combinedMetrics.totalPLToday;
+
                 const totalOverallPL = combinedMetrics.totalUnrealizedPL + combinedMetrics.totalRealizedPL;
                 const totalOverallPLPercent = combinedMetrics.totalContributions > 0 ? (totalOverallPL / combinedMetrics.totalContributions) * 100 : 0;
-                const totalPLPercentToday = combinedMetrics.totalPreviousDayValue > 0 ? (combinedMetrics.totalPLToday / combinedMetrics.totalPreviousDayValue) * 100 : 0;
+                const totalPLPercentToday = combinedMetrics.totalPreviousDayValue > 0 ? (totalPLTodayFinal / combinedMetrics.totalPreviousDayValue) * 100 : 0;
 
                 const setElement = (el, value, isPercent = false) => {
                     if (!el) return;
@@ -2172,6 +2192,7 @@
                     el.className = `summary-value ${value >= 0 ? 'positive' : 'negative'}`;
                 };
                 
+                // 💰 Update all summary labels
                 setElement(document.getElementById('combined-total-value'), combinedMetrics.totalCurrentValue);
                 setElement(document.getElementById('stocks-total-value'), stockMetrics.totalCurrentValue);
                 setElement(document.getElementById('mutual-fund-total-value'), fundMetrics.totalCurrentValue);
@@ -2180,7 +2201,7 @@
                 if (contributionsEl) contributionsEl.textContent = this.formatCurrency(combinedMetrics.totalContributions);
 
                 setElement(document.getElementById('total-dividends'), combinedMetrics.totalDividends);
-                setElement(document.getElementById('total-pl-today'), combinedMetrics.totalPLToday);
+                setElement(document.getElementById('total-pl-today'), totalPLTodayFinal); // Use final calculated value
                 setElement(document.getElementById('total-pl-percent-today'), totalPLPercentToday, true);
                 setElement(document.getElementById('total-pl-unrealized'), combinedMetrics.totalUnrealizedPL);
                 setElement(document.getElementById('total-pl-realized'), combinedMetrics.totalRealizedPL);
@@ -2452,10 +2473,28 @@
 
                 // 3. Render Active Groups
                 const biggestGain = gains.length > 0 ? [gains[0]] : [];
-                if (biggestGain.length > 0) this.createGroup('🚀 Biggest Gain Today', biggestGain, 'biggest-gain-header', container, type, this.getGroupSummary(biggestGain, 'biggest-gain'));
+                
+                // Reset/Calculate the running P/L totals based on groups being built
+                this.biggestGainToday = 0;
+                this.todaysGainsTotal = 0;
+                this.todaysLossesTotal = 0;
+                
+                if (biggestGain.length > 0) {
+                    const stats = this.calculateTransactionStats(biggestGain[0].transactions, biggestGain[0].price);
+                    this.biggestGainToday = (biggestGain[0].change || 0) * stats.totalSharesOwned;
+                    this.createGroup('🚀 Biggest Gain Today', biggestGain, 'biggest-gain-header', container, type, this.getGroupSummary(biggestGain, 'biggest-gain'));
+                }
+                
                 const otherGains = gains.filter(s => biggestGain.length === 0 || s.id !== biggestGain[0].id);
-                this.createGroup('📈 Gains Today', otherGains, 'gains-header', container, type, this.getGroupSummary(otherGains, 'gains'));
-                this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
+                if (otherGains.length > 0) {
+                     this.todaysGainsTotal = otherGains.reduce((sum, item) => sum + ((item.change || 0) * this.calculateTransactionStats(item.transactions, item.price).totalSharesOwned), 0);
+                     this.createGroup('📈 Gains Today', otherGains, 'gains-header', container, type, this.getGroupSummary(otherGains, 'gains'));
+                }
+
+                if (losses.length > 0) {
+                    this.todaysLossesTotal = losses.reduce((sum, item) => sum + ((item.change || 0) * this.calculateTransactionStats(item.transactions, item.price).totalSharesOwned), 0);
+                    this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
+                }
                 
                 // 4. Render Fail-Safe Group (New/Mismatched Items)
                 if (dataMismatch.length > 0) {
@@ -2793,7 +2832,7 @@
                     const firstPrice = chartData[0].y;
                     const lastPrice = chartData[chartData.length - 1].y;
                     const borderColor = lastPrice >= firstPrice ? 'var(--color-positive)' : 'var(--color-negative)';
-                    const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                    const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                     const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
 
                     this.cardChartInstances[chartId] = new Chart(ctx, {
@@ -2932,7 +2971,7 @@
                     this.diversificationChartInstance.destroy();
                 }
                 const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
-                const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+                const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
                 if(this.elements.diversificationChart) {
                     this.diversificationChartInstance = new Chart(this.elements.diversificationChart, {
