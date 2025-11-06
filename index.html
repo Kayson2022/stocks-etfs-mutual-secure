@@ -3012,11 +3012,13 @@
              * ==      REDESIGNED PORTFOLIO PERFORMANCE CHART FUNCTION         ==
              * ==================================================================
              * Key changes: Dynamic line/fill color based on performance, gradient fill, 
-             * and smoother curve.
+             * and smoother curve. Added clear fallback messaging for blank chart state.
              */
             renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
-                if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && this.portfolioHistory.length > 0 ? 'block' : 'none';
+                const hasHistory = this.portfolioHistory.length > 0;
+
+                if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && (this.stocks.length > 0 || this.mutualFunds.length > 0) ? 'block' : 'none';
                 if (!container || container.style.display === 'none') return;
                 
                 // Update active button state
@@ -3027,6 +3029,23 @@
                 }
 
                 const allDataPoints = this.portfolioHistory.map(e => ({ x: new Date(e.date), y: e.value }));
+                
+                const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
+                if (this.portfolioPerformanceChartInstance) {
+                    this.portfolioPerformanceChartInstance.destroy();
+                }
+
+                // --- FALLBACK CHECK ---
+                if (!hasHistory) {
+                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
+                    ctx.font = "16px 'Inter', sans-serif";
+                    ctx.fillText('No portfolio history saved yet.', ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
+                    ctx.font = "12px 'Inter', sans-serif";
+                    ctx.fillText('Log your first BUY transaction to start tracking.', ctx.canvas.width / 2, ctx.canvas.height / 2 + 10);
+                    return;
+                }
                 
                 const now = new Date();
                 let startDate = new Date();
@@ -3046,22 +3065,13 @@
                 const chartData = allDataPoints.filter(dp => dp.x >= startDate);
                 
                 if (chartData.length <= 1) {
-                    // Not enough data points to calculate performance/draw chart.
-                    const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
-                    if (this.portfolioPerformanceChartInstance) this.portfolioPerformanceChartInstance.destroy();
                     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
                     ctx.textAlign = 'center';
                     ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
-                    ctx.font = "16px Inter";
-                    ctx.fillText('Not enough history for this range.', ctx.canvas.width / 2, ctx.canvas.height / 2);
+                    ctx.font = "16px 'Inter', sans-serif";
+                    ctx.fillText('Not enough history for this time range.', ctx.canvas.width / 2, ctx.canvas.height / 2);
                     return;
                 }
-                
-                if (this.portfolioPerformanceChartInstance) {
-                    this.portfolioPerformanceChartInstance.destroy();
-                }
-
-                const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
                 
                 // 1. Determine performance and colors
                 const firstValue = chartData[0].y;
