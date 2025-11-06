@@ -2174,13 +2174,16 @@
                     totalDividends: stockMetrics.totalDividends + fundMetrics.totalDividends
                 };
 
-                // FIX: Use the calculated group totals for display accuracy, if they are available
-                // The combined P/L from the groups should be more accurate for display consistency
-                const aggregatedPLToday = this.biggestGainToday + this.todaysGainsTotal + this.todaysLossesTotal;
-                
-                // If aggregatedPLToday is non-zero (meaning groups have been rendered and populated), use it.
-                // Otherwise, rely on the raw calculation from combinedMetrics.
-                const totalPLTodayFinal = aggregatedPLToday !== 0 ? aggregatedPLToday : combinedMetrics.totalPLToday;
+                // FIX: Use the calculated group totals for display consistency and accuracy
+                const aggregatedPLToday = 
+                    (this.biggestGainToday || 0) +
+                    (this.todaysGainsTotal || 0) -
+                    (this.todaysLossesTotal || 0); // Explicitly subtract the positive loss amount
+
+                // Prefer the group-based total if it's non-zero (meaning groups were rendered and totals were updated), otherwise fall back to the direct item sum.
+                const totalPLTodayFinal = (aggregatedPLToday !== 0 && !isNaN(aggregatedPLToday)) 
+                    ? aggregatedPLToday 
+                    : combinedMetrics.totalPLToday;
 
                 const totalOverallPL = combinedMetrics.totalUnrealizedPL + combinedMetrics.totalRealizedPL;
                 const totalOverallPLPercent = combinedMetrics.totalContributions > 0 ? (totalOverallPL / combinedMetrics.totalContributions) * 100 : 0;
@@ -2492,7 +2495,9 @@
                 }
 
                 if (losses.length > 0) {
-                    this.todaysLossesTotal = losses.reduce((sum, item) => sum + ((item.change || 0) * this.calculateTransactionStats(item.transactions, item.price).totalSharesOwned), 0);
+                    // Store the absolute (positive) value of losses for the summary calculation
+                    const totalNegativeChange = losses.reduce((sum, item) => sum + ((item.change || 0) * this.calculateTransactionStats(item.transactions, item.price).totalSharesOwned), 0);
+                    this.todaysLossesTotal = Math.abs(totalNegativeChange); 
                     this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
                 }
                 
@@ -2562,7 +2567,7 @@
                         const totalPLClass = totalPL >= 0 ? 'positive' : 'negative';
                         const totalValue = stats.currentValue;
                         const totalChangeToday = (item.change || 0) * stats.totalSharesOwned;
-                        const totalChangeTodayClass = totalChangeToday >= 0 ? 'positive' : 'negative'; // FIX: Defined here
+                        const totalChangeTodayClass = totalChangeToday >= 0 ? 'positive' : 'negative'; 
                         summaryText = `Gained <span class="${changeClass}">${this.formatCurrency(item.change)}</span> today, a change of <span class="${changePercentClass}">${(item.changePercent || 0).toFixed(2)}%</span>.`;
                         summaryText += `\nTotal Value: <span class="${totalPL >= 0 ? 'positive' : 'negative'}">${this.formatCurrency(totalValue)}</span>`;
                         summaryText += `\nTotal P/L: <span class="${totalPLClass}">${this.formatCurrency(totalPL)}</span> (<span class="${totalPLClass}">${this.formatNumber(totalPLPercent, 2)}%</span>)`;
