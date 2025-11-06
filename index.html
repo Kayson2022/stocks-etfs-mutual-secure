@@ -1042,7 +1042,7 @@
                         <span id="total-dividends" class="summary-value positive">$0.00</span>
                     </div>
                     <div class="summary-item">
-                        <span class="summary-label">Total P/L Today</span>
+                        <span id="total-pl-today-label" class="summary-label">Total P/L Today</span>
                         <span id="total-pl-today" class="summary-value positive">$0.00</span>
                     </div>
                     <div class="summary-item">
@@ -2690,7 +2690,7 @@
                         }
                     }
                     
-                    const todayPL = (item.change || 0) * stats.totalSharesOwned; // FIX APPLIED HERE: changed 'today PL' to 'todayPL'
+                    const todayPL = (item.change || 0) * stats.totalSharesOwned; 
                     card.innerHTML = `
                         <div class="stock-header">
                             <span class="${type}-symbol stock-symbol">${item.symbol}</span>
@@ -3353,6 +3353,7 @@
                                 <span style="color: var(--text-secondary);">${alertText}</span><br>
                                 <span style="font-size: 0.8rem; color: #aaa;">
                                     Set on: ${formattedDate} at ${formattedTime}
+                                
                                 </span>
                             </div>
                             <div style="display:flex; gap: 5px;">
