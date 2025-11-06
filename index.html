@@ -2135,12 +2135,18 @@
                 items.forEach(item => {
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
                     totalRealizedPL += stats.realizedPL;
+                    
+                    // Only include active positions in market value, today's P/L, and unrealized P/L
                     if (stats.totalSharesOwned > 0) {
                         totalCurrentValue += stats.currentValue;
                         totalUnrealizedPL += stats.unrealizedPL;
+                        
+                        // FIX for Total P/L Today: Ensure this sum is based on current shares and market change
                         totalPLToday += (item.change || 0) * stats.totalSharesOwned;
+                        
                         totalPreviousDayValue += (item.previousClose || item.price - (item.change || 0)) * stats.totalSharesOwned;
                     }
+                    
                     totalContributions += (item.transactions || []).reduce((sum, t) => sum + (t.type === 'buy' ? t.shares * t.price : -t.shares * t.price), 0);
                     totalDividends += (item.dividends || []).reduce((divSum, div) => divSum + div.totalAmount, 0);
                 });
@@ -2440,13 +2446,15 @@
                     }
                 });
                 
-                // 2. Group Active Items by Performance
+                // 2. Group Active Items by Performance (Appears first)
                 if (activeItems.length > 0) {
                     const sortedActiveItems = activeItems.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
-                    const gains = sortedActiveItems.filter(s => (s.changePercent || 0) >= 0);
-                    const losses = sortedActiveItems.filter(s => (s.changePercent || 0) < 0).sort((a, b) => a.changePercent - b.changePercent); 
+                    const gains = sortedActiveItems.filter(s => (s.change || 0) >= 0);
+                    const losses = sortedActiveItems.filter(s => (s.change || 0) < 0).sort((a, b) => a.changePercent - b.changePercent); 
                     
+                    // The Biggest Gain item is the first in the 'gains' list
                     const biggestGain = gains.length > 0 ? [gains[0]] : [];
+                    // All other positive items are in 'otherGains'
                     const otherGains = gains.filter(s => biggestGain.length === 0 || s.id !== biggestGain[0].id);
                     
                     // Render Active Groups (in order: Biggest Gain, Other Gains, Losses)
@@ -2545,6 +2553,7 @@
                         const totalChangeToday = (item.change || 0) * stats.totalSharesOwned;
                         // FIX: Ensure this variable is declared before use
                         const totalChangeTodayClass = totalChangeToday >= 0 ? 'positive' : 'negative'; 
+                        
                         summaryText = `Gained <span class="${changeClass}">${this.formatCurrency(item.change)}</span> today, a change of <span class="${changePercentClass}">${(item.changePercent || 0).toFixed(2)}%</span>.`;
                         summaryText += `\nTotal Value: <span class="${totalPL >= 0 ? 'positive' : 'negative'}">${this.formatCurrency(totalValue)}</span>`;
                         summaryText += `\nTotal P/L: <span class="${totalPLClass}">${this.formatCurrency(totalPL)}</span> (<span class="${totalPLClass}">${this.formatNumber(totalPLPercent, 2)}%</span>)`;
