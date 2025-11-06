@@ -456,17 +456,6 @@
              border-color: var(--border-color);
         }
 
-        /* ADDED: Style for Data Mismatch/Missing Shares Header and Cards */
-        .mismatch-header {
-            color: #FFC300; /* Yellow/Orange for Warning */
-            border-bottom-color: #FFC300;
-        }
-        .stock-card.mismatch-position {
-            opacity: 0.8; 
-            border-left: 4px solid #FFC300; 
-            background-color: color-mix(in srgb, var(--bg-secondary) 90%, #FFC300);
-        }
-
 
         /* ADDED: Ambient hover effect for grouped cards */
         .gains-header-content .stock-card:hover,
@@ -611,6 +600,12 @@
             color: var(--text-secondary);
             border-bottom-color: var(--text-secondary);
         }
+         /* ADDED: Style for Data Mismatch Header */
+        .mismatch-header {
+            color: orange;
+            border-bottom-color: orange;
+        }
+
 
         .group-wrapper {
             /* This is the container for header, summary, content, and footer */
@@ -1110,7 +1105,7 @@
                 <div class="input-wrapper">
                     <input type="text" class="search-input" id="mutualFundInput" placeholder="Enter mutual fund symbol (e.g., VTIAX, FXNAX, SWPPX)">
                     <span class="clear-input" data-target="mutualFundInput">&times;</span>
-                </div>
+                    </div>
                 <button class="add-btn" id="addFundBtn">Add Fund</button>
                 <button class="add-btn" id="quickLookupBtn">Quick Lookup</button>
             </div>
@@ -1354,7 +1349,7 @@
             projectId: "stocks-etfs-mutual",
             storageBucket: "stocks-etfs-mutual.firebasestorage.app",
             messagingSenderId: "326474465163",
-            appId: "1:326474465163:web:6d140efca0407ba8f1f98e"
+            appId: "1:326474465163:web:6d140efca04077ba8f1f98e"
         };
         
         let app, auth, db;
@@ -1504,7 +1499,7 @@
                 this.applyPrivacyMode();
                 if (!db) {
                      this.showError("Firebase is not configured. Please add your firebaseConfig object to the script tag.");
-                    this.elements.loginContainer.style.display = 'block';
+                    if(this.elements.loginContainer) this.elements.loginContainer.style.display = 'block';
                     return;
                 }
                 this.handleAuthentication();
@@ -1521,18 +1516,18 @@
                  onAuthStateChanged(auth, user => {
                     if (user) {
                         this.userId = user.uid;
-                        this.elements.loginContainer.style.display = 'none';
-                        this.elements.appContainer.style.display = 'block';
-                        this.elements.userInfo.style.display = 'flex';
-                        this.elements.userName.textContent = `Welcome, ${user.displayName || 'User'}`;
+                        if(this.elements.loginContainer) this.elements.loginContainer.style.display = 'none';
+                        if(this.elements.appContainer) this.elements.appContainer.style.display = 'block';
+                        if(this.elements.userInfo) this.elements.userInfo.style.display = 'flex';
+                        if(this.elements.userName) this.elements.userName.textContent = `Welcome, ${user.displayName || 'User'}`;
                         this.loadData();
                         this.setupSessionListener();
                         this.startLiveUpdate();
                     } else {
                         this.userId = null;
-                        this.elements.loginContainer.style.display = 'block';
-                        this.elements.appContainer.style.display = 'none';
-                        this.elements.userInfo.style.display = 'none';
+                        if(this.elements.loginContainer) this.elements.loginContainer.style.display = 'block';
+                        if(this.elements.appContainer) this.elements.appContainer.style.display = 'none';
+                        if(this.elements.userInfo) this.elements.userInfo.style.display = 'none';
                         this.stocks = []; this.mutualFunds = []; this.watchlist = [];
                         this.renderContent();
                         if (this.sessionUnsubscribe) {
@@ -1546,8 +1541,8 @@
                 const provider = new GoogleAuthProvider();
                 signInWithPopup(auth, provider).catch(error => {
                     console.error("Google sign-in error", error);
-                    if (error.code === 'auth/unauthorized-domain') {
-                        const errorDiv = document.getElementById('firebase-auth-error');
+                    const errorDiv = document.getElementById('firebase-auth-error');
+                    if (error.code === 'auth/unauthorized-domain' && errorDiv) {
                         errorDiv.style.display = 'block';
                         errorDiv.innerHTML = `
                             <h4>Authentication Error: Unauthorized Domain</h4>
@@ -1674,51 +1669,44 @@
                 if (this.elements.portfolioPerformanceContainer) this.elements.resizeObserver.observe(this.elements.portfolioPerformanceContainer);
             }
             setupEventListeners() {
-                // ADDED: Check for login buttons before adding listeners
-                if(this.elements.googleSignInBtn) this.elements.googleSignInBtn.addEventListener('click', () => this.signIn());
-                if(this.elements.signOutBtn) this.elements.signOutBtn.addEventListener('click', () => this.signOut());
-                
-                // ADDED: Check for core input/button elements
-                if(this.elements.addBtn) this.elements.addBtn.addEventListener('click', () => this.addItemFromInput('stock'));
-                if(this.elements.stockInput) this.elements.stockInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('stock'); });
-                if(this.elements.liveUpdateBtn) this.elements.liveUpdateBtn.addEventListener('click', () => this.refreshCurrentTab());
-                if(this.elements.clearAllBtn) this.elements.clearAllBtn.addEventListener('click', () => this.clearAllItems('stock'));
-                if(this.elements.toggleLiveUpdateBtn) this.elements.toggleLiveUpdateBtn.addEventListener('click', () => this.toggleLiveUpdate());
-                if(this.elements.exportBtn) this.elements.exportBtn.addEventListener('click', () => this.exportData());
-                if(this.elements.importFile) this.elements.importFile.addEventListener('change', (e) => this.importData(e));
-                if(this.elements.portfolioFilter) this.elements.portfolioFilter.addEventListener('input', () => this.renderContent());
-                if(this.elements.platformFilter) this.elements.platformFilter.addEventListener('change', () => this.renderContent());
-                if(this.elements.portfolioSort) this.elements.portfolioSort.addEventListener('change', () => this.renderContent());
-                if(this.elements.addFundBtn) this.elements.addFundBtn.addEventListener('click', () => this.addItemFromInput('fund'));
-                if(this.elements.mutualFundInput) this.elements.mutualFundInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('fund'); });
-                if(this.elements.addWatchlistBtn) this.elements.addWatchlistBtn.addEventListener('click', () => this.addItemFromInput('watchlist'));
-                if(this.elements.watchlistInput) this.elements.watchlistInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('watchlist'); });
-                
+                if (this.elements.googleSignInBtn) this.elements.googleSignInBtn.addEventListener('click', () => this.signIn());
+                if (this.elements.signOutBtn) this.elements.signOutBtn.addEventListener('click', () => this.signOut());
+                if (this.elements.addBtn) this.elements.addBtn.addEventListener('click', () => this.addItemFromInput('stock'));
+                if (this.elements.stockInput) this.elements.stockInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('stock'); });
+                if (this.elements.liveUpdateBtn) this.elements.liveUpdateBtn.addEventListener('click', () => this.refreshCurrentTab());
+                if (this.elements.clearAllBtn) this.elements.clearAllBtn.addEventListener('click', () => this.clearAllItems('stock'));
+                if (this.elements.toggleLiveUpdateBtn) this.elements.toggleLiveUpdateBtn.addEventListener('click', () => this.toggleLiveUpdate());
+                if (this.elements.exportBtn) this.elements.exportBtn.addEventListener('click', () => this.exportData());
+                if (this.elements.importFile) this.elements.importFile.addEventListener('change', (e) => this.importData(e));
+                if (this.elements.portfolioFilter) this.elements.portfolioFilter.addEventListener('input', () => this.renderContent());
+                if (this.elements.platformFilter) this.elements.platformFilter.addEventListener('change', () => this.renderContent());
+                if (this.elements.portfolioSort) this.elements.portfolioSort.addEventListener('change', () => this.renderContent());
+                if (this.elements.addFundBtn) this.elements.addFundBtn.addEventListener('click', () => this.addItemFromInput('fund'));
+                if (this.elements.mutualFundInput) this.elements.mutualFundInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('fund'); });
+                if (this.elements.addWatchlistBtn) this.elements.addWatchlistBtn.addEventListener('click', () => this.addItemFromInput('watchlist'));
+                if (this.elements.watchlistInput) this.elements.watchlistInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('watchlist'); });
                 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', (e) => { const tabId = e.target.getAttribute('onclick').split("'")[1].replace('window.stockTracker.',''); this.switchTab(tabId); }));
-                
-                if(this.elements.modalSaveBtn) this.elements.modalSaveBtn.addEventListener('click', () => this.saveTransaction());
-                if(this.elements.settingsBtn) this.elements.settingsBtn.addEventListener('click', () => this.openSettingsModal());
-                if(this.elements.closeSettingsBtn) this.elements.closeSettingsBtn.addEventListener('click', () => this.closeSettingsModal());
-                if(this.elements.modalSaveSettingsBtn) this.elements.modalSaveSettingsBtn.addEventListener('click', () => this.saveSettings());
-                if(this.elements.enablePushNotificationsBtn) this.elements.enablePushNotificationsBtn.addEventListener('click', () => this.enablePushNotifications());
-                if(this.elements.signOutOtherSessionsBtn) this.elements.signOutOtherSessionsBtn.addEventListener('click', () => this.signOutOtherSessions());
-                
-                if(this.elements.confirmModalCancelBtn) this.elements.confirmModalCancelBtn.addEventListener('click', () => this.closeConfirmModal(true));
-                if(this.elements.confirmModalConfirmBtn) this.elements.confirmModalConfirmBtn.addEventListener('click', () => this.handleConfirmAction());
-                
-                if(this.elements.listAllBtn) this.elements.listAllBtn.addEventListener('click', () => this.openListAllModal());
-                if(this.elements.closeListAllBtn) this.elements.closeListAllBtn.addEventListener('click', () => this.closeListAllModal());
-                if(this.elements.toggleDarkModeBtn) this.elements.toggleDarkModeBtn.addEventListener('click', () => this.toggleDarkMode());
-                if(this.elements.togglePrivacyBtn) this.elements.togglePrivacyBtn.addEventListener('click', () => this.togglePrivacyMode());
-                if(this.elements.saveAlertBtn) this.elements.saveAlertBtn.addEventListener('click', () => this.savePriceAlert());
-                if(this.elements.updateAllFundsBtn) this.elements.updateAllFundsBtn.addEventListener('click', () => this.refreshFunds());
-                if(this.elements.clearAllFundsBtn) this.elements.clearAllFundsBtn.addEventListener('click', () => this.clearAllItems('fund'));
-                if(this.elements.updateWatchlistBtn) this.elements.updateWatchlistBtn.addEventListener('click', () => this.refreshWatchlist());
-                if(this.elements.clearWatchlistBtn) this.elements.clearWatchlistBtn.addEventListener('click', () => this.clearAllItems('watchlist'));
-                if(this.elements.closeEditStockBtn) this.elements.closeEditStockBtn.addEventListener('click', () => this.closeEditStockModal());
-                if(this.elements.saveStockEditBtn) this.elements.saveStockEditBtn.addEventListener('click', () => this.saveStockDetails());
-                if(this.elements.viewAlertsBtn) this.elements.viewAlertsBtn.addEventListener('click', () => this.openAlertsSummaryModal());
-                if(this.elements.closeAlertsSummaryBtn) this.elements.closeAlertsSummaryBtn.addEventListener('click', () => this.elements.alertsSummaryModal.style.display = 'none');
+                if (this.elements.modalSaveBtn) this.elements.modalSaveBtn.addEventListener('click', () => this.saveTransaction());
+                if (this.elements.settingsBtn) this.elements.settingsBtn.addEventListener('click', () => this.openSettingsModal());
+                if (this.elements.closeSettingsBtn) this.elements.closeSettingsBtn.addEventListener('click', () => this.closeSettingsModal());
+                if (this.elements.modalSaveSettingsBtn) this.elements.modalSaveSettingsBtn.addEventListener('click', () => this.saveSettings());
+                if (this.elements.enablePushNotificationsBtn) this.elements.enablePushNotificationsBtn.addEventListener('click', () => this.enablePushNotifications());
+                if (this.elements.signOutOtherSessionsBtn) this.elements.signOutOtherSessionsBtn.addEventListener('click', () => this.signOutOtherSessions());
+                if (this.elements.confirmModalCancelBtn) this.elements.confirmModalCancelBtn.addEventListener('click', () => this.closeConfirmModal(true));
+                if (this.elements.confirmModalConfirmBtn) this.elements.confirmModalConfirmBtn.addEventListener('click', () => this.handleConfirmAction());
+                if (this.elements.listAllBtn) this.elements.listAllBtn.addEventListener('click', () => this.openListAllModal());
+                if (this.elements.closeListAllBtn) this.elements.closeListAllBtn.addEventListener('click', () => this.closeListAllModal());
+                if (this.elements.toggleDarkModeBtn) this.elements.toggleDarkModeBtn.addEventListener('click', () => this.toggleDarkMode());
+                if (this.elements.togglePrivacyBtn) this.elements.togglePrivacyBtn.addEventListener('click', () => this.togglePrivacyMode());
+                if (this.elements.saveAlertBtn) this.elements.saveAlertBtn.addEventListener('click', () => this.savePriceAlert());
+                if (this.elements.updateAllFundsBtn) this.elements.updateAllFundsBtn.addEventListener('click', () => this.refreshFunds());
+                if (this.elements.clearAllFundsBtn) this.elements.clearAllFundsBtn.addEventListener('click', () => this.clearAllItems('fund'));
+                if (this.elements.updateWatchlistBtn) this.elements.updateWatchlistBtn.addEventListener('click', () => this.refreshWatchlist());
+                if (this.elements.clearWatchlistBtn) this.elements.clearWatchlistBtn.addEventListener('click', () => this.clearAllItems('watchlist'));
+                if (this.elements.closeEditStockBtn) this.elements.closeEditStockBtn.addEventListener('click', () => this.closeEditStockModal());
+                if (this.elements.saveStockEditBtn) this.elements.saveStockEditBtn.addEventListener('click', () => this.saveStockDetails());
+                if (this.elements.viewAlertsBtn) this.elements.viewAlertsBtn.addEventListener('click', () => this.openAlertsSummaryModal());
+                if (this.elements.closeAlertsSummaryBtn) this.elements.closeAlertsSummaryBtn.addEventListener('click', () => { if(this.elements.alertsSummaryModal) this.elements.alertsSummaryModal.style.display = 'none'; });
                 
                 if (this.elements.alertType) {
                     this.elements.alertType.addEventListener('change', (e) => this.toggleAlertInputs(e.target.value));
@@ -1754,7 +1742,7 @@
                         { element: this.elements.editStockModal, closeFn: () => this.closeEditStockModal() },
                         { element: this.elements.confirmModal, closeFn: () => this.closeConfirmModal(true) },
                         { element: this.elements.priceAlertModal, closeFn: () => this.closePriceAlertModal() },
-                        { element: this.elements.alertsSummaryModal, closeFn: () => this.elements.alertsSummaryModal.style.display = 'none' }
+                        { element: this.elements.alertsSummaryModal, closeFn: () => { if(this.elements.alertsSummaryModal) this.elements.alertsSummaryModal.style.display = 'none'; } }
                     ];
                     modals.forEach(({ element, closeFn }) => {
                         if (element) {
@@ -1787,8 +1775,7 @@
                         window.scrollTo(0, parseInt(scrollPosition));
                     }
                 });
-                // ADDED: Check for stocksGrid before adding card action listener
-                if(this.elements.stocksGrid) this.elements.stocksGrid.addEventListener('click', (e) => this.handleCardAction(e));
+                if (this.elements.stocksGrid) this.elements.stocksGrid.addEventListener('click', (e) => this.handleCardAction(e));
             }
             saveScrollPosition() {
                 this.lastScrollPosition = window.scrollY;
@@ -1804,9 +1791,11 @@
                 
                 if (!clickedButton && event.target.closest('.stock-card, .fund-card')) {
                     const card = event.target.closest('.stock-card, .fund-card');
-                    card.classList.toggle('expanded');
-                    if (card.classList.contains('expanded')) {
-                        this.renderCardChart(card.dataset.symbol);
+                    if(card) {
+                        card.classList.toggle('expanded');
+                        if (card.classList.contains('expanded')) {
+                            this.renderCardChart(card.dataset.symbol);
+                        }
                     }
                     return;
                 }
@@ -1863,8 +1852,11 @@
                 this.currentTab = tab;
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-                document.querySelector(`[onclick="window.stockTracker.switchTab('${tab}')"]`).classList.add('active');
-                document.getElementById(`${tab}-tab`).classList.add('active');
+                const tabButton = document.querySelector(`[onclick="window.stockTracker.switchTab('${tab}')"]`);
+                if(tabButton) tabButton.classList.add('active');
+                const tabContent = document.getElementById(`${tab}-tab`);
+                if(tabContent) tabContent.classList.add('active');
+
                 if (tab === 'news') this.fetchAndRenderNews();
                 else this.renderContent();
             }
@@ -1909,19 +1901,19 @@
                 const grid = this.elements.stocksGrid;
                 if (!grid) return;
                 grid.innerHTML = '';
-                this.elements.portfolioSummary.style.display = 'none';
+                if(this.elements.portfolioSummary) this.elements.portfolioSummary.style.display = 'none';
                 let items, type;
                 if (this.currentTab === 'stocks') { 
                     [items, type] = [this.stocks, 'stock']; 
-                    this.elements.portfolioSummary.style.display = 'block';
+                    if(this.elements.portfolioSummary) this.elements.portfolioSummary.style.display = 'block';
                 }
                 else if (this.currentTab === 'funds') { 
                     [items, type] = [this.mutualFunds, 'fund']; 
-                    this.elements.portfolioSummary.style.display = 'block'; // Also show for funds
+                    if(this.elements.portfolioSummary) this.elements.portfolioSummary.style.display = 'block'; // Also show for funds
                 }
                 else if (this.currentTab === 'watchlist') {
                      [items, type] = [this.watchlist, 'watchlist'];
-                     this.elements.watchlistCount.textContent = `(${this.watchlist.length})`;
+                     if(this.elements.watchlistCount) this.elements.watchlistCount.textContent = `(${this.watchlist.length})`;
                 } else if (this.currentTab === 'news') {
                     this.fetchAndRenderNews();
                     return;
@@ -1929,24 +1921,25 @@
                 
                 this.renderPortfolioSummary(); // Always render the combined summary
 
-                const sortBy = this.elements.portfolioSort.value;
+                const sortBy = this.elements.portfolioSort ? this.elements.portfolioSort.value : 'performance';
                 let filteredItems = items;
 
                 if (this.currentTab === 'stocks' || this.currentTab === 'funds') {
                     if (sortBy === 'platform') {
-                        this.elements.portfolioFilter.style.display = 'none';
-                        this.elements.platformFilter.style.display = 'block';
+                        if(this.elements.portfolioFilter) this.elements.portfolioFilter.style.display = 'none';
+                        if(this.elements.platformFilter) this.elements.platformFilter.style.display = 'block';
 
                         const allItems = [...this.stocks, ...this.mutualFunds];
                         const platforms = ['All Platforms', ...[...new Set(allItems.flatMap(s => s.transactions.map(t => t.platform)).filter(p => p))].sort()];
-                        const currentSelection = this.elements.platformFilter.value;
-                        this.elements.platformFilter.innerHTML = platforms.map(p => `<option value="${p}">${p}</option>`).join('');
-                        
-                        if (platforms.includes(currentSelection)) {
-                            this.elements.platformFilter.value = currentSelection;
+                        const currentSelection = this.elements.platformFilter ? this.elements.platformFilter.value : 'All Platforms';
+                        if (this.elements.platformFilter) {
+                            this.elements.platformFilter.innerHTML = platforms.map(p => `<option value="${p}">${p}</option>`).join('');
+                            if (platforms.includes(currentSelection)) {
+                                this.elements.platformFilter.value = currentSelection;
+                            }
                         }
 
-                        const platformFilterTerm = this.elements.platformFilter.value;
+                        const platformFilterTerm = this.elements.platformFilter ? this.elements.platformFilter.value : 'All Platforms';
                         if (platformFilterTerm && platformFilterTerm !== 'All Platforms') {
                             const virtualItems = [];
                             items.forEach(stock => {
@@ -1958,9 +1951,9 @@
                             filteredItems = virtualItems;
                         }
                     } else {
-                        this.elements.portfolioFilter.style.display = 'block';
-                        this.elements.platformFilter.style.display = 'none';
-                        const filterTerm = this.elements.portfolioFilter.value.toLowerCase();
+                        if(this.elements.portfolioFilter) this.elements.portfolioFilter.style.display = 'block';
+                        if(this.elements.platformFilter) this.elements.platformFilter.style.display = 'none';
+                        const filterTerm = this.elements.portfolioFilter ? this.elements.portfolioFilter.value.toLowerCase() : '';
                         if (filterTerm) {
                             filteredItems = items.filter(item =>
                                 item.symbol.toLowerCase().includes(filterTerm) ||
@@ -1973,13 +1966,11 @@
                 const sortedItems = this.sortItems([...filteredItems], sortBy);
                 
                 if (type === 'stock' || type === 'fund') {
-                    const isGrouping = sortBy === 'platform' && this.elements.platformFilter.value === 'All Platforms';
+                    const isGrouping = sortBy === 'platform' && (this.elements.platformFilter ? this.elements.platformFilter.value : 'All Platforms') === 'All Platforms';
                     if (isGrouping) {
                         this.renderGroupedByPlatform(sortedItems, grid, type);
                     } else if (sortBy === 'performance') {
-                        // === START Grouping Logic Implementation ===
                         this.renderGroupedStocks(sortedItems, grid, type);
-                        // === END Grouping Logic Implementation ===
                     } else {
                         this.renderCards(sortedItems, grid, type);
                     }
@@ -1989,7 +1980,7 @@
 
                 this.renderDiversificationChart();
                 this.renderPortfolioPerformanceChart();
-                if (sortedItems.length === 0 && type !== 'stock' && type !== 'fund') {
+                if (sortedItems.length === 0 && type !== 'stock' && type !== 'fund' && grid) {
                      grid.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your ${type} list is empty.</div>`;
                 }
                 this.restoreScrollPosition();
@@ -2045,7 +2036,7 @@
 
                     if (migrationNeeded) {
                         console.log("Data migration performed. Saving updated structure.");
-                        await setDoc(userDocRef, docSnap.data());
+                        await this.saveData();
                     }
                 }
                 this.updatePortfolioHistory();
@@ -2059,7 +2050,7 @@
                     this.checkPriceAlerts();
                 }, this.config.refreshIntervalMs);
                 this.isLiveUpdatePaused = false;
-                this.elements.toggleLiveUpdateBtn.textContent = '⏸️ Pause Live Update';
+                if(this.elements.toggleLiveUpdateBtn) this.elements.toggleLiveUpdateBtn.textContent = '⏸️ Pause Live Update';
                 this.startCountdown();
             }
             async refreshCurrentTab(isAutoRefresh = false) {
@@ -2077,13 +2068,13 @@
                 }
             }
             startCountdown() {
-                this.elements.smallCountdownContainer.innerHTML = `Next update: <span id="smallCountdown">${this.config.refreshIntervalMs / 1000}s</span>`;
+                if(this.elements.smallCountdownContainer) this.elements.smallCountdownContainer.innerHTML = `Next update: <span id="smallCountdown">${this.config.refreshIntervalMs / 1000}s</span>`;
                 this.elements.smallCountdown = document.getElementById('smallCountdown');
                 let timeLeft = this.config.refreshIntervalMs / 1000;
                 if(this.countdownIntervalId) clearInterval(this.countdownIntervalId);
                 const updateTimers = () => {
                     if (timeLeft >= 0) {
-                        this.elements.countdown.textContent = timeLeft;
+                        if(this.elements.countdown) this.elements.countdown.textContent = timeLeft;
                         if(this.elements.smallCountdown) this.elements.smallCountdown.textContent = `${timeLeft}s`;
                         timeLeft--;
                     } else {
@@ -2097,7 +2088,7 @@
                  clearInterval(this.refreshIntervalId);
                 clearInterval(this.countdownIntervalId);
                 this.isLiveUpdatePaused = true;
-                this.elements.toggleLiveUpdateBtn.textContent = '▶️ Resume Live Update';
+                if(this.elements.toggleLiveUpdateBtn) this.elements.toggleLiveUpdateBtn.textContent = '▶️ Resume Live Update';
                  if(this.elements.smallCountdownContainer) this.elements.smallCountdownContainer.textContent = 'Updates Paused';
             }
             toggleLiveUpdate() { this.isLiveUpdatePaused ? this.startLiveUpdate() : this.stopLiveUpdate(); }
@@ -2136,15 +2127,19 @@
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
                     totalRealizedPL += stats.realizedPL;
                     
-                    // Only include active positions in market value, today's P/L, and unrealized P/L
                     if (stats.totalSharesOwned > 0) {
                         totalCurrentValue += stats.currentValue;
                         totalUnrealizedPL += stats.unrealizedPL;
                         
-                        // FIX for Total P/L Today: Ensure this sum is based on current shares and market change
-                        totalPLToday += (item.change || 0) * stats.totalSharesOwned;
-                        
-                        totalPreviousDayValue += (item.previousClose || item.price - (item.change || 0)) * stats.totalSharesOwned;
+                        // FIX: Ensure totalPLToday is a clean calculation based on item change
+                        const dailyChange = (item.change || 0) * stats.totalSharesOwned;
+                        if (!isNaN(dailyChange) && isFinite(dailyChange)) {
+                            totalPLToday += dailyChange;
+                        }
+
+                        // Calculate previous day value for percentage calculation
+                        const previousDayPrice = item.price - (item.change || 0);
+                        totalPreviousDayValue += previousDayPrice * stats.totalSharesOwned;
                     }
                     
                     totalContributions += (item.transactions || []).reduce((sum, t) => sum + (t.type === 'buy' ? t.shares * t.price : -t.shares * t.price), 0);
@@ -2195,9 +2190,9 @@
             async addItemFromInput(type) {
                 const isStock = type === 'stock';
                 const input = isStock ? this.elements.stockInput : (type === 'fund' ? this.elements.mutualFundInput : this.elements.watchlistInput);
-                const symbol = input.value.trim().toUpperCase();
+                const symbol = input ? input.value.trim().toUpperCase() : '';
                 if (!symbol) return;
-                input.value = '';
+                if (input) input.value = '';
                 await this.addItem(symbol, type);
             }
             async addItem(symbol, type) {
@@ -2285,11 +2280,11 @@
                 if (!item || !item.transactions || index < 0 || index >= item.transactions.length) return;
                 const transaction = item.transactions[index];
                 this.openTransactionModal(id, type, transaction.type, index);
-                this.elements.modalShares.value = transaction.shares;
-                this.elements.modalPrice.value = transaction.price;
-                this.elements.modalPlatform.value = transaction.platform || '';
-                this.elements.modalNote.value = transaction.note || '';
-                this.elements.modalDate.value = transaction.date ? transaction.date.split('T')[0] : '';
+                if(this.elements.modalShares) this.elements.modalShares.value = transaction.shares;
+                if(this.elements.modalPrice) this.elements.modalPrice.value = transaction.price;
+                if(this.elements.modalPlatform) this.elements.modalPlatform.value = transaction.platform || '';
+                if(this.elements.modalNote) this.elements.modalNote.value = transaction.note || '';
+                if(this.elements.modalDate) this.elements.modalDate.value = transaction.date ? transaction.date.split('T')[0] : '';
             }
             openTransactionModal(id, type, transactionType, transactionIndex = -1) {
                 const modal = this.elements.transactionModal;
@@ -2300,12 +2295,12 @@
                     return;
                 }
                 modal.style.display = 'flex';
-                this.elements.modalSymbol.textContent = item.symbol;
-                this.elements.modalTitleAction.textContent = transactionIndex > -1 ? 'Edit' : transactionType.charAt(0).toUpperCase() + transactionType.slice(1);
+                if(this.elements.modalSymbol) this.elements.modalSymbol.textContent = item.symbol;
+                if(this.elements.modalTitleAction) this.elements.modalTitleAction.textContent = transactionIndex > -1 ? 'Edit' : transactionType.charAt(0).toUpperCase() + transactionType.slice(1);
                 ['modalShares', 'modalPrice', 'modalNote', 'modalPlatform', 'modalDividendAmount'].forEach(elId => {
                      if(this.elements[elId]) this.elements[elId].value = '';
                  });
-                if (transactionIndex === -1) {
+                if (transactionIndex === -1 && this.elements.modalDate) {
                     this.elements.modalDate.value = new Date().toISOString().split('T')[0];
                 }
                 
@@ -2314,48 +2309,51 @@
                 const existingPlatforms = [...new Set(allItems.flatMap(s => s.transactions.map(t => t.platform)).filter(p => p))];
                 const allPlatforms = [...new Set([...predefinedPlatforms, ...existingPlatforms])].sort();
                 const platformSelect = this.elements.modalPlatform;
-                platformSelect.innerHTML = `<option value="">Select...</option>`;
-                allPlatforms.forEach(p => {
-                    platformSelect.innerHTML += `<option value="${p}">${p}</option>`;
-                });
-                platformSelect.innerHTML += `<option value="add_new">++ Add New Platform...</option>`;
-                
-                if (transactionIndex > -1) {
-                    const transaction = item.transactions[transactionIndex];
-                    platformSelect.value = transaction.platform || "";
+                if(platformSelect) {
+                    platformSelect.innerHTML = `<option value="">Select...</option>`;
+                    allPlatforms.forEach(p => {
+                        platformSelect.innerHTML += `<option value="${p}">${p}</option>`;
+                    });
+                    platformSelect.innerHTML += `<option value="add_new">++ Add New Platform...</option>`;
+                    
+                    if (transactionIndex > -1) {
+                        const transaction = item.transactions[transactionIndex];
+                        platformSelect.value = transaction.platform || "";
+                    }
                 }
 
-
-                this.elements.modalDividendFields.style.display = 'none';
-                this.elements.modalShares.parentNode.style.display = 'block';
-                this.elements.modalPrice.parentNode.style.display = 'block';
-                this.elements.modalPlatform.parentNode.style.display = 'block';
+                if(this.elements.modalDividendFields) this.elements.modalDividendFields.style.display = 'none';
+                if(this.elements.modalShares) this.elements.modalShares.parentNode.style.display = 'block';
+                if(this.elements.modalPrice) this.elements.modalPrice.parentNode.style.display = 'block';
+                if(this.elements.modalPlatform) this.elements.modalPlatform.parentNode.style.display = 'block';
 
                 if (transactionType === 'dividend') {
-                    this.elements.modalPrice.parentNode.style.display = 'none';
-                    this.elements.modalPlatform.parentNode.style.display = 'none';
-                    this.elements.modalDividendFields.style.display = 'block';
+                    if(this.elements.modalPrice) this.elements.modalPrice.parentNode.style.display = 'none';
+                    if(this.elements.modalPlatform) this.elements.modalPlatform.parentNode.style.display = 'none';
+                    if(this.elements.modalDividendFields) this.elements.modalDividendFields.style.display = 'block';
                 }
-                Object.assign(this.elements.modalSaveBtn.dataset, { id, type, transactionType, transactionIndex });
+                if(this.elements.modalSaveBtn) Object.assign(this.elements.modalSaveBtn.dataset, { id, type, transactionType, transactionIndex });
             }
-            closeTransactionModal() { this.elements.transactionModal.style.display = 'none'; }
+            closeTransactionModal() { if(this.elements.transactionModal) this.elements.transactionModal.style.display = 'none'; }
             
             async saveTransaction() {
-                const { id, type, transactionType, transactionIndex: indexStr } = this.elements.modalSaveBtn.dataset;
+                const { id, type, transactionType, transactionIndex: indexStr } = this.elements.modalSaveBtn ? this.elements.modalSaveBtn.dataset : {};
+                if (!id || !type) return;
+
                 const index = parseInt(indexStr);
                 const isEditing = index > -1;
                 const itemList = (type === 'stock') ? this.stocks : this.mutualFunds;
                 const item = itemList.find(i => i.id === id);
                 if (!item) return;
         
-                const dateInput = this.elements.modalDate.value;
+                const dateInput = this.elements.modalDate ? this.elements.modalDate.value : '';
                 if (!dateInput) { this.showError('Transaction date is required.'); return; }
                 const transactionDateISO = new Date(dateInput).toISOString();
         
                 if (transactionType === 'buy' || transactionType === 'sell') {
-                    const shares = parseFloat(this.elements.modalShares.value);
-                    const price = parseFloat(this.elements.modalPrice.value);
-                    let platform = this.elements.modalPlatform.value;
+                    const shares = parseFloat(this.elements.modalShares ? this.elements.modalShares.value : 0);
+                    const price = parseFloat(this.elements.modalPrice ? this.elements.modalPrice.value : 0);
+                    let platform = this.elements.modalPlatform ? this.elements.modalPlatform.value : '';
 
                     if (platform === 'add_new') {
                         const customPlatform = prompt("Please enter the new platform name:");
@@ -2384,7 +2382,7 @@
                     const newTransaction = {
                         type: transactionType,
                         shares, price, platform,
-                        note: this.elements.modalNote.value.trim(),
+                        note: this.elements.modalNote ? this.elements.modalNote.value.trim() : '',
                         date: transactionDateISO
                     };
         
@@ -2420,88 +2418,62 @@
                     }
                 });
             }
-
-            // ==================================================================
-            // === Grouping Logic for Active, Closed, and Mismatch Items ===
-            // ==================================================================
             renderGroupedStocks(items, container, type) {
-                const floatingPointEpsilon = 0.0001; 
+                // 1. Separate items into Active (shares > 0 or data mismatch) and Closed (shares = 0 and has transactions)
                 const activeItems = [];
                 const closedPositions = [];
-                const dataMismatchItems = [];
+                const dataMismatch = [];
 
-                // 1. Classify Items
                 items.forEach(item => {
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
+                    const sharesOwned = stats.totalSharesOwned;
+                    const hasTransactions = (item.transactions || []).length > 0;
                     
-                    if (Math.abs(stats.totalSharesOwned) >= floatingPointEpsilon) {
-                        // Item has shares: Active Position
+                    if (sharesOwned > 0.0001) {
                         activeItems.push(item);
-                    } else if (item.transactions && item.transactions.length > 0) {
-                        // Shares are zero but has history: Closed Position
+                    } else if (hasTransactions && sharesOwned < 0.0001) {
+                        // Sold off position (has history but no active shares)
                         closedPositions.push(item);
-                    } else {
-                        // Shares are zero and no history: Newly added or data missing
-                        dataMismatchItems.push(item);
+                    } else if (item.symbol && sharesOwned < 0.0001 && !hasTransactions) {
+                         // Added stock but no transactions logged yet
+                        dataMismatch.push(item);
                     }
                 });
                 
-                // 2. Group Active Items by Performance (Appears first)
-                if (activeItems.length > 0) {
-                    const sortedActiveItems = activeItems.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
-                    const gains = sortedActiveItems.filter(s => (s.change || 0) >= 0);
-                    const losses = sortedActiveItems.filter(s => (s.change || 0) < 0).sort((a, b) => a.changePercent - b.changePercent); 
-                    
-                    // The Biggest Gain item is the first in the 'gains' list
-                    const biggestGain = gains.length > 0 ? [gains[0]] : [];
-                    // All other positive items are in 'otherGains'
-                    const otherGains = gains.filter(s => biggestGain.length === 0 || s.id !== biggestGain[0].id);
-                    
-                    // Render Active Groups (in order: Biggest Gain, Other Gains, Losses)
-                    if (biggestGain.length > 0) {
-                        this.createGroup('🚀 Biggest Gain Today', biggestGain, 'biggest-gain-header', container, type, this.getGroupSummary(biggestGain, 'biggest-gain'));
-                    }
-                    if (otherGains.length > 0) {
-                        this.createGroup('📈 Gains Today', otherGains, 'gains-header', container, type, this.getGroupSummary(otherGains, 'gains'));
-                    }
-                    if (losses.length > 0) {
-                        this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
-                    }
-                } 
+                // 2. Performance Grouping for ACTIVE Items only
+                const gains = activeItems.filter(s => (s.changePercent || 0) >= 0).sort((a, b) => b.changePercent - a.changePercent);
+                const losses = activeItems.filter(s => (s.changePercent || 0) < 0).sort((a, b) => a.changePercent - b.changePercent);
                 
-                // 3. Group Fail-Safe Items (Appears next)
-                if (dataMismatchItems.length > 0) {
-                    this.createGroup(
-                        '⚠️ Data Mismatch/Missing Shares', 
-                        dataMismatchItems, 
-                        'mismatch-header', 
-                        container, 
-                        type, 
-                        this.getGroupSummary(dataMismatchItems, 'mismatch')
-                    );
+                if (activeItems.length === 0 && closedPositions.length === 0 && dataMismatch.length === 0) { 
+                    if (container.classList.contains('group-content')) return;
+                    container.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your portfolio is empty.</div>`; 
+                    return; 
                 }
 
-                // 4. Group Closed Positions (Appears last, as requested)
-                if (closedPositions.length > 0) {
-                    this.createGroup(
-                        '🔒 Closed Positions (Sold Off)', 
-                        closedPositions, 
-                        'closed-header', 
-                        container, 
-                        type, 
-                        this.getGroupSummary(closedPositions, 'closed')
-                    );
-                }
+                // 3. Render Active Groups
+                const biggestGain = gains.length > 0 ? [gains[0]] : [];
+                if (biggestGain.length > 0) this.createGroup('🚀 Biggest Gain Today', biggestGain, 'biggest-gain-header', container, type, this.getGroupSummary(biggestGain, 'biggest-gain'));
+                const otherGains = gains.filter(s => biggestGain.length === 0 || s.id !== biggestGain[0].id);
+                this.createGroup('📈 Gains Today', otherGains, 'gains-header', container, type, this.getGroupSummary(otherGains, 'gains'));
+                this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
                 
-                // 5. Handle Empty Portfolio Message
-                if (items.length === 0) {
-                    container.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your portfolio is empty.</div>`; 
+                // 4. Render Fail-Safe Group (New/Mismatched Items)
+                if (dataMismatch.length > 0) {
+                     this.createGroup('⚠️ Data Mismatch/Missing Shares', dataMismatch, 'mismatch-header', container, type, { 
+                        title: `Please log a transaction for ${dataMismatch.length} item(s)`, 
+                        text: "These items were added but have no shares or transactions recorded yet. They do not affect your portfolio metrics." 
+                    });
+                }
+
+                // 5. Render Closed Positions (Sold Off) - RENDER LAST
+                if (closedPositions.length > 0) {
+                    const totalRealizedPL = closedPositions.reduce((sum, item) => sum + this.calculateTransactionStats(item.transactions).realizedPL, 0);
+                    this.createGroup('🔒 Closed Positions (Sold Off)', closedPositions, 'closed-header', container, type, { 
+                        title: `Total Realized P/L: ${this.formatCurrency(totalRealizedPL)}`, 
+                        text: `This group contains ${closedPositions.length} positions you have completely sold. Their realized profit/loss is preserved in the card view.` 
+                    });
                 }
             }
-            // ==================================================================
-            // === END Grouping Logic ===
-            // ==================================================================
-
             renderGroupedByPlatform(items, container, type) {
                 if (items.length === 0) { 
                     if (container.classList.contains('group-content')) return;
@@ -2551,26 +2523,12 @@
                         const totalPLClass = totalPL >= 0 ? 'positive' : 'negative';
                         const totalValue = stats.currentValue;
                         const totalChangeToday = (item.change || 0) * stats.totalSharesOwned;
-                        // FIX: Ensure this variable is declared before use
-                        const totalChangeTodayClass = totalChangeToday >= 0 ? 'positive' : 'negative'; 
-                        
+                        const totalChangeTodayClass = totalChangeToday >= 0 ? 'positive' : 'negative'; // FIX: Defined here
                         summaryText = `Gained <span class="${changeClass}">${this.formatCurrency(item.change)}</span> today, a change of <span class="${changePercentClass}">${(item.changePercent || 0).toFixed(2)}%</span>.`;
                         summaryText += `\nTotal Value: <span class="${totalPL >= 0 ? 'positive' : 'negative'}">${this.formatCurrency(totalValue)}</span>`;
                         summaryText += `\nTotal P/L: <span class="${totalPLClass}">${this.formatCurrency(totalPL)}</span> (<span class="${totalPLClass}">${this.formatNumber(totalPLPercent, 2)}%</span>)`;
                         summaryText += `\nTotal Change Today: <span class="${totalChangeTodayClass}">${this.formatCurrency(totalChangeToday)}</span>`;
                     }
-                } else if (type === 'closed') {
-                    let totalRealizedPL = 0;
-                    items.forEach(item => {
-                        const stats = this.calculateTransactionStats(item.transactions, item.price);
-                        totalRealizedPL += stats.realizedPL;
-                    });
-                    const totalPLClass = totalRealizedPL >= 0 ? 'positive' : 'negative';
-                    summaryTitle = `Total Realized P/L: ${this.formatCurrency(totalRealizedPL)}`;
-                    summaryText = `This group contains ${items.length} positions you have completely sold. Their realized profit/loss is preserved in the card view.`;
-                } else if (type === 'mismatch') {
-                    summaryTitle = `Action Required for ${items.length} item(s)`;
-                    summaryText = `These items have been added to your portfolio but currently show 0 shares owned and have no buy/sell history. You must log an initial "Buy" transaction to make them active.`;
                 } else {
                     let totalChangeToday = 0;
                     let totalValue = 0;
@@ -2605,7 +2563,7 @@
                 header.innerHTML = `<span>${title} (${itemList.length})</span><span class="toggle-icon">▼</span>`;
 
                 const content = document.createElement('div');
-                content.className = `group-content ${headerClass}-content`;
+                content.className = `group-content ${headerClass.replace('-header', '')}-content`;
                 
                 const summaryContainer = document.createElement('div');
                 summaryContainer.className = 'summary-content collapsed';
@@ -2624,14 +2582,16 @@
                     footer.classList.toggle('collapsed');
 
                     const toggleIcon = header.querySelector('.toggle-icon');
-                    toggleIcon.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
-                    footer.querySelector('.collapse-group-btn').textContent = isCollapsed ? 'Expand' : 'Collapse';
+                    if(toggleIcon) toggleIcon.style.transform = isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
+                    const footerBtn = footer.querySelector('.collapse-group-btn');
+                    if(footerBtn) footerBtn.textContent = isCollapsed ? 'Expand' : 'Collapse';
                     this.groupCollapseState[title] = isCollapsed;
                     sessionStorage.setItem('groupCollapseState', JSON.stringify(this.groupCollapseState));
                 };
 
                 header.addEventListener('click', toggleGroup);
-                footer.querySelector('.collapse-group-btn').addEventListener('click', (e) => {
+                const footerBtn = footer.querySelector('.collapse-group-btn');
+                if(footerBtn) footerBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     toggleGroup();
@@ -2644,8 +2604,9 @@
                     summaryContainer.classList.remove('collapsed');
                     footer.classList.add('collapsed');
                     const toggleIcon = header.querySelector('.toggle-icon');
-                    toggleIcon.style.transform = 'rotate(-90deg)';
-                    footer.querySelector('.collapse-group-btn').textContent = 'Expand';
+                    if(toggleIcon) toggleIcon.style.transform = 'rotate(-90deg)';
+                    const footerBtn = footer.querySelector('.collapse-group-btn');
+                    if(footerBtn) footerBtn.textContent = 'Expand';
                 }
 
                 groupWrapper.append(header, summaryContainer, content, footer);
@@ -2665,27 +2626,11 @@
                     card.dataset.type = type;
                     card.dataset.symbol = item.symbol;
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
-
-                    // === START Card State Logic ===
-                    const floatingPointEpsilon = 0.0001; 
-                    const isClosedPosition = (type === 'stock' || type === 'fund') && 
-                                             Math.abs(stats.totalSharesOwned) < floatingPointEpsilon && 
-                                             item.transactions && item.transactions.length > 0;
-                    
-                    const isMismatchPosition = (type === 'stock' || type === 'fund') &&
-                                               Math.abs(stats.totalSharesOwned) < floatingPointEpsilon &&
-                                               (!item.transactions || item.transactions.length === 0);
-
-                    if (isClosedPosition) {
-                        card.classList.add('closed-position');
-                    } else if (isMismatchPosition) {
-                        card.classList.add('mismatch-position');
-                    }
-                    // === END Card State Logic ===
                     
                     let stockInfoHTML = '';
                     let transactionDetailsHTML = '';
                     let cardChartHTML = '';
+                    let isClosedPosition = false;
 
                     cardChartHTML = `
                         <div class="card-chart-container">
@@ -2702,28 +2647,29 @@
                             <canvas id="chart-${item.id}"></canvas>
                         </div>`;
                     
-                    if (isClosedPosition) {
+                    if ( (type === 'stock' || type === 'fund') && stats.totalSharesOwned < 0.0001 && (item.transactions || []).length > 0) {
+                        isClosedPosition = true;
+                        card.classList.add('closed-position');
                         const realizedPL = stats.realizedPL;
                         const realizedClass = realizedPL >= 0 ? 'positive' : 'negative';
-                        
                         stockInfoHTML = `
                             <div class="info-row" style="text-align: center; display: block; margin-bottom: 10px;">
-                                <span class="info-label" style="font-weight: bold; font-size: 1.1em; color: var(--text-primary);">POSITION CLOSED</span>
+                                <span class="info-label" style="font-weight: bold; font-size: 1.1em;">Position Closed</span>
                             </div>
                             <div class="info-row">
                                 <span class="info-label">Realized P/L</span>
                                 <span class="info-value ${realizedClass}" style="font-size: 1.2em;">${this.formatCurrency(realizedPL)}</span>
                             </div>`;
-                            
-                    } else if (isMismatchPosition) {
-                        stockInfoHTML = `
+                    } else if ( (type === 'stock' || type === 'fund') && stats.totalSharesOwned < 0.0001 && (item.transactions || []).length === 0) {
+                        // Data Mismatch / New Item with Zero Shares
+                         card.classList.add('data-mismatch-position'); // Use for styling if needed
+                         stockInfoHTML = `
                             <div class="info-row" style="text-align: center; display: block; margin-bottom: 10px;">
-                                <span class="info-label" style="font-weight: bold; font-size: 1.1em; color: #FFC300;">ACTION REQUIRED</span>
+                                <span class="info-label" style="font-weight: bold; color: orange; font-size: 1.1em;">Missing Shares/Data</span>
                             </div>
                             <div class="info-row">
-                                <span class="info-label" style="font-size: 0.9em; text-align: left;">
-                                    Shares: 0. You must log a "Buy" transaction below to activate this position.
-                                </span>
+                                <span class="info-label">Action Required:</span>
+                                <span class="info-value" style="color: var(--text-primary);">Log a BUY transaction.</span>
                             </div>`;
                     } else {
                         const totalPL = stats.unrealizedPL;
@@ -2732,7 +2678,7 @@
                 
                         if (type === 'watchlist') {
                             stockInfoHTML = `<div class="info-row"><span class="info-label">Open:</span><span class="info-value">${this.formatCurrency(item.open || 0)}</span></div><div class="info-row"><span class="info-label">High:</span><span class="info-value">${this.formatCurrency(item.high || 0)}</span></div><div class="info-row"><span class="info-label">Low:</span><span class="info-value">${this.formatCurrency(item.low || 0)}</span></div><div class="info-row"><span class="info-label">Prev. Close:</span><span class="info-value">${this.formatCurrency(item.previousClose || 0)}</span></div>`;
-                        } else { // For both stock and fund
+                        } else { // For both stock and fund (active position)
                             stockInfoHTML = `
                                 <div class="info-row"> <span class="info-label">Open:</span> <span class="info-value">${this.formatCurrency(item.open || 0)}</span> </div>
                                 <div class="info-row"> <span class="info-label">Total Shares:</span> <span class="info-value">${this.formatNumber(stats.totalSharesOwned, 3)}</span> </div>
@@ -2744,45 +2690,7 @@
                         }
                     }
                     
-                    if (type === 'stock' || type === 'fund') {
-                        transactionDetailsHTML = `
-                            <div class="transaction-details">
-                                <div class="transaction-header">
-                                    <h4>Transactions</h4>
-                                    <span class="toggle-icon">▼</span>
-                                </div>
-                                <div class="transactions-container">${(item.transactions || []).map((t, index) => `
-                                    <div class="transaction-entry">
-                                        <div class="transaction-info">
-                                            <span><strong class="${t.type}">${t.type.toUpperCase()}</strong>: ${this.formatNumber(t.shares, 3)} @ ${this.formatCurrency(t.price)}</span>
-                                            ${t.platform ? `<span>Platform: ${t.platform}</span>` : ''}
-                                            ${t.note ? `<span>Note: ${t.note}</span>` : ''}
-                                            <span>Date: ${t.date ? new Date(t.date).toLocaleDateString() : 'N/A'}</span>
-                                        </div>
-                                        <div class="transaction-entry-controls">
-                                            <button class="edit-transaction-btn" data-index="${index}">Edit</button>
-                                            <button class="delete-transaction-btn" data-index="${index}">&times;</button>
-                                        </div>
-                                    </div>`).join('')}</div>
-                                </div>
-                                <div class="card-actions">
-                                    <button class="transaction-btn buy-btn">Buy</button>
-                                    <button class="transaction-btn sell-btn" style="background-color: var(--color-negative);">Sell</button>
-                                </div>
-                                <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 8px;">
-                                    <button class="add-btn edit-btn">Edit Details</button>
-                                </div>
-                                <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 8px;">
-                                    <button class="transaction-btn set-alert-btn" style="background-color: #9b59b6;">🔔 Set Alert</button>
-                                </div>`;
-                    } else if (type === 'watchlist') {
-                        transactionDetailsHTML = `<div class="card-actions" style="grid-template-columns: 1fr; gap: 8px;">
-                            <button class="add-btn move-to-portfolio-btn">Move to Portfolio</button>
-                            <button class="transaction-btn set-alert-btn" style="background-color: #9b59b6;">🔔 Set Alert</button>
-                        </div>`;
-                    }
-                    
-                    const todayPL = (item.change || 0) * stats.totalSharesOwned;
+                    const todayPL = (item.change || 0) * stats.totalSharesOwned; // FIX APPLIED HERE: changed 'today PL' to 'todayPL'
                     card.innerHTML = `
                         <div class="stock-header">
                             <span class="${type}-symbol stock-symbol">${item.symbol}</span>
@@ -2806,7 +2714,8 @@
                             if (container) {
                                 container.classList.toggle('collapsed');
                                 transactionHeader.classList.toggle('collapsed');
-                                transactionHeader.querySelector('.toggle-icon').style.transform = container.classList.contains('collapsed') ? 'rotate(0deg)' : 'rotate(90deg)';
+                                const toggleIcon = transactionHeader.querySelector('.toggle-icon');
+                                if(toggleIcon) toggleIcon.style.transform = container.classList.contains('collapsed') ? 'rotate(0deg)' : 'rotate(90deg)';
                             }
                         };
                         transactionHeader.addEventListener('click', toggleTransactions);
@@ -2962,16 +2871,20 @@
                 statusDiv.style.display = 'block';
                 setTimeout(() => { statusDiv.style.display = 'none'; }, 15000);
             }
-            showLoading(show, message = 'Loading...') { this.elements.loadingDiv.style.display = show ? 'block' : 'none'; this.elements.loadingDiv.textContent = message; }
+            showLoading(show, message = 'Loading...') { if(this.elements.loadingDiv) { this.elements.loadingDiv.style.display = show ? 'block' : 'none'; this.elements.loadingDiv.textContent = message; } }
             showError(message) {
-                this.elements.errorDiv.style.display = 'block';
-                this.elements.errorDiv.innerHTML = `<h4>Error</h4><p>${message}</p>`;
-                setTimeout(() => this.elements.errorDiv.style.display = 'none', 10000);
+                if(this.elements.errorDiv) {
+                    this.elements.errorDiv.style.display = 'block';
+                    this.elements.errorDiv.innerHTML = `<h4>Error</h4><p>${message}</p>`;
+                    setTimeout(() => { if(this.elements.errorDiv) this.elements.errorDiv.style.display = 'none'; }, 10000);
+                }
             }
             showSuccess(message) {
-                this.elements.successDiv.style.display = 'block';
-                this.elements.successDiv.innerHTML = `<h4>Success</h4><p>${message}</p>`;
-                setTimeout(() => this.elements.successDiv.style.display = 'none', 3000);
+                if(this.elements.successDiv) {
+                    this.elements.successDiv.style.display = 'block';
+                    this.elements.successDiv.innerHTML = `<h4>Success</h4><p>${message}</p>`;
+                    setTimeout(() => { if(this.elements.successDiv) this.elements.successDiv.style.display = 'none'; }, 3000);
+                }
             }
             async exportData() {
                 this.saveScrollPosition();
@@ -3005,8 +2918,8 @@
                 const container = this.elements.diversificationChartContainer;
                 const allItems = [...this.stocks, ...this.mutualFunds];
                 const hasTransactions = allItems.some(s => s.transactions && s.transactions.length > 0 && this.calculateTransactionStats(s.transactions).currentValue > 0);
-                container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && hasTransactions ? 'block' : 'none';
-                if (!container.style.display || container.style.display === 'none') return;
+                if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && hasTransactions ? 'block' : 'none';
+                if (!container || container.style.display === 'none') return;
                 const industryData = allItems.reduce((acc, stock) => {
                     const { currentValue } = this.calculateTransactionStats(stock.transactions, stock.price);
                     if (currentValue > 0) acc[stock.industry || 'Other'] = (acc[stock.industry || 'Other'] || 0) + currentValue;
@@ -3021,11 +2934,13 @@
                 const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
-                this.diversificationChartInstance = new Chart(this.elements.diversificationChart, {
-                    type: 'bar',
-                    data: { labels, datasets: [{ label: 'Value', data, backgroundColor: colors }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Portfolio by Industry', color: labelColor }, legend: { display: false } }, scales: { y: { ticks: { color: labelColor }, grid: { color: gridColor } }, x: { ticks: { color: labelColor }, grid: { color: gridColor } } } }
-                });
+                if(this.elements.diversificationChart) {
+                    this.diversificationChartInstance = new Chart(this.elements.diversificationChart, {
+                        type: 'bar',
+                        data: { labels, datasets: [{ label: 'Value', data, backgroundColor: colors }] },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Portfolio by Industry', color: labelColor }, legend: { display: false } }, scales: { y: { ticks: { color: labelColor }, grid: { color: gridColor } }, x: { ticks: { color: labelColor }, grid: { color: gridColor } } } }
+                    });
+                }
             }
             async updatePortfolioHistory() {
                 const allItems = [...this.stocks, ...this.mutualFunds];
@@ -3042,22 +2957,18 @@
              * ==================================================================
              * ==      UPDATED PORTFOLIO PERFORMANCE CHART FUNCTION            ==
              * ==================================================================
-             * This function is updated to match the user's screenshot:
-             * 1. Sets line to black (light mode) or white (dark mode).
-             * 2. Adds a light purple fill under the line.
-             * 3. Styles data points to be black/white with an opposing border.
-             * 4. Makes the line curved for '1W' (or small data sets) and angular for others.
-             * 5. Hides vertical (X-axis) gridlines to match the image.
-             * 6. Adds "Today's G/L" to the tooltip for the last data point.
              */
             renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
-                container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && this.portfolioHistory.length > 0 ? 'block' : 'none';
-                if (container.style.display === 'none') return;
+                if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && this.portfolioHistory.length > 0 ? 'block' : 'none';
+                if (!container || container.style.display === 'none') return;
                 
                 // Update active button state
-                this.elements.performanceChartControls.querySelectorAll('.chart-range-btn').forEach(btn => btn.classList.remove('active'));
-                this.elements.performanceChartControls.querySelector(`[data-range="${range}"]`).classList.add('active');
+                if(this.elements.performanceChartControls) {
+                    this.elements.performanceChartControls.querySelectorAll('.chart-range-btn').forEach(btn => btn.classList.remove('active'));
+                    const newActiveButton = this.elements.performanceChartControls.querySelector(`[data-range="${range}"]`);
+                    if(newActiveButton) newActiveButton.classList.add('active');
+                }
 
                 const allDataPoints = this.portfolioHistory.map(e => ({ x: new Date(e.date), y: e.value }));
                 
@@ -3077,8 +2988,10 @@
                 }
 
                 const chartData = allDataPoints.filter(dp => dp.x >= startDate);
-                if (chartData.length === 0) chartData.push(allDataPoints.at(-1)).filter(Boolean); // Show last point if range is empty
-
+                if (chartData.length === 0 && allDataPoints.length > 0) chartData.push(allDataPoints.at(-1)).filter(Boolean); // Show last point if range is empty
+                
+                if (!this.elements.portfolioPerformanceChart) return;
+                
                 if (this.portfolioPerformanceChartInstance) {
                     this.portfolioPerformanceChartInstance.destroy();
                 }
@@ -3200,14 +3113,14 @@
             }
 
             openConfirmModal(text, onConfirmAction, onCancelAction = null) {
-                 this.elements.alertsSummaryModal.style.display = 'none';
-                this.elements.confirmModal.style.display = 'flex';
-                 this.elements.confirmModalText.textContent = text;
+                 if(this.elements.alertsSummaryModal) this.elements.alertsSummaryModal.style.display = 'none';
+                if(this.elements.confirmModal) this.elements.confirmModal.style.display = 'flex';
+                 if(this.elements.confirmModalText) this.elements.confirmModalText.textContent = text;
                  this.onConfirm = onConfirmAction;
                  this.onCancel = onCancelAction;
             }
             closeConfirmModal(wasCancelled = false) {
-                 this.elements.confirmModal.style.display = 'none';
+                 if(this.elements.confirmModal) this.elements.confirmModal.style.display = 'none';
                 if (wasCancelled && this.onCancel) {
                     this.onCancel();
                 }
@@ -3219,18 +3132,18 @@
                  this.closeConfirmModal(false);
             }
             openSettingsModal(){
-                this.elements.modalFinnhubKey.value = this.config.finnhubApiKey || '';
-                this.elements.modalAlphaVantageKey.value = this.config.alphaVantageKey || '';
-                this.elements.modalFmpKey.value = this.config.fmpApiKey || '';
-                this.elements.modalRefreshInterval.value = this.config.refreshIntervalMs / 1000;
-                this.elements.settingsModal.style.display = 'flex';
+                if(this.elements.modalFinnhubKey) this.elements.modalFinnhubKey.value = this.config.finnhubApiKey || '';
+                if(this.elements.modalAlphaVantageKey) this.elements.modalAlphaVantageKey.value = this.config.alphaVantageKey || '';
+                if(this.elements.modalFmpKey) this.elements.modalFmpKey.value = this.config.fmpApiKey || '';
+                if(this.elements.modalRefreshInterval) this.elements.modalRefreshInterval.value = this.config.refreshIntervalMs / 1000;
+                if(this.elements.settingsModal) this.elements.settingsModal.style.display = 'flex';
             }
-            closeSettingsModal(){ this.elements.settingsModal.style.display = 'none'; }
+            closeSettingsModal(){ if(this.elements.settingsModal) this.elements.settingsModal.style.display = 'none'; }
             saveSettings(){
-                const finnhubKey = this.elements.modalFinnhubKey.value.trim();
-                const alphaVantageKey = this.elements.modalAlphaVantageKey.value.trim();
-                const fmpKey = this.elements.modalFmpKey.value.trim();
-                const interval = parseInt(this.elements.modalRefreshInterval.value, 10);
+                const finnhubKey = this.elements.modalFinnhubKey ? this.elements.modalFinnhubKey.value.trim() : '';
+                const alphaVantageKey = this.elements.modalAlphaVantageKey ? this.elements.modalAlphaVantageKey.value.trim() : '';
+                const fmpKey = this.elements.modalFmpKey ? this.elements.modalFmpKey.value.trim() : '';
+                const interval = parseInt(this.elements.modalRefreshInterval ? this.elements.modalRefreshInterval.value : 0, 10);
                 localStorage.setItem('finnhubApiKey', finnhubKey);
                 localStorage.setItem('alphaVantageKey', alphaVantageKey);
                 localStorage.setItem('fmpApiKey', fmpKey);
@@ -3294,12 +3207,13 @@
             applyPrivacyMode() {
                 this.isPrivacyMode = localStorage.getItem('privacyMode') === 'true';
                 document.body.classList.toggle('privacy-mode', this.isPrivacyMode);
-                this.elements.togglePrivacyBtn.textContent = this.isPrivacyMode ? '👁️ Disable Privacy' : '👁️ Privacy Mode';
+                if(this.elements.togglePrivacyBtn) this.elements.togglePrivacyBtn.textContent = this.isPrivacyMode ? '👁️ Disable Privacy' : '👁️ Privacy Mode';
             }
-            openListAllModal() { this.elements.listAllModal.style.display = 'flex'; this.listAllSymbols(); }
-            closeListAllModal() { this.elements.listAllModal.style.display = 'none'; }
+            openListAllModal() { if(this.elements.listAllModal) { this.elements.listAllModal.style.display = 'flex'; this.listAllSymbols(); } }
+            closeListAllModal() { if(this.elements.listAllModal) this.elements.listAllModal.style.display = 'none'; }
             listAllSymbols() {
                 const contentDiv = this.elements.listAllContent;
+                if(!contentDiv) return;
                 contentDiv.innerHTML = '';
                 const createList = (title, items) => {
                     if (items.length > 0) {
@@ -3315,61 +3229,62 @@
             
             toggleAlertInputs(type) {
                 if (type === 'single') {
-                    this.elements.singlePriceInputs.style.display = 'grid';
-                    this.elements.priceRangeInputs.style.display = 'none';
+                    if(this.elements.singlePriceInputs) this.elements.singlePriceInputs.style.display = 'grid';
+                    if(this.elements.priceRangeInputs) this.elements.priceRangeInputs.style.display = 'none';
                 } else {
-                    this.elements.singlePriceInputs.style.display = 'none';
-                    this.elements.priceRangeInputs.style.display = 'grid';
+                    if(this.elements.singlePriceInputs) this.elements.singlePriceInputs.style.display = 'none';
+                    if(this.elements.priceRangeInputs) this.elements.priceRangeInputs.style.display = 'grid';
                 }
             }
             
             openPriceAlertModal(symbol) {
-                this.elements.priceAlertModal.style.display = 'flex';
-                this.elements.alertSymbol.textContent = symbol;
-                this.elements.saveAlertBtn.dataset.symbol = symbol;
+                if(this.elements.priceAlertModal) this.elements.priceAlertModal.style.display = 'flex';
+                if(this.elements.alertSymbol) this.elements.alertSymbol.textContent = symbol;
+                if(this.elements.saveAlertBtn) this.elements.saveAlertBtn.dataset.symbol = symbol;
                 
                 // Reset fields
-                this.elements.alertType.value = 'single';
-                this.elements.alertPrice.value = '';
-                this.elements.alertCondition.value = 'above';
-                this.elements.alertPriceLower.value = '';
-                this.elements.alertPriceUpper.value = '';
+                if(this.elements.alertType) this.elements.alertType.value = 'single';
+                if(this.elements.alertPrice) this.elements.alertPrice.value = '';
+                if(this.elements.alertCondition) this.elements.alertCondition.value = 'above';
+                if(this.elements.alertPriceLower) this.elements.alertPriceLower.value = '';
+                if(this.elements.alertPriceUpper) this.elements.alertPriceUpper.value = '';
                 this.toggleAlertInputs('single');
 
                 // Check for existing alert and populate
                 const existingAlert = this.priceAlerts.find(a => a.symbol === symbol && !a.triggered);
                 if (existingAlert) {
-                    this.elements.saveAlertBtn.textContent = 'Update Alert';
+                    if(this.elements.saveAlertBtn) this.elements.saveAlertBtn.textContent = 'Update Alert';
                     if (existingAlert.type === 'range') {
-                        this.elements.alertType.value = 'range';
-                        this.elements.alertPriceLower.value = existingAlert.priceLower;
-                        this.elements.alertPriceUpper.value = existingAlert.priceUpper;
+                        if(this.elements.alertType) this.elements.alertType.value = 'range';
+                        if(this.elements.alertPriceLower) this.elements.alertPriceLower.value = existingAlert.priceLower;
+                        if(this.elements.alertPriceUpper) this.elements.alertPriceUpper.value = existingAlert.priceUpper;
                         this.toggleAlertInputs('range');
                     } else {
-                        this.elements.alertType.value = 'single';
-                        this.elements.alertPrice.value = existingAlert.price;
-                        this.elements.alertCondition.value = existingAlert.condition;
+                        if(this.elements.alertType) this.elements.alertType.value = 'single';
+                        if(this.elements.alertPrice) this.elements.alertPrice.value = existingAlert.price;
+                        if(this.elements.alertCondition) this.elements.alertCondition.value = existingAlert.condition;
                         this.toggleAlertInputs('single');
                     }
                 } else {
-                    this.elements.saveAlertBtn.textContent = 'Save Alert';
+                    if(this.elements.saveAlertBtn) this.elements.saveAlertBtn.textContent = 'Save Alert';
                 }
             }
 
-            closePriceAlertModal() { this.elements.priceAlertModal.style.display = 'none'; }
+            closePriceAlertModal() { if(this.elements.priceAlertModal) this.elements.priceAlertModal.style.display = 'none'; }
             
             async savePriceAlert() {
-                const { symbol } = this.elements.saveAlertBtn.dataset;
-                const alertType = this.elements.alertType.value;
+                const { symbol } = this.elements.modalSaveBtn ? this.elements.modalSaveBtn.dataset : {};
+                if(!symbol) return;
+                const alertType = this.elements.alertType ? this.elements.alertType.value : 'single';
                 let newAlert;
 
                 // Remove any existing active alert for this symbol
                 this.priceAlerts = this.priceAlerts.filter(a => a.symbol !== symbol || a.triggered);
 
                 if (alertType === 'single') {
-                    const price = parseFloat(this.elements.alertPrice.value);
-                    const condition = this.elements.alertCondition.value;
-                    if (!symbol || isNaN(price) || price <= 0) {
+                    const price = parseFloat(this.elements.alertPrice ? this.elements.alertPrice.value : 0);
+                    const condition = this.elements.alertCondition ? this.elements.alertCondition.value : '';
+                    if (isNaN(price) || price <= 0) {
                         this.showError("Invalid alert data. Please enter a valid target price.");
                         return;
                     }
@@ -3381,9 +3296,9 @@
                     this.showSuccess(`Alert set for ${symbol} when price is ${condition} ${this.formatCurrency(price)}!`);
 
                 } else { // Range
-                    const priceLower = parseFloat(this.elements.alertPriceLower.value);
-                    const priceUpper = parseFloat(this.elements.alertPriceUpper.value);
-                    if (!symbol || isNaN(priceLower) || isNaN(priceUpper) || priceLower < 0 || priceUpper <= priceLower) {
+                    const priceLower = parseFloat(this.elements.alertPriceLower ? this.elements.alertPriceLower.value : 0);
+                    const priceUpper = parseFloat(this.elements.alertPriceUpper ? this.elements.alertPriceUpper.value : 0);
+                    if (isNaN(priceLower) || isNaN(priceUpper) || priceLower < 0 || priceUpper <= priceLower) {
                         this.showError("Invalid range. Upper bound must be greater than lower bound.");
                         return;
                     }
@@ -3401,8 +3316,9 @@
             }
 
             openAlertsSummaryModal() {
-                this.elements.alertsSummaryModal.style.display = 'flex';
+                if(this.elements.alertsSummaryModal) this.elements.alertsSummaryModal.style.display = 'flex';
                 const contentDiv = this.elements.alertsSummaryContent;
+                if(!contentDiv) return;
                 contentDiv.innerHTML = '';
                 const allAlerts = this.priceAlerts.slice().sort((a, b) => (a.triggered === b.triggered) ? 0 : a.triggered ? -1 : 1);
 
@@ -3499,11 +3415,13 @@
                 
                 // In-app notification
                 const alertDiv = this.elements.alertNotification;
-                alertDiv.classList.add('active');
-                alertDiv.innerHTML = `<h4>Price Alert Triggered</h4><p>${message}</p>`;
-                setTimeout(() => {
-                    alertDiv.classList.remove('active');
-                }, 10000);
+                if(alertDiv) {
+                    alertDiv.classList.add('active');
+                    alertDiv.innerHTML = `<h4>Price Alert Triggered</h4><p>${message}</p>`;
+                    setTimeout(() => {
+                        alertDiv.classList.remove('active');
+                    }, 10000);
+                }
 
                 // Browser push notification
                 if (Notification.permission === "granted") {
@@ -3514,7 +3432,7 @@
                 this.saveScrollPosition();
                 const symbols = [...new Set([...this.stocks.map(s => s.symbol), ...this.watchlist.map(s => s.symbol)])];
                 if (symbols.length === 0) {
-                     this.elements.newsArticlesContainer.innerHTML = `<div class="loading">No symbols to fetch news for. Add stocks or watchlist items first.</div>`;
+                     if(this.elements.newsArticlesContainer) this.elements.newsArticlesContainer.innerHTML = `<div class="loading">No symbols to fetch news for. Add stocks or watchlist items first.</div>`;
                      this.restoreScrollPosition();
                      return;
                  }
@@ -3524,19 +3442,20 @@
                      this.restoreScrollPosition();
                      return;
                  }
-                this.elements.newsArticlesContainer.innerHTML = '<div class="loading">Fetching news...</div>';
+                if(this.elements.newsArticlesContainer) this.elements.newsArticlesContainer.innerHTML = '<div class="loading">Fetching news...</div>';
                 const result = await this.apiService.fetchNews(symbols);
                 if (result.success) {
                     this.newsFeed = result.data;
                     this.newsFetchTime = now;
                     this.renderNews();
                 } else {
-                    this.elements.newsArticlesContainer.innerHTML = `<div class="error"><p>Failed to fetch news. Reason: ${result.reason}</p></div>`;
+                    if(this.elements.newsArticlesContainer) this.elements.newsArticlesContainer.innerHTML = `<div class="error"><p>Failed to fetch news. Reason: ${result.reason}</p></div>`;
                 }
                 this.restoreScrollPosition();
             }
             renderNews() {
                 const container = this.elements.newsArticlesContainer;
+                if(!container) return;
                 container.innerHTML = '';
                 if (this.newsFeed.length === 0) { container.innerHTML = `<div class="loading">No recent news found for your tracked symbols.</div>`; return; }
                 this.newsFeed.slice(0, 20).forEach(article => {
@@ -3554,27 +3473,27 @@
                 const stats = this.calculateTransactionStats(item.transactions, item.price);
                 const firstBuyTransaction = item.transactions ? item.transactions.find(t => t.type === 'buy') : null;
                 const initialDate = firstBuyTransaction ? firstBuyTransaction.date.split('T')[0] : '';
-                this.elements.editStockModal.style.display = 'flex';
-                this.elements.editStockSymbolDisplay.textContent = item.symbol;
-                this.elements.editStockSymbol.value = item.symbol || '';
-                this.elements.editStockName.value = item.name || '';
-                this.elements.editStockPlatform.value = firstBuyTransaction?.platform || ''; 
-                this.elements.editStockShares.value = stats.totalSharesOwned > 0 ? stats.totalSharesOwned.toFixed(3) : 0;
-                this.elements.editStockCost.value = stats.averageCostBasis > 0 ? stats.averageCostBasis.toFixed(4) : 0;
-                this.elements.editStockDate.value = initialDate;
-                this.elements.saveStockEditBtn.dataset.id = id;
+                if(this.elements.editStockModal) this.elements.editStockModal.style.display = 'flex';
+                if(this.elements.editStockSymbolDisplay) this.elements.editStockSymbolDisplay.textContent = item.symbol;
+                if(this.elements.editStockSymbol) this.elements.editStockSymbol.value = item.symbol || '';
+                if(this.elements.editStockName) this.elements.editStockName.value = item.name || '';
+                if(this.elements.editStockPlatform) this.elements.editStockPlatform.value = firstBuyTransaction?.platform || ''; 
+                if(this.elements.editStockShares) this.elements.editStockShares.value = stats.totalSharesOwned > 0 ? stats.totalSharesOwned.toFixed(3) : 0;
+                if(this.elements.editStockCost) this.elements.editStockCost.value = stats.averageCostBasis > 0 ? stats.averageCostBasis.toFixed(4) : 0;
+                if(this.elements.editStockDate) this.elements.editStockDate.value = initialDate;
+                if(this.elements.saveStockEditBtn) this.elements.saveStockEditBtn.dataset.id = id;
             }
             closeEditStockModal() {
-                this.elements.editStockModal.style.display = 'none';
+                if(this.elements.editStockModal) this.elements.editStockModal.style.display = 'none';
             }
             async saveStockDetails() {
-                const id = this.elements.saveStockEditBtn.dataset.id;
-                const newSymbol = this.elements.editStockSymbol.value.trim().toUpperCase();
-                const newName = this.elements.editStockName.value.trim();
-                const newPlatform = this.elements.editStockPlatform.value.trim();
-                const newShares = parseFloat(this.elements.editStockShares.value);
-                const newCost = parseFloat(this.elements.editStockCost.value);
-                const newDateInput = this.elements.editStockDate.value;
+                const id = this.elements.saveStockEditBtn ? this.elements.saveStockEditBtn.dataset.id : '';
+                const newSymbol = this.elements.editStockSymbol ? this.elements.editStockSymbol.value.trim().toUpperCase() : '';
+                const newName = this.elements.editStockName ? this.elements.editStockName.value.trim() : '';
+                const newPlatform = this.elements.editStockPlatform ? this.elements.editStockPlatform.value.trim() : '';
+                const newShares = parseFloat(this.elements.editStockShares ? this.elements.editStockShares.value : 0);
+                const newCost = parseFloat(this.elements.editStockCost ? this.elements.editStockCost.value : 0);
+                const newDateInput = this.elements.editStockDate ? this.elements.editStockDate.value : '';
                 let item = this.stocks.find(s => s.id === id) || this.mutualFunds.find(f => f.id === id);
                 if (!item || !newSymbol || !newName) {
                     this.showError("Symbol and Name are required.");
