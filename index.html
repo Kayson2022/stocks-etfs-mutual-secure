@@ -456,6 +456,17 @@
              border-color: var(--border-color);
         }
 
+        /* ADDED: Style for Data Mismatch/Missing Shares Header and Cards */
+        .mismatch-header {
+            color: #FFC300; /* Yellow/Orange for Warning */
+            border-bottom-color: #FFC300;
+        }
+        .stock-card.mismatch-position {
+            opacity: 0.8; 
+            border-left: 4px solid #FFC300; 
+            background-color: color-mix(in srgb, var(--bg-secondary) 90%, #FFC300);
+        }
+
 
         /* ADDED: Ambient hover effect for grouped cards */
         .gains-header-content .stock-card:hover,
@@ -2034,7 +2045,7 @@
 
                     if (migrationNeeded) {
                         console.log("Data migration performed. Saving updated structure.");
-                        await this.saveData();
+                        await setDoc(userDocRef, docSnap.data());
                     }
                 }
                 this.updatePortfolioHistory();
@@ -2405,52 +2416,64 @@
             }
 
             // ==================================================================
-            // === Fixed Grouping Logic to separate Closed and group Active ===
+            // === Grouping Logic for Active, Closed, and Mismatch Items ===
             // ==================================================================
             renderGroupedStocks(items, container, type) {
-                // 1. Calculate stats and split into Active vs. Closed
+                const floatingPointEpsilon = 0.0001; 
                 const activeItems = [];
                 const closedPositions = [];
-                const floatingPointEpsilon = 0.0001; 
+                const dataMismatchItems = [];
 
+                // 1. Classify Items
                 items.forEach(item => {
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
                     
-                    // Check if total shares are virtually zero AND it has transaction history
-                    if (Math.abs(stats.totalSharesOwned) < floatingPointEpsilon && item.transactions && item.transactions.length > 0) {
-                        closedPositions.push(item);
-                    } else if (stats.totalSharesOwned >= floatingPointEpsilon) {
+                    if (Math.abs(stats.totalSharesOwned) >= floatingPointEpsilon) {
+                        // Item has shares: Active Position
                         activeItems.push(item);
+                    } else if (item.transactions && item.transactions.length > 0) {
+                        // Shares are zero but has history: Closed Position
+                        closedPositions.push(item);
+                    } else {
+                        // Shares are zero and no history: Newly added or data missing
+                        dataMismatchItems.push(item);
                     }
                 });
                 
                 // 2. Group Active Items by Performance
                 if (activeItems.length > 0) {
-                    // Sort active items by performance
                     const sortedActiveItems = activeItems.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
-                    
                     const gains = sortedActiveItems.filter(s => (s.changePercent || 0) >= 0);
-                    const losses = sortedActiveItems.filter(s => (s.changePercent || 0) < 0).sort((a, b) => a.changePercent - b.changePercent); // Sort losses reverse for display
+                    const losses = sortedActiveItems.filter(s => (s.changePercent || 0) < 0).sort((a, b) => a.changePercent - b.changePercent); 
                     
-                    // Separate biggest gain
                     const biggestGain = gains.length > 0 ? [gains[0]] : [];
                     const otherGains = gains.filter(s => biggestGain.length === 0 || s.id !== biggestGain[0].id);
                     
-                    // Render Active Groups
+                    // Render Active Groups (in order: Biggest Gain, Other Gains, Losses)
                     if (biggestGain.length > 0) {
                         this.createGroup('🚀 Biggest Gain Today', biggestGain, 'biggest-gain-header', container, type, this.getGroupSummary(biggestGain, 'biggest-gain'));
                     }
-                    
                     if (otherGains.length > 0) {
                         this.createGroup('📈 Gains Today', otherGains, 'gains-header', container, type, this.getGroupSummary(otherGains, 'gains'));
                     }
-                    
                     if (losses.length > 0) {
                         this.createGroup('📉 Losses Today', losses, 'losses-header', container, type, this.getGroupSummary(losses, 'losses'));
                     }
                 } 
                 
-                // 3. Group Closed Positions (Now appears last)
+                // 3. Group Fail-Safe Items (Appears next)
+                if (dataMismatchItems.length > 0) {
+                    this.createGroup(
+                        '⚠️ Data Mismatch/Missing Shares', 
+                        dataMismatchItems, 
+                        'mismatch-header', 
+                        container, 
+                        type, 
+                        this.getGroupSummary(dataMismatchItems, 'mismatch')
+                    );
+                }
+
+                // 4. Group Closed Positions (Appears last, as requested)
                 if (closedPositions.length > 0) {
                     this.createGroup(
                         '🔒 Closed Positions (Sold Off)', 
@@ -2462,13 +2485,13 @@
                     );
                 }
                 
-                // 4. Handle Empty Portfolio Message
+                // 5. Handle Empty Portfolio Message
                 if (items.length === 0) {
                     container.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your portfolio is empty.</div>`; 
                 }
             }
             // ==================================================================
-            // === END Fixed Grouping Logic ===
+            // === END Grouping Logic ===
             // ==================================================================
 
             renderGroupedByPlatform(items, container, type) {
@@ -2536,7 +2559,9 @@
                     const totalPLClass = totalRealizedPL >= 0 ? 'positive' : 'negative';
                     summaryTitle = `Total Realized P/L: ${this.formatCurrency(totalRealizedPL)}`;
                     summaryText = `This group contains ${items.length} positions you have completely sold. Their realized profit/loss is preserved in the card view.`;
-
+                } else if (type === 'mismatch') {
+                    summaryTitle = `Action Required for ${items.length} item(s)`;
+                    summaryText = `These items have been added to your portfolio but currently show 0 shares owned and have no buy/sell history. You must log an initial "Buy" transaction to make them active.`;
                 } else {
                     let totalChangeToday = 0;
                     let totalValue = 0;
@@ -2633,14 +2658,19 @@
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
 
                     // === START Card State Logic ===
-                    // Check if it's a closed position based on shares owned and transaction existence
                     const floatingPointEpsilon = 0.0001; 
                     const isClosedPosition = (type === 'stock' || type === 'fund') && 
                                              Math.abs(stats.totalSharesOwned) < floatingPointEpsilon && 
                                              item.transactions && item.transactions.length > 0;
+                    
+                    const isMismatchPosition = (type === 'stock' || type === 'fund') &&
+                                               Math.abs(stats.totalSharesOwned) < floatingPointEpsilon &&
+                                               (!item.transactions || item.transactions.length === 0);
 
                     if (isClosedPosition) {
                         card.classList.add('closed-position');
+                    } else if (isMismatchPosition) {
+                        card.classList.add('mismatch-position');
                     }
                     // === END Card State Logic ===
                     
@@ -2676,6 +2706,16 @@
                                 <span class="info-value ${realizedClass}" style="font-size: 1.2em;">${this.formatCurrency(realizedPL)}</span>
                             </div>`;
                             
+                    } else if (isMismatchPosition) {
+                        stockInfoHTML = `
+                            <div class="info-row" style="text-align: center; display: block; margin-bottom: 10px;">
+                                <span class="info-label" style="font-weight: bold; font-size: 1.1em; color: #FFC300;">ACTION REQUIRED</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label" style="font-size: 0.9em; text-align: left;">
+                                    Shares: 0. You must log a "Buy" transaction below to activate this position.
+                                </span>
+                            </div>`;
                     } else {
                         const totalPL = stats.unrealizedPL;
                         const totalPLPercent = stats.costOfRemainingShares > 0 ? (totalPL / stats.costOfRemainingShares) * 100 : 0;
