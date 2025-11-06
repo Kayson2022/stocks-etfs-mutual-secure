@@ -1457,7 +1457,7 @@
                     return { success: true, data: json["Time Series (Daily)"] };
                 } catch (error) {
                     console.error(`Error fetching historical data for ${symbol}:`, error);
-                    return { success: false, reason: error.message };
+                    return { success: false, symbol, reason: error.message };
                 }
             }
         }
@@ -3007,8 +3007,8 @@
              * ==      UPDATED PORTFOLIO PERFORMANCE CHART FUNCTION            ==
              * ==================================================================
              * Fixes:
-             * 1. Y-axis overlap (using a custom formatCurrency with 0 decimals for large numbers).
-             * 2. X-axis alignment (setting time unit to day and tick source to auto).
+             * 1. Y-axis overlap (using custom callback to simplify large numbers).
+             * 2. X-axis alignment (setting time unit to day, source to auto, and custom tick format).
              */
             renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
@@ -3091,10 +3091,10 @@
                                 grace: '10%', 
                                 ticks: { 
                                     color: labelColor, 
-                                    // FIX 1: Custom formatter to reduce decimals on large numbers
+                                    // FIX 1: Custom formatter to reduce decimals on large numbers and use K/M abbreviations
                                     callback: (v) => {
-                                        if (v >= 1000000) return '$' + (v / 1000000).toFixed(1) + 'M';
-                                        if (v >= 1000) return '$' + (v / 1000).toFixed(0) + 'K';
+                                        if (Math.abs(v) >= 1000000) return '$' + (v / 1000000).toFixed(1) + 'M';
+                                        if (Math.abs(v) >= 1000) return '$' + (v / 1000).toFixed(0) + 'K';
                                         return this.formatCurrency(v);
                                     }
                                 }, 
@@ -3118,7 +3118,7 @@
                                     maxRotation: 45, // Allow rotation for crowded dates
                                     autoSkip: true,
                                     maxTicksLimit: 10, 
-                                    source: 'auto', // Important for alignment
+                                    source: 'auto', // FIX 2: Essential for aligning dots to labels
                                     callback: function(value) { // Custom date formatting for axis labels
                                         return new Date(value).toLocaleDateString('en-US', {month: 'numeric', day: 'numeric', year: '2-digit'});
                                     }
@@ -3134,7 +3134,7 @@
                             tooltip: { 
                                 mode: 'index', 
                                 intersect: false, 
-                                // FIX 2: Custom tooltip formatting
+                                // FIX 1 (Tooltip): Apply improved readability styling
                                 callbacks: { 
                                     title: (tooltipItems) => {
                                         if (tooltipItems[0]) {
@@ -3158,7 +3158,7 @@
                                         return null;
                                     }
                                 },
-                                // --- TOOLTIP STYLING ---
+                                // --- TOOLTIP STYLING (Based on user suggestion and theme vars) ---
                                 backgroundColor: this.isDarkMode ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
                                 titleColor: this.isDarkMode ? 'var(--text-secondary)' : 'var(--text-primary)',
                                 bodyColor: this.isDarkMode ? 'var(--text-primary)' : 'var(--text-primary)',
