@@ -40,6 +40,11 @@
             --accent-primary-hover: #6d28d9; /* CHANGED: Purple */
             --color-positive: #17A589;
             --color-negative: #E74C3C;
+            
+            /* Chart Specific */
+            --chart-line-color-light: #212529;
+            --chart-positive-fill-color-rgb: 23, 165, 137; /* #17A589 */
+            --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
         }
 
         body.dark-mode {
@@ -54,6 +59,11 @@
             --accent-primary-hover: #8b5cf6; /* CHANGED: Purple */
             --color-positive: #2ECC71;
             --color-negative: #E74C3C;
+            
+            /* Chart Specific */
+            --chart-line-color-dark: #f8f9fa;
+            --chart-positive-fill-color-rgb: 46, 204, 113; /* #2ECC71 */
+            --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
         }
 
         /* --- Privacy Mode --- */
@@ -2999,8 +3009,10 @@
             
             /**
              * ==================================================================
-             * ==      UPDATED PORTFOLIO PERFORMANCE CHART FUNCTION            ==
+             * ==      REDESIGNED PORTFOLIO PERFORMANCE CHART FUNCTION         ==
              * ==================================================================
+             * Key changes: Dynamic line/fill color based on performance, gradient fill, 
+             * and smoother curve.
              */
             renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
@@ -3032,25 +3044,49 @@
                 }
 
                 const chartData = allDataPoints.filter(dp => dp.x >= startDate);
-                if (chartData.length === 0 && allDataPoints.length > 0) chartData.push(allDataPoints.at(-1)).filter(Boolean); // Show last point if range is empty
                 
-                if (!this.elements.portfolioPerformanceChart) return;
+                if (chartData.length <= 1) {
+                    // Not enough data points to calculate performance/draw chart.
+                    const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
+                    if (this.portfolioPerformanceChartInstance) this.portfolioPerformanceChartInstance.destroy();
+                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
+                    ctx.font = "16px Inter";
+                    ctx.fillText('Not enough history for this range.', ctx.canvas.width / 2, ctx.canvas.height / 2);
+                    return;
+                }
                 
                 if (this.portfolioPerformanceChartInstance) {
                     this.portfolioPerformanceChartInstance.destroy();
                 }
 
-                // --- NEW STYLING based on user image ---
-                const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'; // Fainter grid
-                const labelColor = this.isDarkMode ? '#adb5bd' : '#6c757d';
-                const chartLineColor = this.isDarkMode ? '#f8f9fa' : '#212529'; // Black/White line
-                const pointFillColor = this.isDarkMode ? '#f8f9fa' : '#212529'; // Black/White point fill
-                const pointBorderColor = this.isDarkMode ? '#22252e' : '#ffffff'; // Background-matching border
-                const fillBackgroundColor = this.isDarkMode ? 'rgba(167, 139, 250, 0.1)' : 'rgba(124, 58, 237, 0.1)'; // Purple fill
-
                 const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
                 
-                // --- CALCULATE G/L FOR TOOLTIP ---
+                // 1. Determine performance and colors
+                const firstValue = chartData[0].y;
+                const lastValue = chartData.at(-1).y;
+                const isPositive = lastValue >= firstValue;
+                
+                // Use CSS variables for dynamic colors
+                const positiveRgb = document.body.classList.contains('dark-mode') ? 
+                    'var(--chart-positive-fill-color-rgb)' : 'var(--chart-positive-fill-color-rgb)';
+                const negativeRgb = document.body.classList.contains('dark-mode') ? 
+                    'var(--chart-negative-fill-color-rgb)' : 'var(--chart-negative-fill-color-rgb)';
+
+                const mainColor = isPositive ? 'var(--color-positive)' : 'var(--color-negative)';
+                const fillRgb = isPositive ? positiveRgb : negativeRgb;
+
+                // 2. Create Gradient
+                const gradient = ctx.createLinearGradient(0, 0, 0, 400); // 400px is the canvas height
+                gradient.addColorStop(0, `rgba(${fillRgb}, 0.3)`); // Solid at the top
+                gradient.addColorStop(1, `rgba(${fillRgb}, 0)`); // Fully transparent at the bottom
+
+                // 3. Define Chart Styling
+                const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
+                const labelColor = this.isDarkMode ? '#adb5bd' : '#6c757d';
+                
+                // --- Calculate Today's G/L for Tooltip ---
                 const stockMetrics = this.calculateSummaryMetrics(this.stocks);
                 const fundMetrics = this.calculateSummaryMetrics(this.mutualFunds);
                 const totalPLToday = stockMetrics.totalPLToday + fundMetrics.totalPLToday;
@@ -3062,16 +3098,12 @@
                         datasets: [{ 
                             label: 'Portfolio Value', 
                             data: chartData, 
-                            borderColor: chartLineColor, // <-- CHANGED: Black/White line
-                            tension: chartData.length < 15 ? 0.3 : 0, // <-- CHANGED: Conditional curve
-                            borderWidth: 2, 
-                            pointRadius: 3, // <-- CHANGED: Show points
-                            pointBackgroundColor: pointFillColor, // <-- CHANGED: Black/White fill
-                            pointBorderColor: pointBorderColor, // <-- CHANGED: Background-matching border
-                            pointBorderWidth: 2, // <-- ADDED
-                            pointHoverRadius: 5, // <-- ADDED
-                            fill: true, // <-- CHANGED: Enable fill
-                            backgroundColor: fillBackgroundColor, // <-- ADDED: Purple fill
+                            borderColor: mainColor, // Dynamic line color
+                            tension: 0.4, // Smoother curve
+                            borderWidth: 3, 
+                            pointRadius: 0, // No points for a cleaner look
+                            fill: true, // Enable fill
+                            backgroundColor: gradient, // Dynamic gradient fill
                         }] 
                     },
                     options: { 
@@ -3086,28 +3118,29 @@
                                     callback: (v) => this.formatCurrency(v) 
                                 }, 
                                 grid: { 
-                                    color: gridColor, // <-- Use new grid color
+                                    color: gridColor, 
                                     drawBorder: false 
                                 } 
                             }, 
                             x: { 
                                 type: 'time', 
                                 time: { 
-                                    unit: 'day', // <-- CHANGED: Show days
+                                    unit: chartData.length > 90 ? 'month' : 'day', // Adjust unit based on range density
                                     displayFormats: {
-                                        day: 'M/d/yyyy' // <-- CHANGED: Format like image
+                                        day: 'MMM d', 
+                                        month: 'MMM yyyy'
                                     },
-                                    tooltipFormat: 'PP' // 'Oct 23, 2025'
+                                    tooltipFormat: 'PPP' // e.g., Oct 23, 2025
                                 }, 
                                 ticks: { 
                                     color: labelColor, 
                                     maxRotation: 0, 
                                     autoSkip: true,
-                                    maxTicksLimit: 10 // Max 10 labels
+                                    maxTicksLimit: 10 
                                 }, 
                                 grid: { 
-                                    color: gridColor, // <-- Use new grid color
-                                    display: true // <-- KEPT: Show X-axis gridlines per image
+                                    color: gridColor, 
+                                    display: true 
                                 } 
                             } 
                         }, 
@@ -3126,22 +3159,21 @@
                                         return '';
                                     },
                                     label: (c) => `Value: ${this.formatCurrency(c.parsed.y)}`,
-                                    // --- NEW TOOLTIP FOOTER ---
+                                    // Tooltip Footer: Show today's P/L only on the last point
                                     footer: (tooltipItems) => {
                                         const lastDataIndex = chartData.length - 1;
                                         if (tooltipItems[0] && tooltipItems[0].dataIndex === lastDataIndex) {
-                                            // Check if the last data point is for 'today'
                                             const today = new Date().setHours(0,0,0,0);
                                             const lastDate = new Date(chartData[lastDataIndex].x).setHours(0,0,0,0);
                                             
                                             if (lastDate === today) {
-                                                return `Today's G/L: ${totalPLTodayFormatted}`;
+                                                return `Today's P/L: ${totalPLTodayFormatted}`;
                                             }
                                         }
                                         return null;
                                     }
                                 },
-                                // --- NEW TOOLTIP STYLING ---
+                                // Tooltip Styling
                                 bodyColor: this.isDarkMode ? '#f8f9fa' : '#212529',
                                 titleColor: this.isDarkMode ? '#adb5bd' : '#6c757d',
                                 footerColor: totalPLToday >= 0 ? 'var(--color-positive)' : 'var(--color-negative)',
