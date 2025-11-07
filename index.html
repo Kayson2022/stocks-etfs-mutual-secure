@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1147,26 +1149,104 @@
 
         <div class="stocks-grid" id="stocksGrid"></div>
 
-        <div id="portfolio-performance-container" class="chart-container">
-            <div class="chart-header">
-                <h4>Portfolio Performance History</h4>
-                <div class="chart-controls" id="performance-chart-controls">
-                    <button class="chart-range-btn" data-range="1W">1W</button>
-                    <button class="chart-range-btn" data-range="1M">1M</button>
-                    <button class="chart-range-btn" data-range="6M">6M</button>
-                    <button class="chart-range-btn" data-range="YTD">YTD</button>
-                    <button class="chart-range-btn active" data-range="1Y">1Y</button>
-                    <button class="chart-range-btn" data-range="3Y">3Y</button>
-                    <button class="chart-range-btn" data-range="5Y">5Y</button>
-                    <button class="chart-range-btn" data-range="All">All</button>
-                </div>
-            </div>
-            <div class="canvas-wrapper">
-                <canvas id="portfolioPerformanceChart"></canvas>
-            </div>
+        
+<div id="portfolio-performance-container" class="chart-container">
+    <div class="chart-header">
+        <h4>Portfolio Performance History</h4>
+        <div class="chart-controls" id="performance-chart-controls">
+            <button class="chart-range-btn" data-range="1W">1W</button>
+            <button class="chart-range-btn" data-range="1M">1M</button>
+            <button class="chart-range-btn" data-range="6M">6M</button>
+            <button class="chart-range-btn" data-range="YTD">YTD</button>
+            <button class="chart-range-btn" data-range="1Y">1Y</button>
+            <button class="chart-range-btn" data-range="3Y">3Y</button>
+            <button class="chart-range-btn" data-range="5Y">5Y</button>
+            <button class="chart-range-btn" data-range="ALL">ALL</button>
         </div>
+    </div>
+    <div class="canvas-wrapper">
+        <canvas id="portfolioPerformanceChart"></canvas>
+    </div>
+    <script>
+    // Chart range selection
+    document.addEventListener("DOMContentLoaded", () => {
+        const ctx = document.getElementById("portfolioPerformanceChart").getContext("2d");
+        const chart = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: [],
+                datasets: [{
+                    label: "Portfolio Value",
+                    data: [],
+                    borderColor: "#7c3aed",
+                    backgroundColor: "rgba(124, 58, 237, 0.1)",
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        type: "time",
+                        time: { unit: "month" }
+                    },
+                    y: {
+                        beginAtZero: false
+                    }
+                }
+            }
+        });
 
-        <div id="diversification-chart-container" class="chart-container" style="display: none;">
+        // Sample data generator (replace with your own data source)
+        const generateData = () => {
+            const now = new Date();
+            const data = [];
+            for (let i = 365 * 5; i >= 0; i--) {
+                const date = new Date(now);
+                date.setDate(now.getDate() - i);
+                data.push({ date: date.toISOString().split("T")[0], value: 10000 + Math.sin(i / 50) * 1000 + i * 2 });
+            }
+            return data;
+        };
+
+        const fullData = generateData();
+
+        const updateChart = (range) => {
+            const now = new Date();
+            let startDate;
+            switch (range) {
+                case "1W": startDate = new Date(now.setDate(now.getDate() - 7)); break;
+                case "1M": startDate = new Date(now.setMonth(now.getMonth() - 1)); break;
+                case "6M": startDate = new Date(now.setMonth(now.getMonth() - 6)); break;
+                case "YTD": startDate = new Date(now.getFullYear(), 0, 1); break;
+                case "1Y": startDate = new Date(now.setFullYear(now.getFullYear() - 1)); break;
+                case "3Y": startDate = new Date(now.setFullYear(now.getFullYear() - 3)); break;
+                case "5Y": startDate = new Date(now.setFullYear(now.getFullYear() - 5)); break;
+                case "ALL": default: startDate = new Date(0);
+            }
+
+            const filtered = fullData.filter(d => new Date(d.date) >= startDate);
+            chart.data.labels = filtered.map(d => d.date);
+            chart.data.datasets[0].data = filtered.map(d => d.value);
+            chart.update();
+        };
+
+        document.querySelectorAll(".chart-range-btn").forEach(btn => {
+            btn.addEventListener("click", e => {
+                document.querySelectorAll(".chart-range-btn").forEach(b => b.classList.remove("active"));
+                e.target.classList.add("active");
+                updateChart(e.target.getAttribute("data-range"));
+            });
+        });
+
+        // Initialize with 1Y view
+        updateChart("1Y");
+    });
+    </script>
+</div>
+
+<div id="diversification-chart-container" class="chart-container" style="display: none;">
              <div class="canvas-wrapper">
                 <canvas id="diversificationChart"></canvas>
             </div>
