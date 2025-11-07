@@ -1151,101 +1151,228 @@
 
         
 <div id="portfolio-performance-container" class="chart-container">
-    <div class="chart-header">
-        <h4>Portfolio Performance History</h4>
-        <div class="chart-controls" id="performance-chart-controls">
-            <button class="chart-range-btn" data-range="1W">1W</button>
-            <button class="chart-range-btn" data-range="1M">1M</button>
-            <button class="chart-range-btn" data-range="6M">6M</button>
-            <button class="chart-range-btn" data-range="YTD">YTD</button>
-            <button class="chart-range-btn" data-range="1Y">1Y</button>
-            <button class="chart-range-btn" data-range="3Y">3Y</button>
-            <button class="chart-range-btn" data-range="5Y">5Y</button>
-            <button class="chart-range-btn" data-range="ALL">ALL</button>
-        </div>
+  <div class="chart-header">
+    <h4>Portfolio Performance History</h4>
+    <div class="chart-controls" id="performance-chart-controls">
+      <button class="chart-range-btn" data-range="1W">1W</button>
+      <button class="chart-range-btn" data-range="1M">1M</button>
+      <button class="chart-range-btn" data-range="6M">6M</button>
+      <button class="chart-range-btn" data-range="YTD">YTD</button>
+      <button class="chart-range-btn active" data-range="1Y">1Y</button>
+      <button class="chart-range-btn" data-range="3Y">3Y</button>
+      <button class="chart-range-btn" data-range="5Y">5Y</button>
+      <button class="chart-range-btn" data-range="ALL">ALL</button>
     </div>
-    <div class="canvas-wrapper">
-        <canvas id="portfolioPerformanceChart"></canvas>
-    </div>
-    <script>
-    // Chart range selection
-    document.addEventListener("DOMContentLoaded", () => {
-        const ctx = document.getElementById("portfolioPerformanceChart").getContext("2d");
-        const chart = new Chart(ctx, {
-            type: "line",
-            data: {
-                labels: [],
-                datasets: [{
-                    label: "Portfolio Value",
-                    data: [],
-                    borderColor: "#7c3aed",
-                    backgroundColor: "rgba(124, 58, 237, 0.1)",
-                    tension: 0.3,
-                    fill: true
-                }]
+  </div>
+  <div class="canvas-wrapper">
+    <canvas id="portfolioPerformanceChart"></canvas>
+  </div>
+
+  <script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // Create Chart.js instance with gradient fill
+    const canvas = document.getElementById("portfolioPerformanceChart");
+    const ctx = canvas.getContext("2d");
+
+    // Create gradient for dataset fill and line
+    function createGradient(ctx, area) {
+      const grad = ctx.createLinearGradient(0, 0, area.width, 0);
+      grad.addColorStop(0, "rgba(124,58,237,0.15)");
+      grad.addColorStop(0.5, "rgba(99,102,241,0.12)");
+      grad.addColorStop(1, "rgba(56,189,248,0.08)");
+      return grad;
+    }
+
+    // Initial empty chart
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        datasets: [{
+          label: "Portfolio Value ($)",
+          data: [],
+          borderColor: "#7c3aed",
+          borderWidth: 2.5,
+          pointRadius: 0,
+          tension: 0.35,
+          fill: true,
+          backgroundColor: (context) => {
+            const chartArea = context.chart.chartArea;
+            if (!chartArea) return null;
+            return createGradient(context.chart.ctx, chartArea);
+          },
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'nearest' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const v = ctx.parsed.x;
+                return ' $' + Number(v).toLocaleString();
+              },
+              title: (ctx) => {
+                const d = ctx[0].parsed.y;
+                if (!d) return '';
+                const dt = new Date(d);
+                return dt.toLocaleDateString();
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'linear',
+            position: 'bottom',
+            title: { display: true, text: 'Value (USD)' },
+            ticks: {
+              callback: (val, idx) => {
+                if (val === undefined || val === null) return '';
+                return '$' + Number(val).toLocaleString();
+              }
+            }
+          },
+          y: {
+            type: 'time',
+            position: 'left',
+            time: { tooltipFormat: 'MM-dd-yyyy', displayFormats: { day: 'MM-dd-yyyy', month: 'MM-yyyy' } },
+            adapters: { date: { locale: undefined } },
+            title: { display: true, text: 'Date' },
+            ticks: {
+              autoSkip: true,
+              maxTicksLimit: 8,
+              callback: function(value, index, ticks) {
+                if (!value) return '';
+                const d = new Date(value);
+                return (d.getMonth()+1).toString().padStart(2,'0') + '-' + d.getDate().toString().padStart(2,'0') + '-' + d.getFullYear();
+              }
             },
-            options: {
-                responsive: true,
-                scales: {
-                    x: {
-                        type: "time",
-                        time: { unit: "month" }
-                    },
-                    y: {
-                        beginAtZero: false
-                    }
-                }
-            }
-        });
-
-        // Sample data generator (replace with your own data source)
-        const generateData = () => {
-            const now = new Date();
-            const data = [];
-            for (let i = 365 * 5; i >= 0; i--) {
-                const date = new Date(now);
-                date.setDate(now.getDate() - i);
-                data.push({ date: date.toISOString().split("T")[0], value: 10000 + Math.sin(i / 50) * 1000 + i * 2 });
-            }
-            return data;
-        };
-
-        const fullData = generateData();
-
-        const updateChart = (range) => {
-            const now = new Date();
-            let startDate;
-            switch (range) {
-                case "1W": startDate = new Date(now.setDate(now.getDate() - 7)); break;
-                case "1M": startDate = new Date(now.setMonth(now.getMonth() - 1)); break;
-                case "6M": startDate = new Date(now.setMonth(now.getMonth() - 6)); break;
-                case "YTD": startDate = new Date(now.getFullYear(), 0, 1); break;
-                case "1Y": startDate = new Date(now.setFullYear(now.getFullYear() - 1)); break;
-                case "3Y": startDate = new Date(now.setFullYear(now.getFullYear() - 3)); break;
-                case "5Y": startDate = new Date(now.setFullYear(now.getFullYear() - 5)); break;
-                case "ALL": default: startDate = new Date(0);
-            }
-
-            const filtered = fullData.filter(d => new Date(d.date) >= startDate);
-            chart.data.labels = filtered.map(d => d.date);
-            chart.data.datasets[0].data = filtered.map(d => d.value);
-            chart.update();
-        };
-
-        document.querySelectorAll(".chart-range-btn").forEach(btn => {
-            btn.addEventListener("click", e => {
-                document.querySelectorAll(".chart-range-btn").forEach(b => b.classList.remove("active"));
-                e.target.classList.add("active");
-                updateChart(e.target.getAttribute("data-range"));
-            });
-        });
-
-        // Initialize with 1Y view
-        updateChart("1Y");
+            reverse: true
+          }
+        },
+        layout: { padding: { left: 8, right: 8, top: 6, bottom: 6 } }
+      }
     });
-    </script>
-</div>
 
+    // Generate placeholder history data based on latest combined total
+    function getCombinedTotalFromDOM() {
+      const el = document.getElementById("combined-total-value");
+      if (!el) return null;
+      const text = el.innerText || el.textContent || '';
+      const num = parseFloat(text.replace(/[^0-9.\-]/g, '')) ;
+      return isNaN(num) ? null : num;
+    }
+
+    function generatePlaceholderData(latestValue, daysBack) {
+      const arr = [];
+      const today = new Date();
+      for (let i = daysBack; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        // Slight synthetic variation
+        const noise = Math.sin(i/10) * (latestValue * 0.01) + (i * (latestValue*0.0005));
+        const value = Math.max(0, Math.round((latestValue - (daysBack - i) * (latestValue*0.0008)) + noise));
+        arr.push({ x: value, y: d.toISOString().slice(0,10) });
+      }
+      return arr;
+    }
+
+    // Default full data (5 years placeholder)
+    const initialCombined = getCombinedTotalFromDOM() || 50000;
+    let fullData = generatePlaceholderData(initialCombined, 365*5);
+
+    // Range filtering
+    function rangeStartDate(range) {
+      const now = new Date();
+      switch(range) {
+        case '1W': return new Date(now.getFullYear(), now.getMonth(), now.getDate()-7);
+        case '1M': return new Date(now.getFullYear(), now.getMonth()-1, now.getDate());
+        case '6M': return new Date(now.getFullYear(), now.getMonth()-6, now.getDate());
+        case 'YTD': return new Date(now.getFullYear(), 0, 1);
+        case '1Y': return new Date(now.getFullYear()-1, now.getMonth(), now.getDate());
+        case '3Y': return new Date(now.getFullYear()-3, now.getMonth(), now.getDate());
+        case '5Y': return new Date(now.getFullYear()-5, now.getMonth(), now.getDate());
+        case 'ALL': default: return new Date(0);
+      }
+    }
+
+    function updateChart(range) {
+      const start = rangeStartDate(range);
+      const filtered = fullData.filter(p => new Date(p.y) >= start);
+      chart.data.datasets[0].data = filtered;
+      chart.update();
+    }
+
+    // Buttons
+    document.querySelectorAll('.chart-range-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.chart-range-btn').forEach(b => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        updateChart(e.currentTarget.getAttribute('data-range'));
+      });
+    });
+
+    // Initialize to 1Y
+    updateChart('1Y');
+
+    // Observe DOM for combined total updates (when Firebase loads)
+    const combinedEl = document.getElementById('combined-total-value');
+    if (combinedEl) {
+      const observer = new MutationObserver(() => {
+        const newVal = getCombinedTotalFromDOM();
+        if (newVal && newVal !== initialCombined) {
+          // regenerate placeholder fullData based on new latest
+          fullData = generatePlaceholderData(newVal, 365*5);
+          // if real data exists on window.stockTracker.portfolioHistory, use it instead
+          if (window.stockTracker && Array.isArray(window.stockTracker.portfolioHistory) && window.stockTracker.portfolioHistory.length) {
+            try {
+              const real = window.stockTracker.portfolioHistory.map(d => ({ x: Number(d.value), y: d.date }));
+              if (real.length) fullData = real;
+            } catch (err) {
+              // fallback to generated
+            }
+          }
+          updateChart(document.querySelector('.chart-range-btn.active')?.getAttribute('data-range') || '1Y');
+        }
+      });
+      observer.observe(combinedEl, { childList: true, subtree: true, characterData: true });
+    }
+
+    // Also watch for a real portfolioHistory array added to window.stockTracker later
+    if (window.stockTracker) {
+      const tryUseReal = () => {
+        const ph = window.stockTracker.portfolioHistory;
+        if (Array.isArray(ph) && ph.length) {
+          try {
+            const real = ph.map(d => ({ x: Number(d.value), y: d.date }));
+            if (real.length) {
+              fullData = real;
+              updateChart(document.querySelector('.chart-range-btn.active')?.getAttribute('data-range') || '1Y');
+            }
+          } catch (err) {}
+        }
+      };
+      tryUseReal();
+      // If it changes later, user code can call window.dispatchEvent(new Event('portfolioHistoryUpdated'));
+      window.addEventListener('portfolioHistoryUpdated', tryUseReal);
+    }
+  });
+  </script>
+
+  <style>
+    /* Make chart fill width and responsive */
+    #portfolio-performance-container { width: 100%; }
+    #portfolio-performance-container .canvas-wrapper { position: relative; height: 420px; width: 100%; }
+    @media (max-width: 1024px) { #portfolio-performance-container .canvas-wrapper { height: 360px; } }
+    @media (max-width: 768px) { #portfolio-performance-container .canvas-wrapper { height: 300px; } .chart-range-btn { padding: 6px 10px; font-size: 0.78rem; } }
+    /* Gradient background for the card */
+    #portfolio-performance-container { background: linear-gradient(135deg, rgba(124,58,237,0.04), rgba(56,189,248,0.02)); border-radius: 12px; padding: 18px; }
+    #portfolio-performance-container .chart-header { margin-bottom: 10px; }
+  </style>
+</div>
 <div id="diversification-chart-container" class="chart-container" style="display: none;">
              <div class="canvas-wrapper">
                 <canvas id="diversificationChart"></canvas>
