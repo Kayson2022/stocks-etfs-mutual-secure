@@ -2431,7 +2431,8 @@
                         await this.saveData();
                     }
                 }
-                this.updatePortfolioHistory();
+                // FIX: Added missing parentheses to ensure updatePortfolioHistory is called as a function
+                this.updatePortfolioHistory(); 
                 this.renderContent();
             }
             startLiveUpdate() {
