@@ -1631,6 +1631,7 @@
             }
             async fetchHistoricalData(symbol) {
                 if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
+                    // Fail early if key is missing
                     return { success: false, reason: "Alpha Vantage API Key is missing. Please set it in Settings to fetch historical data." };
                 }
                 const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${this.config.alphaVantageKey}`;
@@ -1638,13 +1639,14 @@
                     const response = await fetch(url);
                     if (!response.ok) return { success: false, reason: `HTTP Error: ${response.status}` };
                     const json = await response.json();
+                    // Check for API errors or rate limiting messages in the response
                     if (json["Error Message"] || !json["Time Series (Daily)"]) {
-                        return { success: false, reason: json["Information"] || json["Error Message"] || 'Invalid API payload from Alpha Vantage. The free tier has a low request limit in 5 API calls per minute.' };
+                        return { success: false, reason: json["Information"] || json["Error Message"] || 'Invalid API payload from Alpha Vantage. You might be hitting the free tier rate limit of 5 requests per minute.' };
                     }
                     return { success: true, data: json["Time Series (Daily)"] };
                 } catch (error) {
                     console.error(`Error fetching historical data for ${symbol}:`, error);
-                    return { success: false, symbol, reason: error.message };
+                    return { success: false, reason: error.message };
                 }
             }
         }
@@ -1662,7 +1664,7 @@
                 this.diversificationChartInstance = null;
                 this.portfolioPerformanceChartInstance = null;
                 this.cardChartInstances = {}; // To manage individual card charts
-                this.chartDataCache = {}; // To cache historical data
+                this.chartDataCache = {}; // Cache for historical data (NEW: Persists in session/memory)
                 this.sessionId = crypto.randomUUID(); 
                 this.sessionUnsubscribe = null;
                 
@@ -2726,8 +2728,8 @@
                 const biggestGain = gains.length > 0 ? [gains[0]] : [];
                 
                 // Reset/Calculate the running P/L totals based on groups being built
-                this.biggestGainToday = 0;
                 this.todaysGainsTotal = 0;
+                this.biggestGainToday = 0;
                 this.todaysLossesTotal = 0;
                 
                 if (biggestGain.length > 0) {
@@ -3102,8 +3104,18 @@
                     return d;
                 }
                 
+                // Filter for Buy transactions and find the one with the oldest date
+                const buyTransactions = transactions.filter(t => t.type === 'buy');
+                
+                if (buyTransactions.length === 0) {
+                     // If no buy transactions, return 5 years ago
+                    const d = new Date();
+                    d.setFullYear(d.getFullYear() - 5);
+                    return d;
+                }
+
                 // Find the transaction with the minimum (oldest) date
-                const oldestTransaction = transactions.reduce((oldest, current) => {
+                const oldestTransaction = buyTransactions.reduce((oldest, current) => {
                     const oldestDate = new Date(oldest.date);
                     const currentDate = new Date(current.date);
                     return currentDate < oldestDate ? current : oldest;
@@ -3123,6 +3135,16 @@
                 if (!canvas) return;
                 const ctx = canvas.getContext('2d');
 
+                // Helper to draw error message directly on canvas
+                const drawError = (message) => {
+                     if (this.cardChartInstances[chartId]) this.cardChartInstances[chartId].destroy();
+                     ctx.clearRect(0, 0, canvas.width, canvas.height);
+                     ctx.textAlign = 'center';
+                     ctx.fillStyle = 'var(--color-negative)';
+                     ctx.font = "16px 'Inter', sans-serif";
+                     ctx.fillText(message, canvas.width / 2, canvas.height / 2);
+                };
+
                 // Update active button state
                 const chartControls = card.querySelector('.chart-controls');
                 if(chartControls) {
@@ -3141,11 +3163,19 @@
                     if (this.chartDataCache[symbol]) {
                         historicalData = this.chartDataCache[symbol];
                     } else {
+                        // Check if Alpha Vantage Key is set before fetching
+                        if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
+                            drawError("Alpha Vantage Key Missing. Check Settings.");
+                            return;
+                        }
+                        
                         this.showLoading(true, `Fetching chart data for ${symbol}...`);
                         const result = await this.apiService.fetchHistoricalData(symbol);
                         this.showLoading(false);
+                        
                         if (!result.success) {
-                            throw new Error(result.reason);
+                            drawError(result.reason.includes('rate limit') ? "Rate Limit Hit. Wait a minute." : `API Error: ${result.reason}`);
+                            throw new Error(result.reason); // Throw to skip further processing
                         }
                         this.chartDataCache[symbol] = result.data;
                         historicalData = result.data;
@@ -3156,9 +3186,8 @@
                         y: parseFloat(values['4. close'])
                     })).sort((a, b) => a.x - b.x);
                     
-                    // --- NEW LOGIC: Determine Chart Start Date ---
+                    // --- LOGIC: Determine Chart Start Date ---
                     const item = this.stocks.find(s => s.symbol === symbol) || this.mutualFunds.find(f => f.symbol === symbol);
-                    const oldestBuyDate = item ? this.getOldestTransactionDate(item) : new Date(0);
                     
                     const now = new Date();
                     let startDate = new Date();
@@ -3172,18 +3201,15 @@
                         case '3Y': startDate.setFullYear(now.getFullYear() - 3); break;
                         case '5Y': startDate.setFullYear(now.getFullYear() - 5); break;
                         case 'All': 
-                            // Use the oldest transaction date if available, otherwise default to oldest available historical data
-                            startDate = oldestBuyDate;
+                            // Use the oldest transaction date if available
+                            startDate = item ? this.getOldestTransactionDate(item) : new Date(0);
                             break;
                         default: startDate.setFullYear(now.getFullYear() - 1); break;
                     }
 
                     const chartData = allDataPoints.filter(dp => dp.x >= startDate);
-                    if (chartData.length === 0) {
-                        ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        ctx.textAlign = 'center';
-                        ctx.fillStyle = this.isDarkMode ? '#777' : '#aaa';
-                        ctx.fillText('No data available for this range.', canvas.width / 2, canvas.height / 2);
+                    if (chartData.length <= 1) {
+                        drawError('Not enough historical data for this range.');
                         return;
                     }
 
@@ -3238,11 +3264,9 @@
                     });
 
                 } catch (error) {
-                    console.error(`Could not render chart for ${symbol}:`, error);
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    ctx.textAlign = 'center';
-                    ctx.fillStyle = 'var(--color-negative)';
-                    ctx.fillText(`Error loading chart data.`, canvas.width / 2, canvas.height / 2);
+                    // Catch the error thrown if API key is missing or API limits hit.
+                    console.error(`Chart rendering error for ${symbol}:`, error);
+                    // The error message is already drawn in the catch block above (drawError) if needed.
                 }
             }
             
