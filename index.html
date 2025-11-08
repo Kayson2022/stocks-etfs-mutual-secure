@@ -11,8 +11,8 @@
     ==================================================================
     ==      REVISED & IMPROVED STYLESHEET                           ==
     ==================================================================
-    This stylesheet includes the fix for the card rendering issue
-    and other minor improvements for consistency.
+    This stylesheet includes the fix for the chart color parsing issue
+    and the final visual styles.
     -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -42,6 +42,7 @@
             /* Chart Specific - RGB values MUST be comma-separated integers for JS parsing */
             --chart-positive-fill-color-rgb: 23, 165, 137; /* #17A589 */
             --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
+            --chart-benchmark-color: 255, 165, 0; /* Orange for S&P */
         }
 
         body.dark-mode {
@@ -60,6 +61,7 @@
             /* Chart Specific - RGB values MUST be comma-separated integers for JS parsing */
             --chart-positive-fill-color-rgb: 46, 204, 113; /* #2ECC71 */
             --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
+            --chart-benchmark-color: 255, 165, 0; /* Orange for S&P */
         }
 
         /* --- Privacy Mode --- */
@@ -1115,6 +1117,7 @@
                 <button class="add-btn" id="listAllBtn">📋 List All Stocks</button>
                 <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
                  <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
+                <button class="add-btn" id="toggleBenchmarkBtn">📈 Toggle S&P 500</button>
                 <button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
             </div>
         </div>
@@ -1189,13 +1192,17 @@
     }
     
     // MODIFIED: Inject dynamic RGB values into the gradient creation function
-    function createGradient(ctx, area, isPositive) {
-        // Get the raw comma-separated RGB values from CSS variables
-        const fillRgb = getRgbColor(isPositive ? '--chart-positive-fill-color-rgb' : '--chart-negative-fill-color-rgb');
+    function createGradient(ctx, area, isPositive, isBenchmark = false) {
+        let fillRgb;
+        if (isBenchmark) {
+             fillRgb = getRgbColor('--chart-benchmark-color');
+        } else {
+             fillRgb = getRgbColor(isPositive ? '--chart-positive-fill-color-rgb' : '--chart-negative-fill-color-rgb');
+        }
         
         const gradient = ctx.createLinearGradient(0, 0, 0, area.height);
         // Use the fetched RGB value directly inside the rgba() function
-        gradient.addColorStop(0, `rgba(${fillRgb}, 0.3)`); 
+        gradient.addColorStop(0, `rgba(${fillRgb}, ${isBenchmark ? 0.2 : 0.3})`); 
         gradient.addColorStop(1, `rgba(${fillRgb}, 0)`);
         return gradient;
     }
@@ -1774,6 +1781,40 @@
                     return { success: false, symbol, reason: `Alpha Vantage Historical Data Error: ${error.message}` };
                 }
             }
+            
+            // --- Fetch Benchmark Data (S&P 500) ---
+            async fetchBenchmarkData(range, startDate) {
+                const symbol = '^GSPC'; // S&P 500 symbol for FMP (and often used elsewhere)
+                
+                // Use the fastest and most reliable fetch for the benchmark index. FMP for historical.
+                const result = await this.fetchFmpHistoricalData(symbol); 
+
+                if (!result.success) {
+                    console.error(`Failed to fetch benchmark data for ${symbol}. Reason: ${result.reason}`);
+                    return null; // Return null if fetching fails
+                }
+
+                let allDataPoints = Object.entries(result.data).map(([date, values]) => ({
+                    x: new Date(date),
+                    y: parseFloat(values['4. close'])
+                })).sort((a, b) => a.x - b.x);
+
+                if (range === 'ALL' && startDate) {
+                    // Filter to match the user's portfolio start date
+                    allDataPoints = allDataPoints.filter(dp => new Date(dp.x) >= startDate);
+                }
+                
+                if (allDataPoints.length === 0) return null;
+                
+                // Normalize data to start at 0% change (based on first data point)
+                const startingValue = allDataPoints[0].y;
+                const normalizedData = allDataPoints.map(dp => ({
+                    x: dp.x,
+                    y: ((dp.y - startingValue) / startingValue) * 100 // Calculate percentage change
+                }));
+                
+                return normalizedData;
+            }
         }
         
         class StockTracker {
@@ -1784,6 +1825,8 @@
                 this.isLiveUpdatePaused = false;
                 this.isDarkMode = false;
                 this.isPrivacyMode = false;
+                this.showBenchmark = localStorage.getItem('showBenchmark') === 'true' || false;
+                this.benchmarkDataCache = {};
                 this.countdownIntervalId = null;
                 this.refreshIntervalId = null;
                 this.groupCollapseState = {};
@@ -1824,6 +1867,10 @@
                     return;
                 }
                 this.handleAuthentication();
+                
+                // FIX: Defer ResizeObserver setup until after all methods are fully defined
+                if (this.elements.diversificationChartContainer) this.elements.resizeObserver.observe(this.elements.diversificationChartContainer);
+                if (this.elements.portfolioPerformanceContainer) this.elements.resizeObserver.observe(this.elements.portfolioPerformanceContainer);
             }
             formatCurrency(num) {
                 if (typeof num !== 'number') return num;
@@ -1932,10 +1979,8 @@
                     portfolioPerformanceContainer: document.getElementById('portfolio-performance-container'),
                     portfolioPerformanceChart: document.getElementById('portfolioPerformanceChart'),
                     performanceChartControls: document.getElementById('performance-chart-controls'),
-                    resizeObserver: new ResizeObserver(() => {
-                        this.renderDiversificationChart();
-                        this.renderPortfolioPerformanceChart();
-                    }),
+                    // FIX: Pass the bound method to the ResizeObserver
+                    resizeObserver: new ResizeObserver(this.handleResize.bind(this)),
                     confirmModal: document.getElementById('confirmModal'),
                     confirmModalText: document.getElementById('confirm-modal-text'),
                     confirmModalCancelBtn: document.getElementById('confirm-modal-cancel-btn'),
@@ -1945,6 +1990,7 @@
                     smallCountdownContainer: document.getElementById('small-countdown-container'),
                     toggleDarkModeBtn: document.getElementById('toggleDarkModeBtn'),
                     togglePrivacyBtn: document.getElementById('togglePrivacyBtn'),
+                    toggleBenchmarkBtn: document.getElementById('toggleBenchmarkBtn'),
                     quickLookupBtn: document.getElementById('quickLookupBtn'),
                     updateAllFundsBtn: document.getElementById('updateAllFundsBtn'),
                     clearAllFundsBtn: document.getElementById('clearAllFundsBtn'),
@@ -1986,8 +2032,7 @@
                     alertPriceLower: document.getElementById('alert-price-lower'),
                     alertPriceUpper: document.getElementById('alert-price-upper'),
                 };
-                if (this.elements.diversificationChartContainer) this.elements.resizeObserver.observe(this.elements.diversificationChartContainer);
-                if (this.elements.portfolioPerformanceContainer) this.elements.resizeObserver.observe(this.elements.portfolioPerformanceContainer);
+                // NOTE: ResizeObserver observation moved to the end of runInitialization
             }
             setupEventListeners() {
                 if (this.elements.googleSignInBtn) this.elements.googleSignInBtn.addEventListener('click', () => this.signIn());
@@ -2019,6 +2064,7 @@
                 if (this.elements.closeListAllBtn) this.elements.closeListAllBtn.addEventListener('click', () => this.closeListAllModal());
                 if (this.elements.toggleDarkModeBtn) this.elements.toggleDarkModeBtn.addEventListener('click', () => this.toggleDarkMode());
                 if (this.elements.togglePrivacyBtn) this.elements.togglePrivacyBtn.addEventListener('click', () => this.togglePrivacyMode());
+                if (this.elements.toggleBenchmarkBtn) this.elements.toggleBenchmarkBtn.addEventListener('click', () => this.toggleBenchmark());
                 if (this.elements.saveAlertBtn) this.elements.saveAlertBtn.addEventListener('click', () => this.savePriceAlert());
                 if (this.elements.updateAllFundsBtn) this.elements.updateAllFundsBtn.addEventListener('click', () => this.refreshFunds());
                 if (this.elements.clearAllFundsBtn) this.elements.clearAllFundsBtn.addEventListener('click', () => this.clearAllItems('fund'));
@@ -3116,7 +3162,7 @@
                                 <button class="chart-range-btn active" data-range="1Y">1Y</button>
                                 <button class="chart-range-btn" data-range="3Y">3Y</button>
                                 <button class="chart-range-btn" data-range="5Y">5Y</button>
-                                <button class="chart-range-btn" data-range="All">All</button>
+                                <button class="chart-range-btn" data-range="All">ALL</button>
                             </div>
                             <canvas id="chart-${item.id}"></canvas>
                         </div>`;
@@ -3301,8 +3347,8 @@
                     if (this.chartDataCache[symbol]) {
                         historicalData = this.chartDataCache[symbol];
                     } else {
-                        // Check if Alpha Vantage Key is set before fetching
-                        if (!this.config.alphaVantageKey || !this.config.fmpApiKey) {
+                        // Check FMP key since it is the primary historical API now
+                        if (!this.config.fmpApiKey && !this.config.alphaVantageKey) {
                              drawError("API Keys Missing. Check Settings (Need FMP or Alpha Vantage).");
                              return;
                         }
@@ -3315,8 +3361,8 @@
                         if (!result.success) {
                             // Check for premium/rate limit specific errors
                             let displayError = result.reason;
-                            if (result.reason.includes('Alpha Vantage: Premium endpoint') || result.reason.includes('Alpha Vantage: Rate limit')) {
-                                displayError = "Chart data failed. Alpha Vantage rate limit hit or premium access required.";
+                            if (result.reason.includes('Premium endpoint') || result.reason.includes('Rate limit')) {
+                                displayError = "Chart data failed. API rate limit hit or premium access required.";
                             }
                             drawError(displayError);
                             throw new Error(result.reason); // Throw to skip further processing
@@ -3327,7 +3373,7 @@
 
                     const allDataPoints = Object.entries(historicalData).map(([date, values]) => ({
                         x: new Date(date),
-                        // The FMP conversion stores the close price under "4. close" for compatibility
+                        // The historical data structure uses "4. close" for price data
                         y: parseFloat(values['4. close'])
                     })).sort((a, b) => a.x - b.x);
                     
@@ -3429,118 +3475,16 @@
                 }
             }
             
-            async moveToPortfolio(id) {
-                const stockIndex = this.watchlist.findIndex(stock => stock.id === id);
-                if (stockIndex === -1) return;
+            // --- Benchmark Feature Logic ---
+            toggleBenchmark() {
+                this.showBenchmark = !this.showBenchmark;
+                localStorage.setItem('showBenchmark', this.showBenchmark);
+                this.elements.toggleBenchmarkBtn.textContent = this.showBenchmark ? '✅ Hide S&P 500' : '📈 Toggle S&P 500';
+                this.renderPortfolioPerformanceChart(document.querySelector('#performance-chart-controls .chart-range-btn.active')?.dataset.range || '1Y');
+            }
 
-                const [stockToMove] = this.watchlist.splice(stockIndex, 1);
-                
-                stockToMove.transactions = [];
-                stockToMove.dividends = [];
-                
-                this.stocks.push(stockToMove);
-
-                await this.saveData();
-                this.renderContent();
-                this.showSuccess(`✅ Moved ${stockToMove.symbol} to portfolio!`);
-            }
-            showRefreshStatus(type, stats) {
-                const statusDiv = this.elements.refreshStatusPopup;
-                if (!statusDiv) return;
-                statusDiv.innerHTML = `Refreshed ${stats.success} ${type}(s). ✅ ${stats.gains} gained, 🔻${stats.losses} lost. Failed: ${stats.failed}.`;
-                statusDiv.style.display = 'block';
-                setTimeout(() => { statusDiv.style.display = 'none'; }, 15000);
-            }
-            showLoading(show, message = 'Loading...') { if(this.elements.loadingDiv) { this.elements.loadingDiv.style.display = show ? 'block' : 'none'; this.elements.loadingDiv.textContent = message; } }
-            showError(message) {
-                if(this.elements.errorDiv) {
-                    this.elements.errorDiv.style.display = 'block';
-                    this.elements.errorDiv.innerHTML = `<h4>Error</h4><p>${message}</p>`;
-                    setTimeout(() => { if(this.elements.errorDiv) this.elements.errorDiv.style.display = 'none'; }, 10000);
-                }
-            }
-            showSuccess(message) {
-                if(this.elements.successDiv) {
-                    this.elements.successDiv.style.display = 'block';
-                    this.elements.successDiv.innerHTML = `<h4>Success</h4><p>${message}</p>`;
-                    setTimeout(() => { if(this.elements.successDiv) this.elements.successDiv.style.display = 'none'; }, 3000);
-                }
-            }
-            async exportData() {
-                this.saveScrollPosition();
-                const dataStr = JSON.stringify({ stocks: this.stocks, mutualFunds: this.mutualFunds, watchlist: this.watchlist }, null, 2);
-                const blob = new Blob([dataStr], {type: 'application/json'});
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = 'portfolio-data.json';
-                a.click();
-                URL.revokeObjectURL(a.href);
-            }
-            async importData(e) {
-                const file = e.target.files[0];
-                if (!file) return;
-                this.saveScrollPosition();
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    try {
-                        const data = JSON.parse(event.target.result);
-                        this.stocks = data.stocks || this.stocks;
-                        this.mutualFunds = data.mutualFunds || this.mutualFunds;
-                        this.watchlist = data.watchlist || this.watchlist;
-                        await this.saveData();
-                        this.renderContent();
-                        this.showSuccess(`✅ Data successfully imported!`);
-                    } catch (err) { this.showError('❌ Error parsing JSON file.'); }
-                };
-                reader.readAsText(file);
-            }
-            renderDiversificationChart() {
-                const container = this.elements.diversificationChartContainer;
-                const allItems = [...this.stocks, ...this.mutualFunds];
-                const hasTransactions = allItems.some(s => s.transactions && s.transactions.length > 0 && this.calculateTransactionStats(s.transactions).currentValue > 0);
-                if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && hasTransactions ? 'block' : 'none';
-                if (!container || container.style.display === 'none') return;
-                const industryData = allItems.reduce((acc, stock) => {
-                    const { currentValue } = this.calculateTransactionStats(stock.transactions, stock.price);
-                    if (currentValue > 0) acc[stock.industry || 'Other'] = (acc[stock.industry || 'Other'] || 0) + currentValue;
-                    return acc;
-                }, {});
-                const sortedData = Object.entries(industryData).sort(([, a], [, b]) => b - a);
-                const labels = sortedData.map(([label]) => label);
-                const data = sortedData.map(([, value]) => value);
-                if (this.diversificationChartInstance) {
-                    this.diversificationChartInstance.destroy();
-                }
-                const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
-                const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
-                const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
-                if(this.elements.diversificationChart) {
-                    this.diversificationChartInstance = new Chart(this.elements.diversificationChart, {
-                        type: 'bar',
-                        data: { labels, datasets: [{ label: 'Value', data, backgroundColor: colors }] },
-                        options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Portfolio by Industry', color: labelColor }, legend: { display: false } }, scales: { y: { ticks: { color: labelColor }, grid: { color: gridColor } }, x: { ticks: { color: labelColor }, grid: { color: gridColor } } } }
-                    });
-                }
-            }
-            async updatePortfolioHistory() {
-                const allItems = [...this.stocks, ...this.mutualFunds];
-                 const today = new Date().toISOString().slice(0, 10);
-                const lastEntry = this.portfolioHistory.at(-1);
-                let totalValue = allItems.reduce((sum, item) => sum + this.calculateTransactionStats(item.transactions, item.price).currentValue, 0);
-                if (totalValue <= 0) return;
-                if (!lastEntry || lastEntry.date !== today) this.portfolioHistory.push({ date: today, value: totalValue });
-                else lastEntry.value = totalValue;
-                await this.saveData();
-            }
-            
-            /**
-             * ==================================================================
-             * ==      REDESIGNED PORTFOLIO PERFORMANCE CHART FUNCTION         ==
-             * ==================================================================
-             * Key changes: Dynamic line/fill color based on performance, gradient fill, 
-             * and smoother curve. Added clear fallback messaging for blank chart state.
-             */
-            renderPortfolioPerformanceChart(range = '1Y') {
+            // Central function to render the portfolio performance chart with or without the benchmark
+            async renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
                 const hasHistory = this.portfolioHistory.length > 0;
 
@@ -3553,9 +3497,11 @@
                     const newActiveButton = this.elements.performanceChartControls.querySelector(`[data-range="${range}"]`);
                     if(newActiveButton) newActiveButton.classList.add('active');
                 }
-
-                const allDataPoints = this.portfolioHistory.map(e => ({ x: new Date(e.date), y: e.value }));
                 
+                // Set the benchmark button text based on the current state
+                this.elements.toggleBenchmarkBtn.textContent = this.showBenchmark ? '✅ Hide S&P 500' : '📈 Toggle S&P 500';
+
+
                 const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
                 if (this.portfolioPerformanceChartInstance) {
                     this.portfolioPerformanceChartInstance.destroy();
@@ -3573,8 +3519,11 @@
                     return;
                 }
                 
-                const now = new Date();
+                // --- 1. Portfolio Data Prep ---
+                const allDataPoints = this.portfolioHistory.map(e => ({ x: new Date(e.date), y: e.value }));
+                
                 let startDate = new Date();
+                const now = new Date();
 
                 switch(range) {
                     case '1W': startDate.setDate(now.getDate() - 7); break;
@@ -3584,13 +3533,17 @@
                     case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
                     case '3Y': startDate.setFullYear(now.getFullYear() - 3); break;
                     case '5Y': startDate.setFullYear(now.getFullYear() - 5); break;
-                    case 'All': startDate = new Date(0); break;
+                    case 'ALL': 
+                        // Find the absolute oldest date in the portfolio history for true "ALL" view
+                        const oldestDate = allDataPoints.reduce((minDate, p) => (new Date(p.x) < minDate ? new Date(p.x) : minDate), new Date());
+                        startDate = oldestDate;
+                        break;
                     default: startDate.setFullYear(now.getFullYear() - 1); break;
                 }
 
-                const chartData = allDataPoints.filter(dp => dp.x >= startDate);
+                const chartDataRaw = allDataPoints.filter(dp => dp.x >= startDate);
                 
-                if (chartData.length <= 1) {
+                if (chartDataRaw.length <= 1) {
                     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
                     ctx.textAlign = 'center';
                     ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
@@ -3599,107 +3552,107 @@
                     return;
                 }
                 
-                // 1. Determine performance and colors
-                const firstValue = chartData[0].y;
-                const lastValue = chartData.at(-1).y;
-                const isPositive = lastValue >= firstValue;
+                // Normalize portfolio data to percentage change (0%)
+                const portfolioStartValue = chartDataRaw[0].y;
+                const portfolioNormalizedData = chartDataRaw.map(dp => ({
+                    x: dp.x,
+                    y: ((dp.y - portfolioStartValue) / portfolioStartValue) * 100 
+                }));
+
+
+                // --- 2. Benchmark Data Prep (If enabled) ---
+                let benchmarkDataset = [];
+                if (this.showBenchmark) {
+                    // Use a unique key that includes the selected range to cache the benchmark data
+                    const cacheKey = `SP500_${range}_${startDate.toISOString().slice(0, 10)}`; 
+                    let benchmarkNormalizedData = this.benchmarkDataCache[cacheKey];
+
+                    if (!benchmarkNormalizedData) {
+                         this.showLoading(true, "Fetching S&P 500 benchmark data...");
+                         // Pass range and startDate to the API service
+                         benchmarkNormalizedData = await this.apiService.fetchBenchmarkData(range, startDate);
+                         this.showLoading(false);
+                         if (benchmarkNormalizedData) {
+                             this.benchmarkDataCache[cacheKey] = benchmarkNormalizedData;
+                         }
+                    }
+                    
+                    if (benchmarkNormalizedData && benchmarkNormalizedData.length > 1) {
+                        benchmarkDataset = [{
+                            label: 'S&P 500 (^GSPC)',
+                            data: benchmarkNormalizedData,
+                            borderColor: 'var(--chart-benchmark-color)',
+                            tension: 0.4,
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            fill: true,
+                            backgroundColor: (context) => createGradient(context.chart.ctx, context.chart.chartArea, true, true), // isBenchmark = true
+                        }];
+                    } else {
+                        console.warn("Could not load benchmark data. Displaying portfolio only.");
+                        this.showBenchmark = false; // Turn off if it fails
+                    }
+                }
                 
-                // Use CSS variables for dynamic colors
+                // --- 3. Final Chart Assembly ---
+                const portfolioEndValue = portfolioNormalizedData.at(-1).y;
+                const isPositive = portfolioEndValue >= 0;
                 const mainColor = isPositive ? 'var(--color-positive)' : 'var(--color-negative)';
                 
-                // MODIFIED: Fetch raw RGB color for gradient calculation
                 const fillRgb = window.getComputedStyle(document.body)
                     .getPropertyValue(isPositive ? '--chart-positive-fill-color-rgb' : '--chart-negative-fill-color-rgb')
                     .trim();
 
-                // 2. Create Gradient
-                const gradient = ctx.createLinearGradient(0, 0, 0, 400); // 400px is the canvas height
-                gradient.addColorStop(0, `rgba(${fillRgb}, 0.3)`); // Solid at the top
-                gradient.addColorStop(1, `rgba(${fillRgb}, 0)`); // Fully transparent at the bottom
+                const portfolioDataset = {
+                    label: 'Portfolio Performance (%)',
+                    data: portfolioNormalizedData,
+                    borderColor: mainColor,
+                    tension: 0.4, 
+                    borderWidth: 3, 
+                    pointRadius: 0, 
+                    fill: true, 
+                    backgroundColor: (context) => createGradient(context.chart.ctx, context.chart.chartArea, isPositive),
+                };
 
-                // 3. Define Chart Styling
+                const datasets = [portfolioDataset, ...benchmarkDataset];
+
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#adb5bd' : '#6c757d';
                 
-                // --- Calculate Today's G/L for Tooltip ---
+                // --- Calculate Today's G/L for Tooltip (Unchanged) ---
                 const stockMetrics = this.calculateSummaryMetrics(this.stocks);
                 const fundMetrics = this.calculateSummaryMetrics(this.mutualFunds);
                 const totalPLToday = stockMetrics.totalPLToday + fundMetrics.totalPLToday;
                 const totalPLTodayFormatted = `${totalPLToday >= 0 ? '+' : ''}${this.formatCurrency(totalPLToday)}`;
 
+                // --- Render Chart ---
                 this.portfolioPerformanceChartInstance = new Chart(ctx, {
                     type: 'line', 
                     data: {
-                        datasets: [{ 
-                            label: 'Portfolio Value', 
-                            data: chartData, 
-                            borderColor: mainColor, // Dynamic line color
-                            tension: 0.4, // Smoother curve
-                            borderWidth: 3, 
-                            pointRadius: 0, // No points for a cleaner look
-                            fill: true, // Enable fill
-                            backgroundColor: gradient, // Dynamic gradient fill
-                        }] 
+                        datasets: datasets 
                     },
                     options: { 
                         responsive: true, 
                         maintainAspectRatio: false, 
-                        scales: { 
-                            y: { 
-                                beginAtZero: false, 
-                                grace: '10%', 
-                                ticks: { 
-                                    color: labelColor, 
-                                    callback: (v) => this.formatCurrency(v) 
-                                }, 
-                                grid: { 
-                                    color: gridColor, 
-                                    drawBorder: false 
-                                } 
-                            }, 
-                            x: { 
-                                type: 'time', 
-                                time: { 
-                                    unit: chartData.length > 90 ? 'month' : 'day', // Adjust unit based on range density
-                                    displayFormats: {
-                                        day: 'MMM d', 
-                                        month: 'MMM yyyy'
-                                    },
-                                    tooltipFormat: 'PPP' // e.g., Oct 23, 2025
-                                }, 
-                                ticks: { 
-                                    color: labelColor, 
-                                    maxRotation: 0, 
-                                    autoSkip: true,
-                                    maxTicksLimit: 10 
-                                }, 
-                                grid: { 
-                                    color: gridColor, 
-                                    display: true 
-                                } 
-                            } 
-                        }, 
                         plugins: { 
-                            legend: { display: false }, 
+                            legend: { display: this.showBenchmark }, 
                             tooltip: { 
                                 mode: 'index', 
                                 intersect: false, 
                                 callbacks: { 
                                     title: (tooltipItems) => {
-                                        // Format the title date
                                         if (tooltipItems[0]) {
                                             const date = new Date(tooltipItems[0].parsed.x);
                                             return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
                                         }
                                         return '';
                                     },
-                                    label: (c) => `Value: ${this.formatCurrency(c.parsed.y)}`,
-                                    // Tooltip Footer: Show today's P/L only on the last point
+                                    label: (c) => `${c.dataset.label}: ${this.formatNumber(c.parsed.y, 2)}%`,
                                     footer: (tooltipItems) => {
-                                        const lastDataIndex = chartData.length - 1;
+                                        const lastDataIndex = portfolioNormalizedData.length - 1;
                                         if (tooltipItems[0] && tooltipItems[0].dataIndex === lastDataIndex) {
                                             const today = new Date().setHours(0,0,0,0);
-                                            const lastDate = new Date(chartData[lastDataIndex].x).setHours(0,0,0,0);
+                                            const lastDate = new Date(portfolioNormalizedData[lastDataIndex].x).setHours(0,0,0,0);
                                             
                                             if (lastDate === today) {
                                                 return `Today's P/L: ${totalPLTodayFormatted}`;
@@ -3716,9 +3669,42 @@
                                 borderColor: 'var(--border-color)',
                                 borderWidth: 1,
                                 padding: 10,
-                                displayColors: false
+                                displayColors: true
                             } 
-                        } 
+                        },
+                        scales: { 
+                            y: { 
+                                beginAtZero: true, // Start at zero for percentage comparison
+                                grace: '10%', 
+                                title: { display: true, text: 'Percentage Change (%)', color: labelColor },
+                                ticks: { 
+                                    color: labelColor, 
+                                    callback: (v) => `${this.formatNumber(v, 1)}%` 
+                                }, 
+                                grid: { 
+                                    color: gridColor, 
+                                    drawBorder: false 
+                                } 
+                            }, 
+                            x: { 
+                                type: 'time', 
+                                time: { 
+                                    unit: chartDataRaw.length > 90 ? 'month' : 'day', 
+                                    displayFormats: { day: 'MMM d', month: 'MMM yyyy' },
+                                    tooltipFormat: 'PPP' 
+                                }, 
+                                ticks: { 
+                                    color: labelColor, 
+                                    maxRotation: 0, 
+                                    autoSkip: true,
+                                    maxTicksLimit: 10 
+                                }, 
+                                grid: { 
+                                    color: gridColor, 
+                                    display: true 
+                                } 
+                            } 
+                        }, 
                     }
                 });
             }
@@ -3805,9 +3791,14 @@
             applyTheme() {
                 this.isDarkMode = localStorage.getItem('darkMode') === 'true';
                 document.body.classList.toggle('dark-mode', this.isDarkMode);
+                
+                // FIX: Removed initial chart rendering calls here to avoid TypeError.
+                // They will be correctly called once by renderContent() after data loads.
                 if (this.currentTab === 'stocks' || this.currentTab === 'funds') {
-                    this.renderDiversificationChart();
-                    this.renderPortfolioPerformanceChart();
+                    // Force redraw only if already initialized (for theme swap mid-session)
+                     if (this.portfolioPerformanceChartInstance) {
+                         this.renderPortfolioPerformanceChart(document.querySelector('#performance-chart-controls .chart-range-btn.active')?.dataset.range || '1Y');
+                     }
                 }
             }
             togglePrivacyMode() {
@@ -4209,6 +4200,17 @@
                         }
                     }
                 });
+            }
+            
+            // FIX: New helper method for the ResizeObserver to ensure proper 'this' binding
+            handleResize() {
+                // Check if chart instances exist before calling render
+                if (this.diversificationChartInstance) {
+                    this.renderDiversificationChart();
+                }
+                if (this.portfolioPerformanceChartInstance) {
+                    this.renderPortfolioPerformanceChart(document.querySelector('#performance-chart-controls .chart-range-btn.active')?.dataset.range || '1Y');
+                }
             }
         }
         
