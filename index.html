@@ -34,8 +34,6 @@
             --text-primary: #212529;
             --text-secondary: #6c757d;
             --border-color: #dee2e6;
-            /* --accent-primary: #0052FF; */
-            /* --accent-primary-hover: #0048DE; */
             --accent-primary: #7c3aed; /* CHANGED: Purple */
             --accent-primary-hover: #6d28d9; /* CHANGED: Purple */
             --color-positive: #17A589;
@@ -432,27 +430,34 @@
             border-radius: var(--radius-md);
             padding: 24px;
             box-shadow: var(--shadow-sm);
+            /* START: Requested Blue Left Border */
             border: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent-primary); 
+            /* END: Requested Blue Left Border */
             transition: var(--transition);
             display: flex;
             flex-direction: column;
             cursor: pointer;
         }
         .stock-card:hover, .fund-card:hover, .watchlist-card:hover {
+            /* START: Requested Ambient Hover Effect */
             transform: translateY(-4px);
-            box-shadow: var(--shadow-md);
-            border-color: color-mix(in srgb, var(--border-color) 70%, black);
+            border-color: var(--accent-primary);
+            box-shadow: var(--shadow-md), 0 0 20px color-mix(in srgb, var(--accent-primary) 30%, transparent);
+            /* END: Requested Ambient Hover Effect */
         }
-        /* ADDED: Colored top border for grouped cards */
+        /* ADDED: Colored top border for grouped cards - Adjust to use left border only or keep both? */
+        /* Keeping top border for gains/losses for better visual communication of group, but ensuring it's not overridden */
         .gains-header-content .stock-card,
         .biggest-gain-header-content .stock-card {
-            border-top-width: 4px;
-            border-top-color: var(--color-positive);
+            border-top-width: 1px; /* Reset top to standard if only using left for color */
+            border-top-color: var(--border-color); 
         }
         .losses-header-content .stock-card {
-            border-top-width: 4px;
-            border-top-color: var(--color-negative);
+            border-top-width: 1px; /* Reset top to standard if only using left for color */
+            border-top-color: var(--border-color); 
         }
+
         /* ADDED: Style for Closed Positions Header and Cards */
         .closed-header {
             color: var(--text-secondary);
@@ -461,7 +466,7 @@
         /* The primary visual change for closed positions */
         .stock-card.closed-position {
             opacity: 0.6; 
-            border-left: 4px solid var(--text-secondary); 
+            border-left: 4px solid var(--text-secondary); /* Use secondary color for closed position border */
             transition: opacity 0.3s, transform 0.3s;
         }
         .stock-card.closed-position:hover {
@@ -472,16 +477,16 @@
         }
 
 
-        /* ADDED: Ambient hover effect for grouped cards */
+        /* ADDED: Ambient hover effect for grouped cards (These should still work but will be slightly overridden by the general hover for blue glow) */
         .gains-header-content .stock-card:hover,
         .biggest-gain-header-content .stock-card:hover {
-            border-color: var(--color-positive);
-            box-shadow: var(--shadow-md), 0 0 20px color-mix(in srgb, var(--color-positive) 30%, transparent);
+            /* Keep gain/loss colors separate if desired, but general blue glow is stronger */
+            box-shadow: var(--shadow-md), 0 0 20px color-mix(in srgb, var(--accent-primary) 30%, transparent);
         }
         .losses-header-content .stock-card:hover {
-            border-color: var(--color-negative);
-            box-shadow: var(--shadow-md), 0 0 20px color-mix(in srgb, var(--color-negative) 30%, transparent);
+            box-shadow: var(--shadow-md), 0 0 20px color-mix(in srgb, var(--accent-primary) 30%, transparent);
         }
+
         .stock-header {
             display: flex;
             justify-content: space-between;
