@@ -1548,87 +1548,143 @@
 
         class ApiService {
             constructor(config) { this.config = config; }
+            
+            // --- Finnhub Fetch (Primary for Stock/ETFs) ---
             async fetchStockEtfData(symbol) {
                 const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${this.config.finnhubApiKey}`;
                 const profileUrl = `https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${this.config.finnhubApiKey}`;
                 try {
                     const [quoteResponse, profileResponse] = await Promise.all([fetch(quoteUrl), fetch(profileUrl)]);
-                    if (!quoteResponse.ok || !profileResponse.ok) return { success: false, symbol, reason: `HTTP Error: ${quoteResponse.status}` };
+                    if (!quoteResponse.ok || !profileResponse.ok) return { success: false, symbol, reason: `Finnhub HTTP Error: ${quoteResponse.status}` };
                     const [quoteData, profileData] = await Promise.all([quoteResponse.json(), profileResponse.json()]);
-                    if (quoteData.c === 0 && quoteData.pc === 0 && !profileData.name) return { success: false, symbol, reason: 'Invalid or empty API payload' };
-                    return { success: true, data: { symbol, name: profileData.name ?? symbol, price: quoteData.c ?? 0, change: quoteData.d ?? 0, changePercent: quoteData.dp ?? 0, open: quoteData.o ?? 0, high: quoteData.h ?? 0, low: quoteData.l ?? 0, previousClose: quoteData.pc ?? 0, industry: profileData.finnhubIndustry ?? 'N/A' } };
+                    if (quoteData.c === 0 && quoteData.pc === 0 && !profileData.name) return { success: false, symbol, reason: 'Finnhub: Invalid or empty API payload' };
+                    
+                    // Mutual funds generally don't have profile data, but stocks/etfs do.
+                    const isMutualFund = this.isMutualFund(symbol);
+
+                    return { success: true, data: { 
+                        symbol, 
+                        name: profileData.name ?? symbol, 
+                        price: quoteData.c ?? 0, 
+                        change: quoteData.d ?? 0, 
+                        changePercent: quoteData.dp ?? 0, 
+                        open: quoteData.o ?? 0, 
+                        high: quoteData.h ?? 0, 
+                        low: quoteData.l ?? 0, 
+                        previousClose: quoteData.pc ?? 0, 
+                        industry: isMutualFund ? 'Mutual Fund' : (profileData.finnhubIndustry ?? 'N/A') 
+                    } };
                 } catch (error) {
-                      console.error(`Error fetching stock/ETF data for ${symbol}:`, error);
-                      return { success: false, symbol, reason: error.message };
+                      console.error(`Error fetching stock/ETF data for ${symbol} (Finnhub):`, error);
+                      return { success: false, symbol, reason: `Finnhub Error: ${error.message}` };
                 }
             }
+
+            // --- Finnhub Quote (for refreshing) ---
             async fetchStockEtfQuote(symbol) {
                 const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${this.config.finnhubApiKey}`;
                 try {
                     const response = await fetch(quoteUrl);
-                    if (!response.ok) return { success: false, symbol, reason: `HTTP Error: ${response.status}` };
+                    if (!response.ok) return { success: false, symbol, reason: `Finnhub HTTP Error: ${response.status}` };
                     const quoteData = await response.json();
-                    if (quoteData.c === 0 && quoteData.pc === 0) return { success: false, symbol, reason: 'Invalid or empty API payload' };
+                    if (quoteData.c === 0 && quoteData.pc === 0) return { success: false, symbol, reason: 'Finnhub: Invalid or empty API payload' };
                     return { success: true, data: { price: quoteData.c ?? 0, change: quoteData.d ?? 0, changePercent: quoteData.dp ?? 0, open: quoteData.o ?? 0, high: quoteData.h ?? 0, low: quoteData.l ?? 0, previousClose: quoteData.pc ?? 0 } };
                 } catch (error) {
-                    console.error(`Error fetching stock/ETF quote for ${symbol}:`, error);
-                    return { success: false, symbol, reason: error.message };
+                    console.error(`Error fetching stock/ETF quote for ${symbol} (Finnhub):`, error);
+                    return { success: false, symbol, reason: `Finnhub Error: ${error.message}` };
                 }
             }
-            async fetchNews(symbols) {
-                 if (symbols.length === 0) return { success: true, data: [] };
-                if (!this.config.fmpApiKey || this.config.fmpApiKey === 'YOUR_FMP_API_KEY') {
-                    return { success: false, reason: "FMP API Key is missing. Please set it in Settings to fetch news." };
-                }
-                const profileUrl = `https://financialmodelingprep.com/api/v3/profile/${symbols.join(',')}?apikey=${this.config.fmpApiKey}`;
-                try {
-                    const response = await fetch(profileUrl);
-                    if (!response.ok) {
-                        return { success: false, reason: `HTTP Error: ${response.status}. Check your FMP API key/plan access.` };
-                    }
-                    const data = await response.json();
-                    const generatedNews = symbols.map(symbol => {
-                        const profile = data.find(p => p.symbol === symbol);
-                        if (profile && profile.companyName) {
-                            return {
-                                url: profile.website || `https://www.google.com/search?q=${symbol}+stock+news`,
-                                title: `Official News Source for ${profile.companyName} (${symbol})`,
-                                 summary: `Profile data pulled successfully. Check the company website for the latest official news. (Industry: ${profile.industry})`,
-                                 banner_image: profile.image || 'https://placehold.co/100x100/eee/ccc?text=FMP',
-                                 source: profile.website ? new URL(profile.website).hostname : 'Google Search',
-                                 date: new Date().toISOString(),
-                            };
-                        } else {
-                            return {
-                                url: `https://www.google.com/search?q=${symbol}+stock+news`,
-                                title: `Searching for News: ${symbol}`,
-                                 summary: `FMP profile data unavailable. Clicking this card will perform a real-time Google search for news on ${symbol}.`,
-                                 banner_image: 'https://placehold.co/100x100/34a853/ffffff?text=Google',
-                                 source: 'Google Search Fallback',
-                                 date: new Date().toISOString(),
-                            };
-                        }
-                    });
-                    return { success: true, data: generatedNews };
+            
+            // --- FMP Fetch (Second Priority for Mutual Funds) ---
+            async fetchFmpFundData(symbol) {
+                 const url = `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${this.config.fmpApiKey}`;
+                 if (!this.config.fmpApiKey || this.config.fmpApiKey === 'YOUR_FMP_API_KEY') {
+                    return { success: false, symbol, reason: "FMP API Key missing." };
+                 }
+                 try {
+                    const response = await fetch(url);
+                    if (!response.ok) return { success: false, symbol, reason: `FMP HTTP Error: ${response.status}` };
+                    const json = await response.json();
+                    const quote = json[0];
+                    if (!quote || !quote.price) return { success: false, symbol, reason: 'FMP: Invalid or empty API payload' };
+                    
+                    return { success: true, data: { 
+                        symbol: quote.symbol ?? symbol, 
+                        name: quote.name ?? symbol, 
+                        price: parseFloat(quote.price) || 0, 
+                        change: parseFloat(quote.change) || 0, 
+                        changePercent: parseFloat(quote.changesPercentage) || 0, 
+                        open: parseFloat(quote.open) || 0, 
+                        high: parseFloat(quote.dayHigh) || 0, 
+                        low: parseFloat(quote.dayLow) || 0, 
+                        previousClose: parseFloat(quote.previousClose) || 0, 
+                        industry: 'Mutual Fund' 
+                    } };
                 } catch (error) {
-                    console.error("Error fetching news (FMP Profile Fallback):", error);
-                    return { success: false, reason: error.message };
+                    console.error(`Error fetching fund data for ${symbol} (FMP):`, error);
+                    return { success: false, symbol, reason: `FMP Error: ${error.message}` };
                 }
             }
-            async fetchFundData(symbol) {
+            
+            // --- Alpha Vantage Fetch (Last Resort for Mutual Funds) ---
+            async fetchAlphaVantageFundData(symbol) {
                 const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${this.config.alphaVantageKey}`;
+                if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
+                    return { success: false, symbol, reason: "Alpha Vantage API Key missing." };
+                }
                 try {
                     const response = await fetch(url);
-                    if (!response.ok) return { success: false, symbol, reason: `HTTP Error: ${response.status}` };
+                    if (!response.ok) return { success: false, symbol, reason: `Alpha Vantage HTTP Error: ${response.status}` };
                     const json = await response.json();
                     const quote = json['Global Quote'];
-                    if (!quote || Object.keys(quote).length === 0) return { success: false, symbol, reason: 'Invalid API payload from Alpha Vantage.' };
-                    return { success: true, data: { symbol: quote['01. symbol'] ?? symbol, name: quote['01. symbol'] ?? symbol, price: parseFloat(quote['05. price']) || 0, change: parseFloat(quote['09. change']) || 0, changePercent: parseFloat(quote['10. change percent'].replace('%', '')) || 0, open: parseFloat(quote['02. open']) || 0, high: parseFloat(quote['03. high']) || 0, low: parseFloat(quote['04. low']) || 0, previousClose: parseFloat(quote['08. previous close']) || 0, industry: 'Mutual Fund' } };
+                    if (!quote || Object.keys(quote).length === 0) return { success: false, symbol, reason: 'Alpha Vantage: Invalid API payload or rate limit reached.' };
+                    return { success: true, data: { 
+                        symbol: quote['01. symbol'] ?? symbol, 
+                        name: quote['01. symbol'] ?? symbol, 
+                        price: parseFloat(quote['05. price']) || 0, 
+                        change: parseFloat(quote['09. change']) || 0, 
+                        changePercent: parseFloat(quote['10. change percent'].replace('%', '')) || 0, 
+                        open: parseFloat(quote['02. open']) || 0, 
+                        high: parseFloat(quote['03. high']) || 0, 
+                        low: parseFloat(quote['04. low']) || 0, 
+                        previousClose: parseFloat(quote['08. previous close']) || 0, 
+                        industry: 'Mutual Fund' 
+                    } };
                 } catch (error) {
-                    console.error(`Error fetching fund data for ${symbol}:`, error);
-                    return { success: false, symbol, reason: error.message };
+                    console.error(`Error fetching fund data for ${symbol} (Alpha Vantage):`, error);
+                    return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}` };
                 }
             }
+            
+            // --- New Fallback Function for Mutual Funds ---
+            async fetchMutualFundDataWithFallback(symbol) {
+                let result = await this.fetchStockEtfQuote(symbol); // Try Finnhub first (as it can handle mutual funds/quotes)
+
+                if (result.success) {
+                    // Finnhub was successful, just need to populate missing fields
+                    const profileResult = await this.fetchStockEtfData(symbol);
+                    return profileResult.success ? profileResult : result;
+                }
+
+                console.log(`Finnhub failed for ${symbol}. Falling back to FMP... Reason: ${result.reason}`);
+                result = await this.fetchFmpFundData(symbol); // Try FMP second
+
+                if (result.success) {
+                    return result;
+                }
+
+                console.log(`FMP failed for ${symbol}. Falling back to Alpha Vantage... Reason: ${result.reason}`);
+                result = await this.fetchAlphaVantageFundData(symbol); // Try Alpha Vantage last
+
+                if (result.success) {
+                    return result;
+                }
+                
+                // All failed
+                return { success: false, symbol, reason: `All fund APIs failed. Last error: ${result.reason}` };
+            }
+
+            // --- Historical Data Fetch (Uses Alpha Vantage) ---
             async fetchHistoricalData(symbol) {
                 if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
                     // Fail early if key is missing
@@ -1646,10 +1702,14 @@
                     return { success: true, data: json["Time Series (Daily)"] };
                 } catch (error) {
                     console.error(`Error fetching historical data for ${symbol}:`, error);
-                    return { success: false, reason: error.message };
+                    return { success: false, symbol, reason: error.message };
                 }
             }
+            
+            // Utility function to check for mutual fund symbol pattern (unchanged)
+            isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
         }
+        
         class StockTracker {
             constructor() {
                 this.userId = null; this.stocks = []; this.mutualFunds = []; this.watchlist = []; this.portfolioHistory = [];
@@ -2321,7 +2381,13 @@
                 let stats = { success: 0, gains: 0, losses: 0, unchanged: 0, failed: 0 };
                 let failedSymbols = [];
                 for (const [i, item] of items.entries()) {
-                    const result = this.isMutualFund(item.symbol) ? await this.apiService.fetchFundData(item.symbol) : await this.apiService.fetchStockEtfQuote(item.symbol);
+                    let result;
+                    if (type === 'fund') {
+                        result = await this.apiService.fetchMutualFundDataWithFallback(item.symbol);
+                    } else { // stock or watchlist
+                        result = await this.apiService.fetchStockEtfQuote(item.symbol);
+                    }
+                    
                     if (result.success) {
                         Object.assign(item, result.data);
                         stats.success++;
@@ -2435,8 +2501,14 @@
                     if (type === 'stock') { [targetList, listName] = [this.stocks, 'portfolio']; }
                     else if (type === 'fund') { [targetList, listName] = [this.mutualFunds, 'fund portfolio']; }
                     else { [targetList, listName] = [this.watchlist, 'watchlist']; }
-
-                    const result = this.isMutualFund(symbol) ? await this.apiService.fetchFundData(symbol) : await this.apiService.fetchStockEtfData(symbol);
+                    
+                    let result;
+                    if (type === 'fund') {
+                        result = await this.apiService.fetchMutualFundDataWithFallback(symbol);
+                    } else {
+                        result = await this.apiService.fetchStockEtfData(symbol);
+                    }
+                    
                     if (!result.success) throw new Error(result.reason);
                     
                     let newItem = { 
@@ -3165,7 +3237,7 @@
                     } else {
                         // Check if Alpha Vantage Key is set before fetching
                         if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
-                            drawError("Alpha Vantage Key Missing. Check Settings.");
+                            drawError("Alpha Vantage Key Missing. Cannot load chart data.");
                             return;
                         }
                         
@@ -3704,7 +3776,7 @@
                 this.toggleAlertInputs('single');
 
                 // Check for existing alert and populate
-                const existingAlert = this.priceAlerts.find(a => a.symbol === symbol && !a.triggered);
+                const existingAlert = this.priceAlerts.find(a => a.symbol === symbol || a.triggered);
                 if (existingAlert) {
                     if(this.elements.saveAlertBtn) this.elements.saveAlertBtn.textContent = 'Update Alert';
                     if (existingAlert.type === 'range') {
@@ -3864,7 +3936,7 @@
                  if (alert.type === 'range') {
                     message = `🔔 ALERT: ${item.symbol} is at ${this.formatCurrency(item.price)}, inside your target range of ${this.formatCurrency(alert.priceLower)} - ${this.formatCurrency(alert.priceUpper)}.`;
                 } else {
-                    message = `🔔 ALERT: ${item.symbol} reached ${this.formatCurrency(item.price)}! It is ${alert.condition} your target of ${this.formatCurrency(alert.price)}.`;
+                    message = `🔔 ALERT: ${item.symbol} reached ${this.formatCurrency(item.price)}! It is ${alert.condition} your target of ${this.formatCurrency(item.price)}.`;
                 }
                 
                 // In-app notification
