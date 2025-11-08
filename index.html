@@ -39,8 +39,7 @@
             --color-positive: #17A589;
             --color-negative: #E74C3C;
             
-            /* Chart Specific */
-            --chart-line-color-light: #212529;
+            /* Chart Specific - RGB values MUST be comma-separated integers for JS parsing */
             --chart-positive-fill-color-rgb: 23, 165, 137; /* #17A589 */
             --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
         }
@@ -58,8 +57,7 @@
             --color-positive: #2ECC71;
             --color-negative: #E74C3C;
             
-            /* Chart Specific */
-            --chart-line-color-dark: #f8f9fa;
+            /* Chart Specific - RGB values MUST be comma-separated integers for JS parsing */
             --chart-positive-fill-color-rgb: 46, 204, 113; /* #2ECC71 */
             --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
         }
@@ -1184,12 +1182,22 @@
     const canvas = document.getElementById("portfolioPerformanceChart");
     const ctx = canvas.getContext("2d");
 
-    function createGradient(ctx, area) {
-      const gradient = ctx.createLinearGradient(0, 0, 0, area.height);
-      gradient.addColorStop(0, "rgba(16,185,129,0.25)"); // emerald
-      gradient.addColorStop(0.6, "rgba(20,184,166,0.12)"); // teal
-      gradient.addColorStop(1, "rgba(56,189,248,0.05)"); // light blue tint
-      return gradient;
+    // Helper function to dynamically get the chart color based on theme
+    function getRgbColor(name) {
+        const style = getComputedStyle(document.body);
+        return style.getPropertyValue(name).trim();
+    }
+    
+    // MODIFIED: Inject dynamic RGB values into the gradient creation function
+    function createGradient(ctx, area, isPositive) {
+        // Get the raw comma-separated RGB values from CSS variables
+        const fillRgb = getRgbColor(isPositive ? '--chart-positive-fill-color-rgb' : '--chart-negative-fill-color-rgb');
+        
+        const gradient = ctx.createLinearGradient(0, 0, 0, area.height);
+        // Use the fetched RGB value directly inside the rgba() function
+        gradient.addColorStop(0, `rgba(${fillRgb}, 0.3)`); 
+        gradient.addColorStop(1, `rgba(${fillRgb}, 0)`);
+        return gradient;
     }
 
     const chart = new Chart(ctx, {
@@ -1211,7 +1219,8 @@
           backgroundColor: function(context) {
             const chartArea = context.chart.chartArea;
             if (!chartArea) return null;
-            return createGradient(context.chart.ctx, chartArea);
+            // For portfolio chart, we assume positive for the initial placeholder state
+            return createGradient(context.chart.ctx, chartArea, true); 
           },
         }]
       },
@@ -1549,6 +1558,9 @@
         class ApiService {
             constructor(config) { this.config = config; }
             
+            // Utility function to check for mutual fund symbol pattern (unchanged)
+            isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
+            
             // --- Finnhub Fetch (Primary for Stock/ETFs) ---
             async fetchStockEtfData(symbol) {
                 const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${this.config.finnhubApiKey}`;
@@ -1559,7 +1571,6 @@
                     const [quoteData, profileData] = await Promise.all([quoteResponse.json(), profileResponse.json()]);
                     if (quoteData.c === 0 && quoteData.pc === 0 && !profileData.name) return { success: false, symbol, reason: 'Finnhub: Invalid or empty API payload' };
                     
-                    // Mutual funds generally don't have profile data, but stocks/etfs do.
                     const isMutualFund = this.isMutualFund(symbol);
 
                     return { success: true, data: { 
@@ -1637,7 +1648,15 @@
                     if (!response.ok) return { success: false, symbol, reason: `Alpha Vantage HTTP Error: ${response.status}` };
                     const json = await response.json();
                     const quote = json['Global Quote'];
-                    if (!quote || Object.keys(quote).length === 0) return { success: false, symbol, reason: 'Alpha Vantage: Invalid API payload or rate limit reached.' };
+                    
+                    let errorReason = json["Information"] || json["Error Message"] || 'Alpha Vantage: Invalid API payload.';
+                    
+                    if (json["Error Message"] && json["Error Message"].includes('premium endpoint')) {
+                         errorReason = "Alpha Vantage: Premium endpoint error. Check subscription.";
+                    }
+                    
+                    if (!quote || Object.keys(quote).length === 0) return { success: false, symbol, reason: errorReason };
+                    
                     return { success: true, data: { 
                         symbol: quote['01. symbol'] ?? symbol, 
                         name: quote['01. symbol'] ?? symbol, 
@@ -1656,58 +1675,105 @@
                 }
             }
             
-            // --- New Fallback Function for Mutual Funds ---
+            // --- Fallback Function for Mutual Funds ---
             async fetchMutualFundDataWithFallback(symbol) {
-                let result = await this.fetchStockEtfQuote(symbol); // Try Finnhub first (as it can handle mutual funds/quotes)
+                // 1. Try Finnhub first (as it can sometimes provide mutual fund data/quotes)
+                let result = await this.fetchStockEtfData(symbol); 
 
-                if (result.success) {
-                    // Finnhub was successful, just need to populate missing fields
-                    const profileResult = await this.fetchStockEtfData(symbol);
-                    return profileResult.success ? profileResult : result;
-                }
-
-                console.log(`Finnhub failed for ${symbol}. Falling back to FMP... Reason: ${result.reason}`);
-                result = await this.fetchFmpFundData(symbol); // Try FMP second
-
-                if (result.success) {
+                if (result.success && result.data.price > 0) {
                     return result;
                 }
 
-                console.log(`FMP failed for ${symbol}. Falling back to Alpha Vantage... Reason: ${result.reason}`);
-                result = await this.fetchAlphaVantageFundData(symbol); // Try Alpha Vantage last
+                console.log(`Finnhub failed for ${symbol}. Falling back to FMP... Reason: ${result.reason || 'No price data.'}`);
+                
+                // 2. Try FMP second
+                result = await this.fetchFmpFundData(symbol);
 
-                if (result.success) {
+                if (result.success && result.data.price > 0) {
+                    return result;
+                }
+
+                console.log(`FMP failed for ${symbol}. Falling back to Alpha Vantage... Reason: ${result.reason || 'No price data.'}`);
+                
+                // 3. Try Alpha Vantage last
+                result = await this.fetchAlphaVantageFundData(symbol); 
+
+                if (result.success && result.data.price > 0) {
                     return result;
                 }
                 
                 // All failed
-                return { success: false, symbol, reason: `All fund APIs failed. Last error: ${result.reason}` };
+                return { success: false, symbol, reason: `All fund APIs failed. Last attempt error: ${result.reason}` };
             }
 
-            // --- Historical Data Fetch (Uses Alpha Vantage) ---
+            // --- New FMP Historical Data Fetch (Primary for Charts) ---
+            async fetchFmpHistoricalData(symbol) {
+                 const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?apikey=${this.config.fmpApiKey}`;
+                 if (!this.config.fmpApiKey || this.config.fmpApiKey === 'YOUR_FMP_API_KEY') {
+                    return { success: false, reason: "FMP API Key is missing. Cannot load chart data." };
+                 }
+                 try {
+                    const response = await fetch(url);
+                    if (!response.ok) return { success: false, reason: `FMP HTTP Error: ${response.status}` };
+                    const json = await response.json();
+                    
+                    if (!json.historical) {
+                        return { success: false, reason: json.Error || 'FMP: Invalid symbol or no historical data found.' };
+                    }
+                    
+                    // Convert FMP format to match Alpha Vantage structure for compatibility
+                    const avCompatibleData = json.historical.reduce((acc, entry) => {
+                        acc[entry.date] = {
+                            "4. close": entry.close.toString()
+                        };
+                        return acc;
+                    }, {});
+                    
+                    return { success: true, data: avCompatibleData };
+                } catch (error) {
+                    console.error(`Error fetching historical data for ${symbol} (FMP):`, error);
+                    return { success: false, symbol, reason: `FMP Historical Data Error: ${error.message}` };
+                }
+            }
+
+            // --- Historical Data Fetch (Fallback to Alpha Vantage) ---
             async fetchHistoricalData(symbol) {
+                // 1. Try FMP first (Higher Priority)
+                const fmpResult = await this.fetchFmpHistoricalData(symbol);
+                if (fmpResult.success) {
+                    console.log(`Historical data fetched successfully from FMP for ${symbol}`);
+                    return fmpResult;
+                }
+                
+                console.warn(`FMP historical data failed for ${symbol}. Reason: ${fmpResult.reason}. Falling back to Alpha Vantage...`);
+
+                // 2. Fallback to Alpha Vantage (Lower Priority)
                 if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
-                    // Fail early if key is missing
-                    return { success: false, reason: "Alpha Vantage API Key is missing. Please set it in Settings to fetch historical data." };
+                    return { success: false, reason: "Alpha Vantage API Key is missing. FMP fallback also failed. Cannot load chart data." };
                 }
                 const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${this.config.alphaVantageKey}`;
                 try {
                     const response = await fetch(url);
                     if (!response.ok) return { success: false, reason: `HTTP Error: ${response.status}` };
                     const json = await response.json();
-                    // Check for API errors or rate limiting messages in the response
+                    
+                    let errorReason = json["Information"] || json["Error Message"] || 'Invalid API payload from Alpha Vantage.';
+                    
+                    if (json["Error Message"] && json["Error Message"].includes('premium endpoint')) {
+                         errorReason = "Alpha Vantage: Premium endpoint for historical data failed. Check subscription.";
+                    } else if (json["Information"] && json["Information"].includes('call frequency')) {
+                         errorReason = "Alpha Vantage: Rate limit hit. Wait 1 minute.";
+                    }
+                    
                     if (json["Error Message"] || !json["Time Series (Daily)"]) {
-                        return { success: false, reason: json["Information"] || json["Error Message"] || 'Invalid API payload from Alpha Vantage. You might be hitting the free tier rate limit of 5 requests per minute.' };
+                        return { success: false, reason: errorReason };
                     }
                     return { success: true, data: json["Time Series (Daily)"] };
                 } catch (error) {
-                    console.error(`Error fetching historical data for ${symbol}:`, error);
-                    return { success: false, symbol, reason: error.message };
+                    console.error(`Error fetching historical data for ${symbol} (Alpha Vantage):`, error);
+                    return { success: false, symbol, reason: `Alpha Vantage Historical Data Error: ${error.message}` };
                 }
             }
-            
-            // Utility function to check for mutual fund symbol pattern (unchanged)
-            isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
         }
         
         class StockTracker {
@@ -3236,17 +3302,23 @@
                         historicalData = this.chartDataCache[symbol];
                     } else {
                         // Check if Alpha Vantage Key is set before fetching
-                        if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
-                            drawError("Alpha Vantage Key Missing. Cannot load chart data.");
-                            return;
+                        if (!this.config.alphaVantageKey || !this.config.fmpApiKey) {
+                             drawError("API Keys Missing. Check Settings (Need FMP or Alpha Vantage).");
+                             return;
                         }
                         
                         this.showLoading(true, `Fetching chart data for ${symbol}...`);
+                        // Use the updated fetchHistoricalData with FMP priority
                         const result = await this.apiService.fetchHistoricalData(symbol);
                         this.showLoading(false);
                         
                         if (!result.success) {
-                            drawError(result.reason.includes('rate limit') ? "Rate Limit Hit. Wait a minute." : `API Error: ${result.reason}`);
+                            // Check for premium/rate limit specific errors
+                            let displayError = result.reason;
+                            if (result.reason.includes('Alpha Vantage: Premium endpoint') || result.reason.includes('Alpha Vantage: Rate limit')) {
+                                displayError = "Chart data failed. Alpha Vantage rate limit hit or premium access required.";
+                            }
+                            drawError(displayError);
                             throw new Error(result.reason); // Throw to skip further processing
                         }
                         this.chartDataCache[symbol] = result.data;
@@ -3255,6 +3327,7 @@
 
                     const allDataPoints = Object.entries(historicalData).map(([date, values]) => ({
                         x: new Date(date),
+                        // The FMP conversion stores the close price under "4. close" for compatibility
                         y: parseFloat(values['4. close'])
                     })).sort((a, b) => a.x - b.x);
                     
@@ -3287,7 +3360,19 @@
 
                     const firstPrice = chartData[0].y;
                     const lastPrice = chartData[chartData.length - 1].y;
-                    const borderColor = lastPrice >= firstPrice ? 'var(--color-positive)' : 'var(--color-negative)';
+                    const isPositive = lastPrice >= firstPrice;
+                    const borderColor = isPositive ? 'var(--color-positive)' : 'var(--color-negative)';
+                    
+                    // MODIFIED: Fetch raw RGB color for gradient calculation (Fixes SyntaxError)
+                    const fillRgb = window.getComputedStyle(document.body)
+                        .getPropertyValue(isPositive ? '--chart-positive-fill-color-rgb' : '--chart-negative-fill-color-rgb')
+                        .trim();
+
+                    // 2. Create Gradient
+                    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                    gradient.addColorStop(0, `rgba(${fillRgb}, 0.3)`);
+                    gradient.addColorStop(1, `rgba(${fillRgb}, 0)`);
+                    
                     const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                     const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
 
@@ -3301,6 +3386,8 @@
                                 tension: 0.1,
                                 borderWidth: 2,
                                 pointRadius: 0,
+                                fill: true, // Enable fill
+                                backgroundColor: gradient, // Use the dynamically created gradient
                             }]
                         },
                         options: {
@@ -3518,13 +3605,12 @@
                 const isPositive = lastValue >= firstValue;
                 
                 // Use CSS variables for dynamic colors
-                const positiveRgb = document.body.classList.contains('dark-mode') ? 
-                    'var(--chart-positive-fill-color-rgb)' : 'var(--chart-positive-fill-color-rgb)';
-                const negativeRgb = document.body.classList.contains('dark-mode') ? 
-                    'var(--chart-negative-fill-color-rgb)' : 'var(--chart-negative-fill-color-rgb)';
-
                 const mainColor = isPositive ? 'var(--color-positive)' : 'var(--color-negative)';
-                const fillRgb = isPositive ? positiveRgb : negativeRgb;
+                
+                // MODIFIED: Fetch raw RGB color for gradient calculation
+                const fillRgb = window.getComputedStyle(document.body)
+                    .getPropertyValue(isPositive ? '--chart-positive-fill-color-rgb' : '--chart-negative-fill-color-rgb')
+                    .trim();
 
                 // 2. Create Gradient
                 const gradient = ctx.createLinearGradient(0, 0, 0, 400); // 400px is the canvas height
@@ -3670,7 +3756,7 @@
                 const fmpKey = this.elements.modalFmpKey ? this.elements.modalFmpKey.value.trim() : '';
                 const interval = parseInt(this.elements.modalRefreshInterval ? this.elements.modalRefreshInterval.value : 0, 10);
                 localStorage.setItem('finnhubApiKey', finnhubKey);
-                localStorage.setItem('alphaVantageKey', alphaVantageKey);
+                localStorage.setItem('alphaVantageApiKey', alphaVantageKey);
                 localStorage.setItem('fmpApiKey', fmpKey);
                 if (interval && interval >= 10) {
                     localStorage.setItem('refreshIntervalMs', interval * 1000);
