@@ -1,7 +1,3 @@
-
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -354,11 +350,16 @@
             gap: 24px;
             text-align: center;
         }
+        .summary-item {
+            /* This ensures better alignment of text when blur is active */
+            line-height: 1.2;
+        }
         .summary-label {
             font-size: 1rem;
             color: rgba(255, 255, 255, 0.8);
             margin-bottom: 8px;
             text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            display: block; /* Important for flow */
         }
         .summary-value {
             font-size: 1.6rem;
@@ -733,6 +734,7 @@
         .card-actions {
             margin-top: 20px;
             display: grid;
+            /* Default to 2 columns, will be overridden */
             grid-template-columns: 1fr 1fr;
             gap: 12px;
         }
@@ -750,12 +752,19 @@
         .transaction-btn.sell-btn {
             background-color: var(--color-negative);
         }
+        /* EDITS: Updated edit button style */
         .add-btn.edit-btn {
              background-color: var(--bg-tertiary) !important;
              color: var(--text-primary) !important;
              border: 1px solid var(--border-color) !important;
-             width: 100%;
+             box-shadow: none !important;
         }
+        .add-btn.edit-btn:hover {
+             background-color: var(--border-color) !important;
+             transform: none !important;
+             box-shadow: var(--shadow-sm) !important;
+        }
+
         .transaction-details {
             margin-top: 16px;
         }
@@ -765,6 +774,7 @@
             align-items: center;
             cursor: pointer;
             padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
         }
         .transaction-header h4 { font-size: 1rem; }
         .transactions-container {
@@ -773,7 +783,7 @@
              overflow: hidden;
         }
         .transactions-container.collapsed {
-            max-height: 0; opacity: 0; margin-top: 0; pointer-events: none;
+            max-height: 0; opacity: 0; margin-top: 0; padding-top: 0; pointer-events: none;
         }
         .transaction-entry {
             background-color: var(--bg-tertiary);
@@ -797,6 +807,7 @@
             padding: 5px 10px;
             border-radius: var(--radius-sm);
             cursor: pointer;
+            font-size: 0.8rem;
         }
         .delete-transaction-btn {
             background: transparent; border: none; font-size: 1.2rem;
@@ -1172,6 +1183,7 @@
   </div>
 
   <script>
+  // This Chart.js setup script remains here for the portfolio performance chart initialization and logic
   document.addEventListener("DOMContentLoaded", () => {
     const canvas = document.getElementById("portfolioPerformanceChart");
     const ctx = canvas.getContext("2d");
@@ -1358,15 +1370,15 @@
                 <input type="text" class="search-input" id="edit-stock-name" placeholder="Company Name">
             </div>
             <div class="transaction-input-group">
-                <label for="edit-stock-shares">Shares (Edit First Buy):</label>
+                <label for="edit-stock-shares">Shares (Initial Buy):</label>
                 <input type="number" class="search-input" id="edit-stock-shares" placeholder="Total Shares (First Buy)">
             </div>
             <div class="transaction-input-group">
-                <label for="edit-stock-cost">Average Cost (Edit First Buy):</label>
+                <label for="edit-stock-cost">Average Cost (Initial Buy):</label>
                 <input type="number" class="search-input" id="edit-stock-cost" placeholder="Average Cost Basis">
             </div>
             <div class="transaction-input-group">
-                <label for="edit-stock-date">Initial Buy Date (Edit First Buy):</label>
+                <label for="edit-stock-date">Initial Buy Date (Initial Buy):</label>
                 <input type="date" class="search-input" id="edit-stock-date">
             </div>
             <div class="transaction-input-group">
@@ -1631,7 +1643,7 @@
                     if (!response.ok) return { success: false, reason: `HTTP Error: ${response.status}` };
                     const json = await response.json();
                     if (json["Error Message"] || !json["Time Series (Daily)"]) {
-                        return { success: false, reason: json["Information"] || json["Error Message"] || 'Invalid API payload from Alpha Vantage. The free tier has a low request limit.' };
+                        return { success: false, reason: json["Information"] || json["Error Message"] || 'Invalid API payload from Alpha Vantage. The free tier has a low request limit in 5 API calls per minute.' };
                     }
                     return { success: true, data: json["Time Series (Daily)"] };
                 } catch (error) {
@@ -1977,6 +1989,12 @@
                 if (!clickedButton && event.target.closest('.stock-card, .fund-card')) {
                     const card = event.target.closest('.stock-card, .fund-card');
                     if(card) {
+                        // Toggle collapse for stock/fund card
+                        if(card.classList.contains('closed-position') && !event.target.closest('.transaction-header')) {
+                            // Don't expand closed positions on click unless it's the transaction header
+                            return;
+                        }
+
                         card.classList.toggle('expanded');
                         if (card.classList.contains('expanded')) {
                             this.renderCardChart(card.dataset.symbol);
@@ -1985,7 +2003,21 @@
                     return;
                 }
                 
-                if (!clickedButton) return;
+                if (!clickedButton) {
+                    // Handle transaction header click
+                    const transactionHeader = event.target.closest('.transaction-header');
+                    if (transactionHeader) {
+                        const container = transactionHeader.nextElementSibling;
+                        if (container) {
+                            container.classList.toggle('collapsed');
+                            transactionHeader.classList.toggle('collapsed');
+                            const toggleIcon = transactionHeader.querySelector('.toggle-icon');
+                            if(toggleIcon) toggleIcon.style.transform = container.classList.contains('collapsed') ? 'rotate(0deg)' : 'rotate(90deg)';
+                        }
+                    }
+                    return;
+                }
+                
                 const card = clickedButton.closest('.stock-card, .fund-card, .watchlist-card');
                 if (!card) return;
                 
@@ -2025,7 +2057,7 @@
                 } else if (clickedButton.classList.contains('sell-btn')) {
                     this.openTransactionModal(id, type, 'sell');
                 } else if (clickedButton.classList.contains('edit-btn')) {
-                    this.openEditStockModal(id);
+                    this.openEditStockModal(id); // Re-enabled Edit Button
                 } else if (clickedButton.classList.contains('set-alert-btn')) {
                     this.openPriceAlertModal(item.symbol);
                 } else if (clickedButton.classList.contains('move-to-portfolio-btn')) {
@@ -2533,8 +2565,11 @@
                 if (transactionType === 'dividend') {
                     if(this.elements.modalPrice) this.elements.modalPrice.parentNode.style.display = 'none';
                     if(this.elements.modalPlatform) this.elements.modalPlatform.parentNode.style.display = 'none';
+                    if(this.elements.modalShares) this.elements.modalShares.parentNode.style.display = 'none';
                     if(this.elements.modalDividendFields) this.elements.modalDividendFields.style.display = 'block';
+                    if(this.elements.modalTitleAction) this.elements.modalTitleAction.textContent = transactionIndex > -1 ? 'Edit Dividend' : 'Record Dividend';
                 }
+
                 if(this.elements.modalSaveBtn) Object.assign(this.elements.modalSaveBtn.dataset, { id, type, transactionType, transactionIndex });
             }
             closeTransactionModal() { if(this.elements.transactionModal) this.elements.transactionModal.style.display = 'none'; }
@@ -2596,7 +2631,29 @@
                     }
 
                 } else if (transactionType === 'dividend') {
-                    // Dividend logic remains the same
+                    const amountPerShare = parseFloat(this.elements.modalDividendAmount ? this.elements.modalDividendAmount.value : 0);
+                    const totalSharesOwned = this.calculateTransactionStats(item.transactions, item.price).totalSharesOwned;
+
+                    if (isNaN(amountPerShare) || amountPerShare < 0) {
+                        this.showError('Invalid dividend amount. Amount per share must be non-negative.');
+                        return;
+                    }
+
+                    if (!item.dividends) item.dividends = [];
+                    
+                    const newDividend = {
+                        amountPerShare: amountPerShare,
+                        totalAmount: totalSharesOwned * amountPerShare,
+                        shares: totalSharesOwned,
+                        note: this.elements.modalNote ? this.elements.modalNote.value.trim() : '',
+                        date: transactionDateISO
+                    };
+
+                    if (isEditing) {
+                        item.dividends[index] = newDividend;
+                    } else {
+                        item.dividends.push(newDividend);
+                    }
                 }
         
                 await this.saveData();
@@ -2621,6 +2678,22 @@
                     }
                 });
             }
+
+            removeDividend(id, index, type) {
+                this.openConfirmModal('Delete this dividend entry?', async () => {
+                    const itemList = (type === 'stock') ? this.stocks : this.mutualFunds;
+                    const item = itemList.find(i => i.id === id);
+                    if (item && item.dividends && index >= 0 && index < item.dividends.length) {
+                        item.dividends.splice(index, 1);
+                        this.showSuccess(`🗑️ Deleted dividend for ${item.symbol}.`);
+                        await this.saveData();
+                        this.renderContent();
+                    } else {
+                         this.showError(`Error: Dividend index ${index} not found for ${item.symbol}.`);
+                    }
+                });
+            }
+
             renderGroupedStocks(items, container, type) {
                 // 1. Separate items into Active (shares > 0 or data mismatch) and Closed (shares = 0 and has transactions)
                 const activeItems = [];
@@ -2836,6 +2909,49 @@
                 parent.appendChild(groupWrapper);
                 this.renderCards(itemList, content, type);
             }
+
+            renderTransactions(transactions = [], dividends = [], itemId, type) {
+                const all = [...(transactions || []).map((t, i) => ({ ...t, index: i, date: new Date(t.date), kind: 'transaction' })),
+                             ...(dividends || []).map((d, i) => ({ ...d, index: i, date: new Date(d.date), kind: 'dividend' }))]
+                    .sort((a, b) => b.date - a.date); // Sort newest first
+
+                if (all.length === 0) return `<p style="text-align: center; color: var(--text-secondary); padding: 5px;">No transactions recorded.</p>`;
+
+                return all.map(entry => {
+                    if (entry.kind === 'dividend') {
+                        return `
+                            <div class="transaction-entry">
+                                <div class="transaction-info">
+                                    <span class="positive"><strong>DIVIDEND</strong> - ${this.formatCurrency(entry.totalAmount)}</span>
+                                    <span>Shares: ${this.formatNumber(entry.shares, 3)} @ ${this.formatCurrency(entry.amountPerShare)} per share</span>
+                                    <span style="font-size: 0.8rem; color: var(--text-secondary);">${new Date(entry.date).toLocaleDateString()}</span>
+                                </div>
+                                <div class="transaction-entry-controls">
+                                    <button onclick="window.stockTracker.removeDividend('${itemId}', ${entry.index}, '${type}')" class="delete-transaction-btn">&times;</button>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        const transactionClass = entry.type === 'buy' ? 'buy' : 'sell';
+                        const actionText = entry.type.toUpperCase();
+                        return `
+                            <div class="transaction-entry">
+                                <div class="transaction-info">
+                                    <span class="${transactionClass}"><strong>${actionText}</strong> ${this.formatNumber(entry.shares, 3)} shares @ ${this.formatCurrency(entry.price)}</span>
+                                    <span style="font-size: 0.8rem; color: var(--text-secondary);">
+                                        ${entry.platform || 'Unspecified'} - ${new Date(entry.date).toLocaleDateString()}
+                                    </span>
+                                    ${entry.note ? `<span style="font-style: italic; color: var(--text-secondary); font-size: 0.8rem;">Note: ${entry.note}</span>` : ''}
+                                </div>
+                                <div class="transaction-entry-controls">
+                                    <button data-index="${entry.index}" class="edit-transaction-btn">Edit</button>
+                                    <button data-index="${entry.index}" class="delete-transaction-btn">&times;</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }).join('');
+            }
             
             renderCards(itemList, container, type) {
                 if (!container.classList.contains('group-content')) {
@@ -2851,7 +2967,6 @@
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
                     
                     let stockInfoHTML = '';
-                    let transactionDetailsHTML = '';
                     let cardChartHTML = '';
                     let isClosedPosition = false;
 
@@ -2914,6 +3029,54 @@
                     }
                     
                     const todayPL = (item.change || 0) * stats.totalSharesOwned; 
+                    
+                    let cardActionsHTML = '';
+                    if (type === 'watchlist') {
+                         cardActionsHTML = `
+                            <div class="card-actions" style="grid-template-columns: 1fr 1fr;">
+                                <button class="add-btn move-to-portfolio-btn" data-id="${item.id}" data-type="${type}">Move to Portfolio</button>
+                                <button class="add-btn set-alert-btn" data-id="${item.id}" data-type="${type}">Set Price Alert</button>
+                            </div>
+                        `;
+                    } else if (!isClosedPosition) {
+                        // Stock or Fund with an active position or with data mismatch
+                         cardActionsHTML = `
+                            <div class="card-actions" style="grid-template-columns: repeat(4, 1fr); margin-top: 10px;">
+                                <button class="add-btn buy-btn transaction-btn" data-id="${item.id}" data-type="${type}">Buy</button>
+                                <button class="add-btn sell-btn transaction-btn" data-id="${item.id}" data-type="${type}">Sell</button>
+                                <button class="add-btn set-alert-btn" data-id="${item.id}" data-type="${type}">Alert</button>
+                                <button class="add-btn edit-btn" data-id="${item.id}" data-type="${type}">Edit Details</button>
+                            </div>
+                            <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 12px;">
+                                <button class="add-btn transaction-btn" style="background-color: var(--color-positive); opacity: 0.8;" onclick="window.stockTracker.openTransactionModal('${item.id}', '${type}', 'dividend')">Record Dividend</button>
+                            </div>
+                            <div class="transaction-details">
+                                <div class="transaction-header">
+                                    <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
+                                </div>
+                                <div class="transactions-container">
+                                    ${this.renderTransactions(item.transactions, item.dividends, item.id, type)}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        // Closed Position (only transactions visible)
+                         cardActionsHTML = `
+                            <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 10px;">
+                                <button class="add-btn transaction-btn buy-btn" data-id="${item.id}" data-type="${type}" style="background-color: var(--color-positive);">Re-open Position (Buy)</button>
+                            </div>
+                            <div class="transaction-details">
+                                <div class="transaction-header">
+                                    <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
+                                </div>
+                                <div class="transactions-container collapsed">
+                                    ${this.renderTransactions(item.transactions, item.dividends, item.id, type)}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+
                     card.innerHTML = `
                         <div class="stock-header">
                             <span class="${type}-symbol stock-symbol">${item.symbol}</span>
@@ -2925,24 +3088,12 @@
                         </div>
                         <div class="stock-info">${stockInfoHTML}</div>
                         ${cardChartHTML}
-                        ${transactionDetailsHTML}
+                        ${cardActionsHTML}
                         <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}` : ''}</div>
                     `;
                     
                     container.appendChild(card);
-                    const transactionHeader = card.querySelector('.transaction-header');
-                    if (transactionHeader) {
-                        const toggleTransactions = () => {
-                            const container = transactionHeader.nextElementSibling;
-                            if (container) {
-                                container.classList.toggle('collapsed');
-                                transactionHeader.classList.toggle('collapsed');
-                                const toggleIcon = transactionHeader.querySelector('.toggle-icon');
-                                if(toggleIcon) toggleIcon.style.transform = container.classList.contains('collapsed') ? 'rotate(0deg)' : 'rotate(90deg)';
-                            }
-                        };
-                        transactionHeader.addEventListener('click', toggleTransactions);
-                    }
+                    // No need to add extra event listeners here, as handleCardAction handles the delegated events.
                 });
             }
 
@@ -3586,7 +3737,7 @@
                 allAlerts.forEach(alert => {
                     let alertText;
                     if (alert.type === 'range') {
-                        alertText = `Alert: Price is between <span class="positive">${this.formatCurrency(alert.priceLower)}</span> and <span class="positive">${this.formatCurrency(alert.priceUpper)}</span>`;
+                        alertText = `Alert: Price is at or between <span class="positive">${this.formatCurrency(alert.priceLower)}</span> and <span class="positive">${this.formatCurrency(alert.priceUpper)}</span>`;
                     } else {
                         const priceClass = alert.condition === 'above' ? 'positive' : 'negative';
                         alertText = `Alert: Price is <span class="${priceClass}">${alert.condition} ${this.formatCurrency(alert.price)}</span>`;
@@ -3726,16 +3877,27 @@
             openEditStockModal(id) {
                 const item = this.stocks.find(s => s.id === id) || this.mutualFunds.find(f => f.id === id);
                 if (!item) return;
-                const stats = this.calculateTransactionStats(item.transactions, item.price);
-                const firstBuyTransaction = item.transactions ? item.transactions.find(t => t.type === 'buy') : null;
-                const initialDate = firstBuyTransaction ? firstBuyTransaction.date.split('T')[0] : '';
+                
+                const currentStats = this.calculateTransactionStats(item.transactions, item.price);
+
+                // Find the first original 'buy' transaction to use for initial edit values
+                const firstBuyTransaction = item.transactions ? item.transactions.find(t => t.type === 'buy' && t.note !== 'Initial Basis (via Edit Stock Details)') : null;
+                
+                // Fallback to latest transaction if no clean buy is found, or use an injected one if it exists
+                const initialTransaction = firstBuyTransaction || (item.transactions || []).find(t => t.note === 'Initial Basis (via Edit Stock Details)') || item.transactions?.[0];
+
+                const initialDate = initialTransaction ? initialTransaction.date.split('T')[0] : new Date().toISOString().split('T')[0];
+                const initialShares = initialTransaction ? initialTransaction.shares : (currentStats.totalSharesOwned > 0 ? currentStats.totalSharesOwned : 0);
+                const initialCost = initialTransaction ? initialTransaction.price : (currentStats.averageCostBasis > 0 ? currentStats.averageCostBasis : 0);
+                const initialPlatform = initialTransaction?.platform || '';
+                
                 if(this.elements.editStockModal) this.elements.editStockModal.style.display = 'flex';
                 if(this.elements.editStockSymbolDisplay) this.elements.editStockSymbolDisplay.textContent = item.symbol;
                 if(this.elements.editStockSymbol) this.elements.editStockSymbol.value = item.symbol || '';
                 if(this.elements.editStockName) this.elements.editStockName.value = item.name || '';
-                if(this.elements.editStockPlatform) this.elements.editStockPlatform.value = firstBuyTransaction?.platform || ''; 
-                if(this.elements.editStockShares) this.elements.editStockShares.value = stats.totalSharesOwned > 0 ? stats.totalSharesOwned.toFixed(3) : 0;
-                if(this.elements.editStockCost) this.elements.editStockCost.value = stats.averageCostBasis > 0 ? stats.averageCostBasis.toFixed(4) : 0;
+                if(this.elements.editStockPlatform) this.elements.editStockPlatform.value = initialPlatform; 
+                if(this.elements.editStockShares) this.elements.editStockShares.value = this.formatNumber(initialShares, 3);
+                if(this.elements.editStockCost) this.elements.editStockCost.value = this.formatNumber(initialCost, 4);
                 if(this.elements.editStockDate) this.elements.editStockDate.value = initialDate;
                 if(this.elements.saveStockEditBtn) this.elements.saveStockEditBtn.dataset.id = id;
             }
@@ -3750,6 +3912,7 @@
                 const newShares = parseFloat(this.elements.editStockShares ? this.elements.editStockShares.value : 0);
                 const newCost = parseFloat(this.elements.editStockCost ? this.elements.editStockCost.value : 0);
                 const newDateInput = this.elements.editStockDate ? this.elements.editStockDate.value : '';
+                
                 let item = this.stocks.find(s => s.id === id) || this.mutualFunds.find(f => f.id === id);
                 if (!item || !newSymbol || !newName) {
                     this.showError("Symbol and Name are required.");
@@ -3763,27 +3926,37 @@
                 item.symbol = newSymbol;
                 item.name = newName;
                 
-                if (item.transactions && item.transactions.length > 0) {
-                    let firstBuyIndex = item.transactions.findIndex(t => t.type === 'buy');
-                    if (firstBuyIndex !== -1) {
-                        item.transactions[firstBuyIndex].shares = newShares;
-                        item.transactions[firstBuyIndex].price = newCost;
-                        item.transactions[firstBuyIndex].date = new Date(newDateInput).toISOString();
-                        item.transactions[firstBuyIndex].platform = newPlatform; // Update platform on first buy
-                    } else { 
-                         item.transactions.push({
-                            type: 'buy', shares: newShares, price: newCost, platform: newPlatform,
-                            note: 'Initial Basis (via Edit Stock Details)',
-                            date: new Date(newDateInput).toISOString()
-                        });
-                    }
-                } else if (newShares > 0) {
-                     item.transactions = [{
+                const existingTransactionIndex = (item.transactions || []).findIndex(t => t.note === 'Initial Basis (via Edit Stock Details)');
+                
+                // If the user has more than 1 transaction (meaning a real history exists), we only update the item name/symbol.
+                if ((item.transactions || []).filter(t => t.type === 'buy').length > 1 && existingTransactionIndex === -1) {
+                     this.showError("Cannot overwrite transaction history. Symbol and Name updated only.");
+                } else {
+                    // Scenario: Only one transaction (the original buy) or no transactions (need to create one)
+                    const initialBuyTransaction = {
                         type: 'buy', shares: newShares, price: newCost, platform: newPlatform,
                         note: 'Initial Basis (via Edit Stock Details)',
                         date: new Date(newDateInput).toISOString()
-                    }];
+                    };
+                    
+                    if (existingTransactionIndex !== -1) {
+                        // Update the existing placeholder transaction
+                        item.transactions[existingTransactionIndex] = initialBuyTransaction;
+                    } else if ((item.transactions || []).length === 0) {
+                        // No transactions at all, add one
+                        item.transactions = [initialBuyTransaction];
+                    } else if ((item.transactions || []).filter(t => t.type === 'buy').length === 1 && (item.transactions || []).filter(t => t.type === 'sell').length === 0) {
+                        // Only one original buy transaction exists, replace it
+                        const originalIndex = item.transactions.findIndex(t => t.type === 'buy');
+                        if (originalIndex !== -1) {
+                            item.transactions[originalIndex] = initialBuyTransaction;
+                        }
+                    } else {
+                        // More complex history exists, only modify symbol/name
+                        this.showError("Transaction history is complex. Only Symbol and Name updated.");
+                    }
                 }
+                
                 await this.saveData();
                 this.renderContent();
                 this.closeEditStockModal();
