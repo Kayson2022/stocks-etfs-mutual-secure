@@ -1644,7 +1644,7 @@
                     return { success: true, data: json["Time Series (Daily)"] };
                 } catch (error) {
                     console.error(`Error fetching historical data for ${symbol}:`, error);
-                    return { success: false, reason: error.message };
+                    return { success: false, symbol, reason: error.message };
                 }
             }
         }
@@ -3092,6 +3092,27 @@
                     // No need to add extra event listeners here, as handleCardAction handles the delegated events.
                 });
             }
+            
+            getOldestTransactionDate(item) {
+                const transactions = item.transactions || [];
+                if (transactions.length === 0) {
+                    // Return 5 years ago if no transactions found, matching the default '5Y' data range
+                    const d = new Date();
+                    d.setFullYear(d.getFullYear() - 5);
+                    return d;
+                }
+                
+                // Find the transaction with the minimum (oldest) date
+                const oldestTransaction = transactions.reduce((oldest, current) => {
+                    const oldestDate = new Date(oldest.date);
+                    const currentDate = new Date(current.date);
+                    return currentDate < oldestDate ? current : oldest;
+                });
+                
+                // Return the date object of the oldest transaction
+                return new Date(oldestTransaction.date);
+            }
+
 
             async renderCardChart(symbol, range = '1Y') {
                 const card = document.querySelector(`.stock-card[data-symbol="${symbol}"], .fund-card[data-symbol="${symbol}"]`);
@@ -3110,7 +3131,6 @@
                     if(newActiveButton) newActiveButton.classList.add('active');
                 }
                 
-
                 // Destroy previous chart instance if it exists
                 if (this.cardChartInstances[chartId]) {
                     this.cardChartInstances[chartId].destroy();
@@ -3135,7 +3155,11 @@
                         x: new Date(date),
                         y: parseFloat(values['4. close'])
                     })).sort((a, b) => a.x - b.x);
-
+                    
+                    // --- NEW LOGIC: Determine Chart Start Date ---
+                    const item = this.stocks.find(s => s.symbol === symbol) || this.mutualFunds.find(f => f.symbol === symbol);
+                    const oldestBuyDate = item ? this.getOldestTransactionDate(item) : new Date(0);
+                    
                     const now = new Date();
                     let startDate = new Date();
 
@@ -3147,7 +3171,10 @@
                         case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
                         case '3Y': startDate.setFullYear(now.getFullYear() - 3); break;
                         case '5Y': startDate.setFullYear(now.getFullYear() - 5); break;
-                        case 'All': startDate = new Date(0); break; // Start from the beginning of time
+                        case 'All': 
+                            // Use the oldest transaction date if available, otherwise default to oldest available historical data
+                            startDate = oldestBuyDate;
+                            break;
                         default: startDate.setFullYear(now.getFullYear() - 1); break;
                     }
 
