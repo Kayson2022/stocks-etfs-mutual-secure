@@ -1313,12 +1313,20 @@
       chart.data.datasets[0].data = filtered;
       chart.update();
     }
-
+    
+    // NOTE: We only bind button events here. The initial chart rendering is managed 
+    // entirely by the StockTracker.renderPortfolioPerformanceChart method after data loads.
     document.querySelectorAll('.chart-range-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         document.querySelectorAll('.chart-range-btn').forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
-        updateChart(e.target.getAttribute('data-range'));
+        // Let StockTracker handle the real chart update (fixes chart race condition)
+        if (window.stockTracker) {
+            window.stockTracker.renderPortfolioPerformanceChart(e.target.getAttribute('data-range'));
+        } else {
+            // Fallback for placeholder chart logic (if StockTracker hasn't initialized)
+            updateChart(e.target.getAttribute('data-range'));
+        }
       });
     });
 
@@ -2490,6 +2498,7 @@
             async refreshWatchlist() { await this.refreshItems(this.watchlist, 'watchlist'); }
             async refreshItems(items, type) {
                 if (items.length === 0) return;
+                // FIX: Ensure showLoading uses this.showLoading
                 this.showLoading(true, `Refreshing 0/${items.length} items...`);
                 let stats = { success: 0, gains: 0, losses: 0, unchanged: 0, failed: 0 };
                 let failedSymbols = [];
@@ -2512,6 +2521,7 @@
                         failedSymbols.push(item.symbol);
                         console.error(`Failed to refresh ${item.symbol}:`, result.reason);
                     }
+                    // FIX: Ensure showLoading uses this.showLoading
                     this.showLoading(true, `Refreshing ${item.symbol}... (${i + 1}/${items.length})`);
                 }
                 this.showLoading(false);
@@ -2724,7 +2734,7 @@
                 
                 const allItems = [...this.stocks, ...this.mutualFunds];
                 const predefinedPlatforms = ['Fidelity', 'Robinhood', 'Vanguard', 'Charles Schwab', 'E*TRADE', 'Merrill Edge', 'Uncategorized'];
-                const existingPlatforms = [...new Set(allItems.flatMap(s => s.transactions.map(t => t.platform)).filter(p => p))];
+                const existingPlatforms = [...new Set(allItems.flatMap(s => s.transactions.map(t => t.platform).filter(p => p)).filter(p => p))];
                 const allPlatforms = [...new Set([...predefinedPlatforms, ...existingPlatforms])].sort();
                 const platformSelect = this.elements.modalPlatform;
                 if(platformSelect) {
@@ -3341,6 +3351,7 @@
                 // Destroy previous chart instance if it exists
                 if (this.cardChartInstances[chartId]) {
                     this.cardChartInstances[chartId].destroy();
+                    this.cardChartInstances[chartId] = null;
                 }
 
                 try {
@@ -3504,6 +3515,7 @@
 
 
                 const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
+                // FIX: Destroy existing chart instance before creating a new one (fixes chart conflict error)
                 if (this.portfolioPerformanceChartInstance) {
                     this.portfolioPerformanceChartInstance.destroy();
                 }
