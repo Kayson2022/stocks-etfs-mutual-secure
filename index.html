@@ -4153,232 +4153,319 @@
         window.stockTracker = new StockTracker();
     </script>
 
-<!-- Injected override to fix card chart data sourcing and chart reuse errors -->
+<!-- BEGIN: Enhancements injected: Finnhub handling, News tab, Chart destroy -->
 <script>
 (function(){
-  function isMutualFundSymbol(sym) {
-    return typeof sym === 'string' && sym.length === 5 && sym.endsWith('X');
+  // session flag to stop retrying Finnhub after 403
+  let _finnhubDisabled = false;
+
+  // utility to get api keys from localStorage or window.apiService.config
+  function getApiKeys() {
+    const local = { finnhub: null, fmp: null };
+    try {
+      const cfg = window.apiService && window.apiService.config ? window.apiService.config : {};
+      local.finnhub = (cfg.finnhubApiKey || localStorage.getItem('finnhubApiKey') || '').trim();
+      local.fmp = (cfg.fmpApiKey || localStorage.getItem('fmpApiKey') || '').trim();
+    } catch(e){}
+    return local;
   }
 
   async function fetchFinnhubHistorical(apiKey, symbol, fromTs, toTs) {
+    if (_finnhubDisabled) return { success:false, reason:'Finnhub disabled after previous 403' };
+    const key = (apiKey||'').trim();
+    if (!key) return { success:false, reason:'Finnhub key missing' };
     try {
-      const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}&token=${apiKey}`;
+      const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}&token=${encodeURIComponent(key)}`;
       const resp = await fetch(url);
-      if (!resp.ok) return { success: false, reason: `Finnhub HTTP ${resp.status}` };
-      const json = await resp.json();
-      if (json.s !== 'ok' || !json.t || !json.c) return { success: false, reason: 'Finnhub returned no candle data' };
-      // convert to AlphaVantage-like object: { "YYYY-MM-DD": { "4. close": "123.45" }, ... }
-      const res = {};
-      for (let i = 0; i < json.t.length; i++) {
-        const dt = new Date(json.t[i] * 1000).toISOString().slice(0,10);
-        res[dt] = { "4. close": String(json.c[i]) };
-      }
-      return { success: true, data: res };
-    } catch (err) {
-      return { success: false, reason: 'Finnhub error: ' + err.message };
-    }
+      if (resp.status === 403) { _finnhubDisabled = true; return { success:false, reason:'Finnhub 403 Forbidden' }; }
+      if (!resp.ok) return { success:false, reason:'Finnhub HTTP ' + resp.status };
+      const j = await resp.json();
+      if (j.s !== 'ok' || !j.t || !j.c) return { success:false, reason:'Finnhub no data' };
+      const out = {};
+      for (let i=0;i<j.t.length;i++){ const dt = new Date(j.t[i]*1000).toISOString().slice(0,10); out[dt] = {'4. close': String(j.c[i])}; }
+      return { success:true, data: out };
+    } catch(err){ return { success:false, reason:'Finnhub error ' + err.message }; }
   }
 
-  // Wait for stockTracker to be ready, then override its method
-  function applyOverride() {
-    if (!window.stockTracker) {
-      setTimeout(applyOverride, 300);
-      return;
-    }
-    const tracker = window.stockTracker;
+  async function fetchFmpHistorical(apiKey, symbol) {
+    const key = (apiKey||'').trim();
+    if (!key) return { success:false, reason:'FMP key missing' };
+    try {
+      const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${encodeURIComponent(symbol)}?apikey=${encodeURIComponent(key)}`;
+      const r = await fetch(url);
+      if (!r.ok) return { success:false, reason:'FMP HTTP ' + r.status };
+      const j = await r.json();
+      if (!j.historical) return { success:false, reason: j.Error || 'FMP no historical' };
+      const out = {}; j.historical.forEach(e=> out[e.date] = {'4. close': String(e.close)});
+      return { success:true, data: out };
+    } catch(err){ return { success:false, reason:'FMP error ' + err.message }; }
+  }
 
-    tracker._safeDrawError = function(cardId, message) {
+  // override stockTracker.renderCardChart if exists, else provide safe helper for card charts
+  function applyChartFix() {
+    const tracker = window.stockTracker;
+    if (!tracker) return;
+    // ensure cardChartInstances exists
+    if (!tracker.cardChartInstances) tracker.cardChartInstances = {};
+
+    // safe destroy global portfolio chart too
+    const safeDestroy = (id) => {
       try {
-        const canvas = document.getElementById(cardId);
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (tracker.cardChartInstances && tracker.cardChartInstances[cardId]) {
-          try { tracker.cardChartInstances[cardId].destroy(); } catch(e) {}
-          delete tracker.cardChartInstances[cardId];
-        }
-        ctx.clearRect(0,0,canvas.width, canvas.height);
-        ctx.textAlign = 'center';
-        ctx.fillStyle = tracker.isDarkMode ? '#adb5bd' : '#6c757d';
-        ctx.font = "14px 'Inter', sans-serif";
-        ctx.fillText(message, canvas.width/2, canvas.height/2);
-      } catch(e) { console.error('safeDrawError failed', e); }
+        const ins = window[id];
+        if (ins && typeof ins.destroy === 'function') ins.destroy();
+      } catch(e){}
     };
 
-    tracker.renderCardChart = async function(symbol, range = '1Y') {
+    // patch portfolioPerformanceChart render if exists
+    const origRender = tracker.renderPortfolioPerformanceChart;
+    tracker.renderPortfolioPerformanceChart = async function() {
+      // destroy existing Chart stored on window.portfolioChart
+      if (window.portfolioChart && typeof window.portfolioChart.destroy === 'function') {
+        try { window.portfolioChart.destroy(); } catch(e){}
+        window.portfolioChart = null;
+      }
+      if (typeof origRender === 'function') {
+        try { await origRender.apply(this, arguments); }
+        catch(e){ console.warn('patched renderPortfolioPerformanceChart error', e); }
+      }
+    };
+
+    // override renderCardChart to use Finnhub->FMP->Alpha (alpha left as last resort previously)
+    const origCard = tracker.renderCardChart;
+    tracker.renderCardChart = async function(symbol, range='1Y') {
       try {
         const card = document.querySelector(`.stock-card[data-symbol="${symbol}"], .fund-card[data-symbol="${symbol}"]`);
         if (!card) return;
-        const chartId = `chart-${card.dataset.id}`;
+        const chartId = 'chart-' + (card.dataset.id || symbol);
         const canvas = document.getElementById(chartId);
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
-
-        // Update active button state
-        const chartControls = card.querySelector('.chart-controls');
-        if(chartControls) {
-            chartControls.querySelectorAll('.chart-range-btn').forEach(btn => btn.classList.remove('active'));
-            const newActiveButton = chartControls.querySelector(`[data-range="${range}"]`);
-            if(newActiveButton) newActiveButton.classList.add('active');
+        // destroy previous instance
+        if (tracker.cardChartInstances && tracker.cardChartInstances[chartId]) {
+          try { tracker.cardChartInstances[chartId].destroy(); } catch(e){};
+          delete tracker.cardChartInstances[chartId];
         }
-
-        // destroy existing Chart.js instance if present
-        if (!this.cardChartInstances) this.cardChartInstances = {};
-        if (this.cardChartInstances[chartId]) {
-          try { this.cardChartInstances[chartId].destroy(); } catch(e) {}
-          delete this.cardChartInstances[chartId];
-        }
-
-        // Determine sources order per your requested logic:
-        // 1. Finnhub for Stocks/ETFs (historical candles)
-        // 2. FMP for Mutual Funds (historical)
-        // 3. Alpha Vantage only for Mutual Funds as a last resort
-        let historicalData = null;
+        const api = getApiKeys();
         const now = new Date();
-        const fiveYearsAgo = new Date(now); fiveYearsAgo.setFullYear(now.getFullYear()-5);
+        const fiveYearsAgo = new Date(); fiveYearsAgo.setFullYear(now.getFullYear()-5);
         const fromTs = Math.floor(fiveYearsAgo.getTime()/1000);
         const toTs = Math.floor(now.getTime()/1000);
 
-        const apiCfg = this.apiService?.config || {};
+        let hist = null;
+        // if not mutual fund (heuristic: symbol length <=5 and not ending with X => treat as stock/etf)
+        const isMutual = (symbol && symbol.toUpperCase().endsWith('X'));
 
-        const tryFinnhub = async () => {
-          if (!apiCfg.finnhubApiKey) return { success: false, reason: 'Finnhub key missing' };
-          return await fetchFinnhubHistorical(apiCfg.finnhubApiKey, symbol, fromTs, toTs);
-        };
-
-        const tryFmpHistorical = async () => {
-          if (!apiCfg.fmpApiKey) return { success: false, reason: 'FMP key missing' };
-          try {
-            const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${encodeURIComponent(symbol)}?apikey=${apiCfg.fmpApiKey}`;
-            const r = await fetch(url);
-            if (!r.ok) return { success: false, reason: `FMP HTTP ${r.status}` };
-            const j = await r.json();
-            if (!j.historical) return { success: false, reason: j.Error || 'FMP no historical' };
-            const avCompatible = {};
-            j.historical.forEach(entry => { avCompatible[entry.date] = { "4. close": String(entry.close) }; });
-            return { success: true, data: avCompatible };
-          } catch(err) { return { success:false, reason: 'FMP error: ' + err.message }; }
-        };
-
-        const tryAlphaVantage = async () => {
-          if (!apiCfg.alphaVantageKey) return { success: false, reason: 'Alpha key missing' };
-          try {
-            const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${encodeURIComponent(symbol)}&outputsize=full&apikey=${apiCfg.alphaVantageKey}`;
-            const r = await fetch(url);
-            if (!r.ok) return { success: false, reason: `Alpha HTTP ${r.status}` };
-            const j = await r.json();
-            if (j["Error Message"] && j["Error Message"].includes('premium')) {
-              return { success: false, reason: 'Alpha Premium endpoint (no access)' };
-            }
-            if (!j["Time Series (Daily)"]) return { success: false, reason: j["Information"] || 'Alpha invalid payload' };
-            return { success: true, data: j["Time Series (Daily)"] };
-          } catch(err) { return { success:false, reason: 'Alpha error: ' + err.message }; }
-        };
-
-        // Choose order based on fund vs stock
-        if (isMutualFundSymbol(symbol)) {
-          // Mutual funds: try FMP first, alpha last resort
-          let res = await tryFmpHistorical();
-          if (res.success) historicalData = res.data;
+        if (!isMutual) {
+          let r = await fetchFinnhubHistorical(api.finnhub, symbol, fromTs, toTs);
+          if (r.success) hist = r.data;
           else {
-            console.warn('FMP hist failed for', symbol, res.reason);
-            res = await tryAlphaVantage();
-            if (res.success) historicalData = res.data;
-            else {
-              console.warn('Alpha hist failed for', symbol, res.reason);
-            }
+            console.warn('Finnhub hist failed for', symbol, r.reason);
+            r = await fetchFmpHistorical(api.fmp, symbol);
+            if (r.success) hist = r.data;
+            else console.warn('FMP hist failed for', symbol, r.reason);
           }
         } else {
-          // Stocks/ETFs: try Finnhub first, then FMP, then Alpha as last resort
-          let res = await tryFinnhub();
-          if (res.success) historicalData = res.data;
-          else {
-            console.warn('Finnhub hist failed for', symbol, res.reason);
-            res = await tryFmpHistorical();
-            if (res.success) historicalData = res.data;
-            else {
-              console.warn('FMP hist failed for', symbol, res.reason);
-              res = await tryAlphaVantage();
-              if (res.success) historicalData = res.data;
-              else console.warn('Alpha hist failed for', symbol, res.reason);
-            }
-          }
+          // mutual funds: try FMP then alpha (alpha not implemented here)
+          let r = await fetchFmpHistorical(api.fmp, symbol);
+          if (r.success) hist = r.data;
+          else console.warn('FMP hist failed for', symbol, r.reason);
         }
 
-        if (!historicalData) {
-          // If no historical data found, draw friendly message and exit
-          this._safeDrawError(chartId, 'No historical chart data available.');
+        if (!hist) {
+          // draw message
+          ctx.clearRect(0,0,canvas.width, canvas.height);
+          ctx.textAlign='center'; ctx.fillStyle = '#9aa0a6'; ctx.font="14px Arial";
+          ctx.fillText('No historical chart data available', canvas.width/2, canvas.height/2);
           return;
         }
 
-        // Convert historicalData to array of points sorted by date
-        const allDataPoints = Object.entries(historicalData).map(([date, values]) => ({
-            x: new Date(date),
-            y: parseFloat(values['4. close'])
-        })).sort((a,b)=>a.x-b.x);
+        const pts = Object.entries(hist).map(([date,vals])=>({ x: new Date(date), y: parseFloat(vals['4. close'])}))
+                         .sort((a,b)=>a.x-b.x);
 
-        // Determine start date based on range
+        // range filter
         const now2 = new Date();
-        let startDate = new Date();
+        let start = new Date();
         switch(range) {
-          case '1W': startDate.setDate(now2.getDate()-7); break;
-          case '1M': startDate.setMonth(now2.getMonth()-1); break;
-          case '6M': startDate.setMonth(now2.getMonth()-6); break;
-          case 'YTD': startDate = new Date(now2.getFullYear(),0,1); break;
-          case '1Y': startDate.setFullYear(now2.getFullYear()-1); break;
-          case '3Y': startDate.setFullYear(now2.getFullYear()-3); break;
-          case '5Y': startDate.setFullYear(now2.getFullYear()-5); break;
-          case 'ALL': startDate = new Date(0); break;
-          default: startDate.setFullYear(now2.getFullYear()-1); break;
+          case '1W': start.setDate(now2.getDate()-7); break;
+          case '1M': start.setMonth(now2.getMonth()-1); break;
+          case '6M': start.setMonth(now2.getMonth()-6); break;
+          case 'YTD': start = new Date(now2.getFullYear(),0,1); break;
+          case '1Y': start.setFullYear(now2.getFullYear()-1); break;
+          case '3Y': start.setFullYear(now2.getFullYear()-3); break;
+          case '5Y': start.setFullYear(now2.getFullYear()-5); break;
+          case 'ALL': start = new Date(0); break;
+          default: start.setFullYear(now2.getFullYear()-1); break;
         }
-        const chartData = allDataPoints.filter(dp => dp.x >= startDate);
-
-        if (chartData.length <= 1) {
-          this._safeDrawError(chartId, 'Not enough history for this time range.');
+        const data = pts.filter(p=>p.x>=start);
+        if (data.length<=1) {
+          ctx.clearRect(0,0,canvas.width, canvas.height);
+          ctx.textAlign='center'; ctx.fillStyle = '#9aa0a6'; ctx.font="14px Arial";
+          ctx.fillText('Not enough history for this range', canvas.width/2, canvas.height/2);
           return;
         }
 
-        // Create Chart.js dataset and ensure previous instance destroyed
-        const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
-        const gridColor = this.isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
-        const borderColor = '#10b981';
-        // create gradient
+        // build chart
         const gradient = ctx.createLinearGradient(0,0,0,canvas.height);
         gradient.addColorStop(0, 'rgba(16,185,129,0.25)');
         gradient.addColorStop(1, 'rgba(16,185,129,0.02)');
-
         const cfg = {
-          type: 'line',
-          data: { datasets: [{ label: symbol + ' price', data: chartData, borderColor, tension:0.2, borderWidth:2, pointRadius:2, pointHoverRadius:5, fill:true, backgroundColor: gradient }] },
-          options: {
-            responsive:true, maintainAspectRatio:false,
-            scales: {
-              x: { type:'time', time:{ unit:'month' }, ticks:{ color: labelColor, maxRotation:0, autoSkip:true, maxTicksLimit:6 }, grid:{ display:false } },
-              y: { ticks:{ color: labelColor, callback: (v)=> this.formatCurrency ? this.formatCurrency(v) : '$'+v }, grid:{ color: gridColor, drawBorder:false } }
-            },
-            plugins: { legend:{ display:false }, tooltip:{ mode:'index', intersect:false, callbacks:{ label: (ctx)=> 'Price: ' + (this.formatCurrency ? this.formatCurrency(ctx.parsed.y) : ('$'+ctx.parsed.y)) } } },
+          type:'line',
+          data:{ datasets:[{ label:symbol+' price', data:data, borderColor:'#10b981', backgroundColor:gradient, tension:0.2, pointRadius:2, pointHoverRadius:5, fill:true }]},
+          options:{ responsive:true, maintainAspectRatio:false,
+            scales:{ x:{ type:'time', time:{ unit:'month' }, grid:{display:false} }, y:{ ticks:{ callback: v=> '$'+Number(v).toLocaleString() } } },
+            plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: ctx=>'Price: $'+Number(ctx.parsed.y).toLocaleString() } } },
             interaction:{ mode:'index', intersect:false }
           }
         };
-
-        // create chart and save instance
         try {
-          const chartInstance = new Chart(ctx, cfg);
-          this.cardChartInstances[chartId] = chartInstance;
-        } catch (err) {
-          console.error('Chart creation failed for', chartId, err);
-          this._safeDrawError(chartId, 'Chart error');
+          const instance = new Chart(ctx, cfg);
+          tracker.cardChartInstances[chartId] = instance;
+        } catch(err){
+          console.error('chart create', err);
         }
-
-      } catch (err) {
-        console.error('renderCardChart override error', err);
-      }
+      } catch(err){ console.error('patched renderCardChart', err); }
     };
-    console.log('renderCardChart override applied');
-  }
+    console.log('Chart fixes applied to stockTracker');
+  } // end applyChartFix
 
-  applyOverride();
-})();
+  // Build News tab UI and behavior
+  function buildNewsTab() {
+    // find news tab container by id or class - try common ids
+    const newsTab = document.getElementById('news-tab') || document.querySelector('.tab-content#news') || document.querySelector('#news');
+    if (!newsTab) return;
+    // create container
+    const container = document.createElement('div');
+    container.id = 'news-wrapper';
+    container.style.padding = '12px';
+    container.innerHTML = `
+      <div id="news-tickers" style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap"></div>
+      <div id="news-results" style="min-height:120px"></div>
+      <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center">
+        <div id="news-last-updated" style="color:#9aa0a6"></div>
+        <div><button id="news-refresh" style="padding:6px 10px; border-radius:6px; background:#2b2f33; color:#fff; border:none;">🔄 Refresh News</button></div>
+      </div>`;
+    newsTab.innerHTML = ''; newsTab.appendChild(container);
+
+    // gather tickers from DOM: look for elements with data-symbol attribute
+    const tickerSet = new Set();
+    document.querySelectorAll('[data-symbol]').forEach(el=>{
+      const s = (el.getAttribute('data-symbol')||el.dataset.symbol||'').trim().toUpperCase();
+      if (s) tickerSet.add(s);
+    });
+    // fallback: look for elements with class '.stock-symbol' or text
+    document.querySelectorAll('.stock-symbol').forEach(el=> tickerSet.add((el.innerText||'').trim().toUpperCase()));
+
+    const tickers = Array.from(tickerSet);
+    const tickersDiv = container.querySelector('#news-tickers');
+    if (!tickers.length) {
+      tickersDiv.innerText = 'No portfolio tickers found.';
+      return;
+    }
+    tickers.forEach(t=>{
+      const btn = document.createElement('button');
+      btn.className='news-ticker-btn';
+      btn.innerText = t; btn.dataset.ticker=t;
+      btn.style.padding='6px 10px'; btn.style.borderRadius='12px'; btn.style.border='1px solid rgba(255,255,255,0.06)'; btn.style.background='transparent'; btn.style.color='#fff';
+      btn.style.cursor='pointer';
+      btn.onclick = ()=> loadNewsForTicker(t);
+      tickersDiv.appendChild(btn);
+    });
+
+    let currentTicker = tickers[0];
+    const resultsDiv = container.querySelector('#news-results');
+    const lastUpdated = container.querySelector('#news-last-updated');
+    const refreshBtn = container.querySelector('#news-refresh');
+    refreshBtn.addEventListener('click', ()=> loadNewsForTicker(currentTicker, true));
+
+    async function loadNewsForTicker(ticker, force=false) {
+      currentTicker = ticker;
+      // set active style
+      document.querySelectorAll('.news-ticker-btn').forEach(b=> b.style.background = b.dataset.ticker===ticker ? '#10b981' : 'transparent');
+      resultsDiv.innerHTML = '<div style="padding:20px;color:#9aa0a6">Loading news...</div>';
+      const api = getApiKeys();
+      const today = new Date();
+      const past = new Date(); past.setDate(today.getDate()-7);
+      const from = past.toISOString().slice(0,10);
+      const to = today.toISOString().slice(0,10);
+      // try Finnhub
+      let articles = null;
+      try {
+        if (api.finnhub) {
+          const url = `https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(ticker)}&from=${from}&to=${to}&token=${encodeURIComponent(api.finnhub)}`;
+          const r = await fetch(url);
+          if (r.ok) {
+            const j = await r.json();
+            if (Array.isArray(j) && j.length) {
+              articles = j.map(a=>({ title:a.headline, url:a.url, source:a.source, image:a.image, datetime:a.datetime ? new Date(a.datetime*1000) : null }));
+            }
+          }
+        }
+      } catch(err){ console.warn('Finnhub news error', err); }
+      // fallback FMP
+      if (!articles || !articles.length) {
+        try {
+          if (api.fmp) {
+            const url2 = `https://financialmodelingprep.com/api/v3/stock_news?tickers=${encodeURIComponent(ticker)}&limit=10&apikey=${encodeURIComponent(api.fmp)}`;
+            const r2 = await fetch(url2);
+            if (r2.ok) {
+              const j2 = await r2.json();
+              if (Array.isArray(j2) && j2.length) {
+                articles = j2.map(a=>({ title:a.title||a.text, url:a.url||a.site, source:a.site||a.source, image:a.image, datetime: a.publishedDate ? new Date(a.publishedDate) : null }));
+              }
+            }
+          }
+        } catch(err){ console.warn('FMP news error', err); }
+      }
+      if (!articles || !articles.length) {
+        resultsDiv.innerHTML = `<div style="padding:20px;color:#9aa0a6">No recent news found for ${ticker}.</div>`;
+        lastUpdated.innerText = `Last updated: ${new Date().toLocaleString()}`;
+        return;
+      }
+      // render first 5 and show "Show more" toggle
+      let showAll = false;
+      const render = ()=> {
+        const toShow = showAll ? articles.slice(0,15) : articles.slice(0,5);
+        resultsDiv.innerHTML = '';
+        toShow.forEach(it=>{
+          const card = document.createElement('div');
+          card.style.display='flex'; card.style.gap='12px'; card.style.padding='10px'; card.style.borderBottom='1px solid rgba(255,255,255,0.03)';
+          const img = document.createElement('img'); img.src = it.image||''; img.style.width='84px'; img.style.height='56px'; img.style.objectFit='cover'; img.onerror = ()=>{ img.style.display='none'; };
+          const body = document.createElement('div'); body.style.flex='1';
+          const a = document.createElement('a'); a.href=it.url||'#'; a.target='_blank'; a.innerText=it.title||'No title'; a.style.color='#fff'; a.style.fontWeight='600';
+          const meta = document.createElement('div'); meta.style.color='#9aa0a6'; meta.style.fontSize='12px'; meta.innerText = `${it.source || ''} ${it.datetime ? ' • ' + it.datetime.toLocaleString() : ''}`;
+          body.appendChild(a); body.appendChild(meta);
+          card.appendChild(img); card.appendChild(body);
+          resultsDiv.appendChild(card);
+        });
+        // show toggle
+        const toggle = document.createElement('button'); toggle.style.margin='12px auto'; toggle.style.display='block'; toggle.style.padding='8px 12px'; toggle.style.borderRadius='8px';
+        toggle.style.border='1px solid rgba(255,255,255,0.04)'; toggle.style.background='transparent'; toggle.style.color='#fff';
+        toggle.innerText = showAll ? 'Show Less' : 'Show More';
+        toggle.onclick = ()=>{ showAll = !showAll; render(); };
+        resultsDiv.appendChild(toggle);
+      };
+      render();
+      lastUpdated.innerText = `Last updated: ${new Date().toLocaleString()}`;
+    }
+
+    // auto-load first ticker
+    const firstBtn = tickersDiv.querySelector('.news-ticker-btn');
+    if (firstBtn) firstBtn.click();
+  } // end buildNewsTab
+
+  // Wait for DOM and stockTracker presence
+  function initPeriodic() {
+    if (document.readyState !== 'complete' || !window.stockTracker) {
+      setTimeout(initPeriodic, 400);
+      return;
+    }
+    try { applyChartFix(); } catch(e){ console.warn(e); }
+    try { buildNewsTab(); } catch(e){ console.warn(e); }
+  }
+  initPeriodic();
+})(); 
 </script>
+<!-- END: Enhancements injected -->
 
 </body>
 </html>
