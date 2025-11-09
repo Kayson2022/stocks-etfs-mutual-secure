@@ -1679,23 +1679,23 @@
                 }
             }
             
-            // --- Fallback Function for Mutual Funds ---
+            // --- Fallback Function for Mutual Funds (STRICTLY FMP -> AV) ---
             async fetchMutualFundDataWithFallback(symbol) {
-                // 1. Try Finnhub first (Primary check)
-                let result = await this.fetchStockEtfQuote(symbol); 
+                // Check if the symbol might be a stock/ETF first via Finnhub quote
+                let quoteResult = await this.fetchStockEtfQuote(symbol);
 
-                if (result.success) {
-                    // If Finnhub returns a successful quote, grab the profile info to complete the data object
-                    const profileResult = await this.fetchStockEtfData(symbol);
-                    if (profileResult.success && profileResult.data.price > 0) {
-                        return profileResult;
+                if (quoteResult.success && !this.isMutualFund(symbol)) {
+                    // It seems like a stock/ETF (non-mutual fund format), use the full data fetch
+                    const dataResult = await this.fetchStockEtfData(symbol);
+                    if (dataResult.success) {
+                         return dataResult;
                     }
                 }
-
-                console.log(`Finnhub failed or was incomplete for ${symbol}. Falling back to FMP...`);
                 
-                // 2. Try FMP second
-                result = await this.fetchFmpFundData(symbol);
+                // If it's explicitly a mutual fund (e.g., ends with X) or Finnhub failed, proceed with fund fallbacks
+                
+                // 1. Try FMP (Primary for Mutual Funds)
+                let result = await this.fetchFmpFundData(symbol);
 
                 if (result.success && result.data.price > 0) {
                     return result;
@@ -1703,7 +1703,7 @@
 
                 console.log(`FMP failed for ${symbol}. Falling back to Alpha Vantage...`);
                 
-                // 3. Try Alpha Vantage last
+                // 2. Try Alpha Vantage last resort
                 result = await this.fetchAlphaVantageFundData(symbol); 
 
                 if (result.success && result.data.price > 0) {
@@ -1711,7 +1711,7 @@
                 }
                 
                 // All failed
-                return { success: false, symbol, reason: `All fund APIs failed. Last error: ${result.reason}` };
+                return { success: false, symbol, reason: `All fund APIs failed. Last error: ${result.reason || 'Data not found.'}` };
             }
 
             // --- Historical Data Fetch (Uses Alpha Vantage) ---
@@ -3523,7 +3523,7 @@
                     case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
                     case '3Y': startDate.setFullYear(now.getFullYear() - 3); break;
                     case '5Y': startDate.setFullYear(now.getFullYear() - 5); break;
-                    case 'All': startDate = new Date(0); break;
+                    case 'ALL': startDate = new Date(0); break;
                     default: startDate.setFullYear(now.getFullYear() - 1); break;
                 }
 
@@ -3543,14 +3543,11 @@
                 const lastValue = chartData.at(-1).y;
                 const isPositive = lastValue >= firstValue;
                 
-                // Use CSS variables for dynamic colors
-                const positiveRgb = document.body.classList.contains('dark-mode') ? 
-                    'var(--chart-positive-fill-color-rgb)' : 'var(--chart-positive-fill-color-rgb)';
-                const negativeRgb = document.body.classList.contains('dark-mode') ? 
-                    'var(--chart-negative-fill-color-rgb)' : 'var(--chart-negative-fill-color-rgb)';
-
+                // MODIFIED: Fetch raw RGB color for gradient calculation (Fixes SyntaxError)
                 const mainColor = isPositive ? 'var(--color-positive)' : 'var(--color-negative)';
-                const fillRgb = isPositive ? positiveRgb : negativeRgb;
+                const fillRgb = window.getComputedStyle(document.body)
+                    .getPropertyValue(isPositive ? '--chart-positive-fill-color-rgb' : '--chart-negative-fill-color-rgb')
+                    .trim();
 
                 // 2. Create Gradient
                 const gradient = ctx.createLinearGradient(0, 0, 0, 400); // 400px is the canvas height
