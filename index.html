@@ -4467,5 +4467,135 @@
 </script>
 <!-- END: Enhancements injected -->
 
+
+<!-- BEGIN: Patch fixes for portfolio chart destroy and news integration -->
+<script>
+(function(){
+  function safeDestroyChartOnCanvas(canvasId) {
+    try {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      // Chart.getChart works in Chart.js v3/v4 to retrieve instance by canvas element or id
+      const existing = (window.Chart && Chart.getChart) ? Chart.getChart(canvas) : (window[canvasId] || null);
+      if (existing && typeof existing.destroy === 'function') {
+        try { existing.destroy(); } catch(e) {}
+        // also clear any global reference
+        try { if (window[canvasId]) window[canvasId] = null; } catch(e){}
+      }
+      // also try Chart.instances fallback (older versions)
+      if (window.Chart && window.Chart.instances) {
+        Object.values(window.Chart.instances).forEach(inst=>{
+          try{
+            if (inst && inst.canvas && inst.canvas.id === canvasId && typeof inst.destroy === 'function') inst.destroy();
+          }catch(e){}
+        });
+      }
+    } catch(e){ console.warn('safeDestroyChartOnCanvas failed', e); }
+  }
+
+  // Wait for stockTracker to be ready and patch methods
+  function applyFinalPatches() {
+    if (!window.stockTracker) { setTimeout(applyFinalPatches, 300); return; }
+    const tracker = window.stockTracker;
+
+    // Patch renderPortfolioPerformanceChart to destroy existing chart instance before rendering
+    try {
+      const orig = tracker.renderPortfolioPerformanceChart;
+      tracker.renderPortfolioPerformanceChart = async function() {
+        try {
+          safeDestroyChartOnCanvas('portfolioPerformanceChart');
+        } catch(e){ console.warn(e); }
+        if (typeof orig === 'function') {
+          try { await orig.apply(this, arguments); }
+          catch(err){ console.warn('patched renderPortfolioPerformanceChart error', err); }
+        }
+      };
+    } catch(e){ console.warn('patch portfolio render failed', e); }
+
+    // If original code expects apiService.fetchNews, provide a fallback that calls our UI
+    if (tracker && tracker.apiService && typeof tracker.apiService.fetchNews !== 'function') {
+      tracker.apiService.fetchNews = async function(ticker, limit) {
+        // Try Finnhub then FMP similar to other logic, but return unified array
+        const apiCfg = tracker.apiService.config || {};
+        const finnhubKey = (apiCfg.finnhubApiKey || localStorage.getItem('finnhubApiKey') || '').trim();
+        const fmpKey = (apiCfg.fmpApiKey || localStorage.getItem('fmpApiKey') || '').trim();
+        const today = new Date();
+        const past = new Date(); past.setDate(today.getDate()-7);
+        const from = past.toISOString().slice(0,10);
+        const to = today.toISOString().slice(0,10);
+        let articles = [];
+        try {
+          if (finnhubKey) {
+            const url = `https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(ticker)}&from=${from}&to=${to}&token=${encodeURIComponent(finnhubKey)}`;
+            const r = await fetch(url);
+            if (r.ok) {
+              const j = await r.json();
+              if (Array.isArray(j) && j.length) articles = j.map(a=>({ title:a.headline, url:a.url, source:a.source, image:a.image, datetime:a.datetime ? new Date(a.datetime*1000) : null }));
+            }
+          }
+        } catch(e){ console.warn('fallback fetchNews finnhub err', e); }
+        if ((!articles || !articles.length) && fmpKey) {
+          try {
+            const url2 = `https://financialmodelingprep.com/api/v3/stock_news?tickers=${encodeURIComponent(ticker)}&limit=${limit||10}&apikey=${encodeURIComponent(fmpKey)}`;
+            const r2 = await fetch(url2);
+            if (r2.ok) {
+              const j2 = await r2.json();
+              if (Array.isArray(j2) && j2.length) {
+                articles = j2.map(a=>({ title: a.title || a.text, url: a.url || a.site, source: a.site || a.source, image: a.image, datetime: a.publishedDate ? new Date(a.publishedDate) : null }));
+              }
+            }
+          } catch(e){ console.warn('fallback fetchNews fmp err', e); }
+        }
+        return articles;
+      };
+    }
+
+    // Also patch StockTracker.fetchAndRenderNews to use apiService.fetchNews and our built news UI if present
+    try {
+      tracker.fetchAndRenderNews = async function() {
+        try {
+          // find news tab container (reuse our injected UI if present)
+          const wrapper = document.getElementById('news-wrapper');
+          if (!wrapper) {
+            // fallback to original behavior if exists
+            if (typeof this._originalFetchAndRenderNews === 'function') return this._originalFetchAndRenderNews();
+            return;
+          }
+          const tickers = Array.from(new Set(Array.from(document.querySelectorAll('[data-symbol]')).map(el=> (el.dataset.symbol||el.getAttribute('data-symbol')||'').toUpperCase()).filter(Boolean)));
+          const tickersDiv = wrapper.querySelector('#news-tickers');
+          tickersDiv.innerHTML = '';
+          tickers.forEach(t=>{
+            const btn = document.createElement('button');
+            btn.className='news-ticker-btn';
+            btn.innerText = t; btn.dataset.ticker=t;
+            btn.style.padding='6px 10px'; btn.style.borderRadius='12px'; btn.style.border='1px solid rgba(255,255,255,0.06)'; btn.style.background='transparent'; btn.style.color='#fff';
+            btn.style.cursor='pointer';
+            btn.onclick = ()=> { tracker.loadNewsForTicker && tracker.loadNewsForTicker(t); };
+            tickersDiv.appendChild(btn);
+          });
+          // auto-click first if exists
+          const first = tickersDiv.querySelector('button');
+          if (first) first.click();
+        } catch(e){ console.warn('patched fetchAndRenderNews error', e); }
+      };
+    } catch(e){ console.warn('patch fetchAndRenderNews failed', e); }
+
+    // Expose loadNewsForTicker if our injected UI defined it in window scope earlier
+    try {
+      if (!tracker.loadNewsForTicker && window.loadNewsForTicker) tracker.loadNewsForTicker = window.loadNewsForTicker;
+      if (!tracker.loadNewsForTicker && window.__news && window.__news.loadNewsForTicker) tracker.loadNewsForTicker = window.__news.loadNewsForTicker;
+    } catch(e){}
+
+    console.log('Final patches applied');
+  }
+
+  // run
+  applyFinalPatches();
+  // also attempt again later in case scripts load later
+  setTimeout(applyFinalPatches, 1500);
+  setTimeout(applyFinalPatches, 4000);
+})();
+</script>
+<!-- END: Patch -->
 </body>
 </html>
