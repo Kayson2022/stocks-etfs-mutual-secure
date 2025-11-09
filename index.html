@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -4151,5 +4152,233 @@
         
         window.stockTracker = new StockTracker();
     </script>
+
+<!-- Injected override to fix card chart data sourcing and chart reuse errors -->
+<script>
+(function(){
+  function isMutualFundSymbol(sym) {
+    return typeof sym === 'string' && sym.length === 5 && sym.endsWith('X');
+  }
+
+  async function fetchFinnhubHistorical(apiKey, symbol, fromTs, toTs) {
+    try {
+      const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${fromTs}&to=${toTs}&token=${apiKey}`;
+      const resp = await fetch(url);
+      if (!resp.ok) return { success: false, reason: `Finnhub HTTP ${resp.status}` };
+      const json = await resp.json();
+      if (json.s !== 'ok' || !json.t || !json.c) return { success: false, reason: 'Finnhub returned no candle data' };
+      // convert to AlphaVantage-like object: { "YYYY-MM-DD": { "4. close": "123.45" }, ... }
+      const res = {};
+      for (let i = 0; i < json.t.length; i++) {
+        const dt = new Date(json.t[i] * 1000).toISOString().slice(0,10);
+        res[dt] = { "4. close": String(json.c[i]) };
+      }
+      return { success: true, data: res };
+    } catch (err) {
+      return { success: false, reason: 'Finnhub error: ' + err.message };
+    }
+  }
+
+  // Wait for stockTracker to be ready, then override its method
+  function applyOverride() {
+    if (!window.stockTracker) {
+      setTimeout(applyOverride, 300);
+      return;
+    }
+    const tracker = window.stockTracker;
+
+    tracker._safeDrawError = function(cardId, message) {
+      try {
+        const canvas = document.getElementById(cardId);
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (tracker.cardChartInstances && tracker.cardChartInstances[cardId]) {
+          try { tracker.cardChartInstances[cardId].destroy(); } catch(e) {}
+          delete tracker.cardChartInstances[cardId];
+        }
+        ctx.clearRect(0,0,canvas.width, canvas.height);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = tracker.isDarkMode ? '#adb5bd' : '#6c757d';
+        ctx.font = "14px 'Inter', sans-serif";
+        ctx.fillText(message, canvas.width/2, canvas.height/2);
+      } catch(e) { console.error('safeDrawError failed', e); }
+    };
+
+    tracker.renderCardChart = async function(symbol, range = '1Y') {
+      try {
+        const card = document.querySelector(`.stock-card[data-symbol="${symbol}"], .fund-card[data-symbol="${symbol}"]`);
+        if (!card) return;
+        const chartId = `chart-${card.dataset.id}`;
+        const canvas = document.getElementById(chartId);
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+
+        // Update active button state
+        const chartControls = card.querySelector('.chart-controls');
+        if(chartControls) {
+            chartControls.querySelectorAll('.chart-range-btn').forEach(btn => btn.classList.remove('active'));
+            const newActiveButton = chartControls.querySelector(`[data-range="${range}"]`);
+            if(newActiveButton) newActiveButton.classList.add('active');
+        }
+
+        // destroy existing Chart.js instance if present
+        if (!this.cardChartInstances) this.cardChartInstances = {};
+        if (this.cardChartInstances[chartId]) {
+          try { this.cardChartInstances[chartId].destroy(); } catch(e) {}
+          delete this.cardChartInstances[chartId];
+        }
+
+        // Determine sources order per your requested logic:
+        // 1. Finnhub for Stocks/ETFs (historical candles)
+        // 2. FMP for Mutual Funds (historical)
+        // 3. Alpha Vantage only for Mutual Funds as a last resort
+        let historicalData = null;
+        const now = new Date();
+        const fiveYearsAgo = new Date(now); fiveYearsAgo.setFullYear(now.getFullYear()-5);
+        const fromTs = Math.floor(fiveYearsAgo.getTime()/1000);
+        const toTs = Math.floor(now.getTime()/1000);
+
+        const apiCfg = this.apiService?.config || {};
+
+        const tryFinnhub = async () => {
+          if (!apiCfg.finnhubApiKey) return { success: false, reason: 'Finnhub key missing' };
+          return await fetchFinnhubHistorical(apiCfg.finnhubApiKey, symbol, fromTs, toTs);
+        };
+
+        const tryFmpHistorical = async () => {
+          if (!apiCfg.fmpApiKey) return { success: false, reason: 'FMP key missing' };
+          try {
+            const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${encodeURIComponent(symbol)}?apikey=${apiCfg.fmpApiKey}`;
+            const r = await fetch(url);
+            if (!r.ok) return { success: false, reason: `FMP HTTP ${r.status}` };
+            const j = await r.json();
+            if (!j.historical) return { success: false, reason: j.Error || 'FMP no historical' };
+            const avCompatible = {};
+            j.historical.forEach(entry => { avCompatible[entry.date] = { "4. close": String(entry.close) }; });
+            return { success: true, data: avCompatible };
+          } catch(err) { return { success:false, reason: 'FMP error: ' + err.message }; }
+        };
+
+        const tryAlphaVantage = async () => {
+          if (!apiCfg.alphaVantageKey) return { success: false, reason: 'Alpha key missing' };
+          try {
+            const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${encodeURIComponent(symbol)}&outputsize=full&apikey=${apiCfg.alphaVantageKey}`;
+            const r = await fetch(url);
+            if (!r.ok) return { success: false, reason: `Alpha HTTP ${r.status}` };
+            const j = await r.json();
+            if (j["Error Message"] && j["Error Message"].includes('premium')) {
+              return { success: false, reason: 'Alpha Premium endpoint (no access)' };
+            }
+            if (!j["Time Series (Daily)"]) return { success: false, reason: j["Information"] || 'Alpha invalid payload' };
+            return { success: true, data: j["Time Series (Daily)"] };
+          } catch(err) { return { success:false, reason: 'Alpha error: ' + err.message }; }
+        };
+
+        // Choose order based on fund vs stock
+        if (isMutualFundSymbol(symbol)) {
+          // Mutual funds: try FMP first, alpha last resort
+          let res = await tryFmpHistorical();
+          if (res.success) historicalData = res.data;
+          else {
+            console.warn('FMP hist failed for', symbol, res.reason);
+            res = await tryAlphaVantage();
+            if (res.success) historicalData = res.data;
+            else {
+              console.warn('Alpha hist failed for', symbol, res.reason);
+            }
+          }
+        } else {
+          // Stocks/ETFs: try Finnhub first, then FMP, then Alpha as last resort
+          let res = await tryFinnhub();
+          if (res.success) historicalData = res.data;
+          else {
+            console.warn('Finnhub hist failed for', symbol, res.reason);
+            res = await tryFmpHistorical();
+            if (res.success) historicalData = res.data;
+            else {
+              console.warn('FMP hist failed for', symbol, res.reason);
+              res = await tryAlphaVantage();
+              if (res.success) historicalData = res.data;
+              else console.warn('Alpha hist failed for', symbol, res.reason);
+            }
+          }
+        }
+
+        if (!historicalData) {
+          // If no historical data found, draw friendly message and exit
+          this._safeDrawError(chartId, 'No historical chart data available.');
+          return;
+        }
+
+        // Convert historicalData to array of points sorted by date
+        const allDataPoints = Object.entries(historicalData).map(([date, values]) => ({
+            x: new Date(date),
+            y: parseFloat(values['4. close'])
+        })).sort((a,b)=>a.x-b.x);
+
+        // Determine start date based on range
+        const now2 = new Date();
+        let startDate = new Date();
+        switch(range) {
+          case '1W': startDate.setDate(now2.getDate()-7); break;
+          case '1M': startDate.setMonth(now2.getMonth()-1); break;
+          case '6M': startDate.setMonth(now2.getMonth()-6); break;
+          case 'YTD': startDate = new Date(now2.getFullYear(),0,1); break;
+          case '1Y': startDate.setFullYear(now2.getFullYear()-1); break;
+          case '3Y': startDate.setFullYear(now2.getFullYear()-3); break;
+          case '5Y': startDate.setFullYear(now2.getFullYear()-5); break;
+          case 'ALL': startDate = new Date(0); break;
+          default: startDate.setFullYear(now2.getFullYear()-1); break;
+        }
+        const chartData = allDataPoints.filter(dp => dp.x >= startDate);
+
+        if (chartData.length <= 1) {
+          this._safeDrawError(chartId, 'Not enough history for this time range.');
+          return;
+        }
+
+        // Create Chart.js dataset and ensure previous instance destroyed
+        const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
+        const gridColor = this.isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+        const borderColor = '#10b981';
+        // create gradient
+        const gradient = ctx.createLinearGradient(0,0,0,canvas.height);
+        gradient.addColorStop(0, 'rgba(16,185,129,0.25)');
+        gradient.addColorStop(1, 'rgba(16,185,129,0.02)');
+
+        const cfg = {
+          type: 'line',
+          data: { datasets: [{ label: symbol + ' price', data: chartData, borderColor, tension:0.2, borderWidth:2, pointRadius:2, pointHoverRadius:5, fill:true, backgroundColor: gradient }] },
+          options: {
+            responsive:true, maintainAspectRatio:false,
+            scales: {
+              x: { type:'time', time:{ unit:'month' }, ticks:{ color: labelColor, maxRotation:0, autoSkip:true, maxTicksLimit:6 }, grid:{ display:false } },
+              y: { ticks:{ color: labelColor, callback: (v)=> this.formatCurrency ? this.formatCurrency(v) : '$'+v }, grid:{ color: gridColor, drawBorder:false } }
+            },
+            plugins: { legend:{ display:false }, tooltip:{ mode:'index', intersect:false, callbacks:{ label: (ctx)=> 'Price: ' + (this.formatCurrency ? this.formatCurrency(ctx.parsed.y) : ('$'+ctx.parsed.y)) } } },
+            interaction:{ mode:'index', intersect:false }
+          }
+        };
+
+        // create chart and save instance
+        try {
+          const chartInstance = new Chart(ctx, cfg);
+          this.cardChartInstances[chartId] = chartInstance;
+        } catch (err) {
+          console.error('Chart creation failed for', chartId, err);
+          this._safeDrawError(chartId, 'Chart error');
+        }
+
+      } catch (err) {
+        console.error('renderCardChart override error', err);
+      }
+    };
+    console.log('renderCardChart override applied');
+  }
+
+  applyOverride();
+})();
+</script>
+
 </body>
 </html>
