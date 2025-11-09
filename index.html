@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,8 +11,8 @@
     ==================================================================
     ==      REVISED & IMPROVED STYLESHEET                           ==
     ==================================================================
-    This stylesheet includes the fix for the card rendering issue
-    and other minor improvements for consistency.
+    This stylesheet includes the fix for the chart color parsing issue
+    and the final visual styles.
     -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -40,8 +39,7 @@
             --color-positive: #17A589;
             --color-negative: #E74C3C;
             
-            /* Chart Specific */
-            --chart-line-color-light: #212529;
+            /* Chart Specific - RGB values MUST be comma-separated integers for JS parsing */
             --chart-positive-fill-color-rgb: 23, 165, 137; /* #17A589 */
             --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
         }
@@ -59,8 +57,7 @@
             --color-positive: #2ECC71;
             --color-negative: #E74C3C;
             
-            /* Chart Specific */
-            --chart-line-color-dark: #f8f9fa;
+            /* Chart Specific - RGB values MUST be comma-separated integers for JS parsing */
             --chart-positive-fill-color-rgb: 46, 204, 113; /* #2ECC71 */
             --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
         }
@@ -1185,12 +1182,26 @@
     const canvas = document.getElementById("portfolioPerformanceChart");
     const ctx = canvas.getContext("2d");
 
-    function createGradient(ctx, area) {
-      const gradient = ctx.createLinearGradient(0, 0, 0, area.height);
-      gradient.addColorStop(0, "rgba(16,185,129,0.25)"); // emerald
-      gradient.addColorStop(0.6, "rgba(20,184,166,0.12)"); // teal
-      gradient.addColorStop(1, "rgba(56,189,248,0.05)"); // light blue tint
-      return gradient;
+    // Helper function to dynamically get the chart color based on theme
+    function getRgbColor(name) {
+        const style = getComputedStyle(document.body);
+        return style.getPropertyValue(name).trim();
+    }
+    
+    // MODIFIED: Inject dynamic RGB values into the gradient creation function
+    function createGradient(ctx, area, isPositive, isBenchmark = false) {
+        let fillRgb;
+        if (isBenchmark) {
+             fillRgb = getRgbColor('--chart-benchmark-color');
+        } else {
+             fillRgb = getRgbColor(isPositive ? '--chart-positive-fill-color-rgb' : '--chart-negative-fill-color-rgb');
+        }
+        
+        const gradient = ctx.createLinearGradient(0, 0, 0, area.height);
+        // Use the fetched RGB value directly inside the rgba() function
+        gradient.addColorStop(0, `rgba(${fillRgb}, ${isBenchmark ? 0.2 : 0.3})`); 
+        gradient.addColorStop(1, `rgba(${fillRgb}, 0)`);
+        return gradient;
     }
 
     const chart = new Chart(ctx, {
@@ -1212,7 +1223,8 @@
           backgroundColor: function(context) {
             const chartArea = context.chart.chartArea;
             if (!chartArea) return null;
-            return createGradient(context.chart.ctx, chartArea);
+            // For portfolio chart, we assume positive for the initial placeholder state
+            return createGradient(context.chart.ctx, chartArea, true); 
           },
         }]
       },
@@ -1298,18 +1310,26 @@
       chart.data.datasets[0].data = filtered;
       chart.update();
     }
-
+    
+    // NOTE: We only bind button events here. The initial chart rendering is managed 
+    // entirely by the StockTracker.renderPortfolioPerformanceChart method after data loads.
     document.querySelectorAll('.chart-range-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         document.querySelectorAll('.chart-range-btn').forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
-        updateChart(e.target.getAttribute('data-range'));
+        // Let StockTracker handle the real chart update (fixes chart race condition)
+        if (window.stockTracker) {
+            window.stockTracker.renderPortfolioPerformanceChart(e.target.getAttribute('data-range'));
+        } else {
+            // Fallback for placeholder chart logic (if StockTracker hasn't initialized)
+            updateChart(e.target.getAttribute('data-range'));
+        }
       });
     });
 
     updateChart('1Y');
 
-    var combinedEl = document.getElementById('combined-total-value');
+    var combinedEl = document.getElementById("combined-total-value");
     if (combinedEl) {
       var observer = new MutationObserver(() => {
         var newVal = getCombinedTotalFromDOM();
@@ -1550,6 +1570,9 @@
         class ApiService {
             constructor(config) { this.config = config; }
             
+            // Utility function to check for mutual fund symbol pattern (unchanged)
+            isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
+            
             // --- Finnhub Fetch (Primary for Stock/ETFs) ---
             async fetchStockEtfData(symbol) {
                 const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${this.config.finnhubApiKey}`;
@@ -1560,7 +1583,6 @@
                     const [quoteData, profileData] = await Promise.all([quoteResponse.json(), profileResponse.json()]);
                     if (quoteData.c === 0 && quoteData.pc === 0 && !profileData.name) return { success: false, symbol, reason: 'Finnhub: Invalid or empty API payload' };
                     
-                    // Mutual funds generally don't have profile data, but stocks/etfs do.
                     const isMutualFund = this.isMutualFund(symbol);
 
                     return { success: true, data: { 
@@ -1657,27 +1679,34 @@
                 }
             }
             
-            // --- New Fallback Function for Mutual Funds ---
+            // --- Fallback Function for Mutual Funds ---
             async fetchMutualFundDataWithFallback(symbol) {
-                let result = await this.fetchStockEtfQuote(symbol); // Try Finnhub first (as it can handle mutual funds/quotes)
+                // 1. Try Finnhub first (Primary check)
+                let result = await this.fetchStockEtfQuote(symbol); 
 
                 if (result.success) {
-                    // Finnhub was successful, just need to populate missing fields
+                    // If Finnhub returns a successful quote, grab the profile info to complete the data object
                     const profileResult = await this.fetchStockEtfData(symbol);
-                    return profileResult.success ? profileResult : result;
+                    if (profileResult.success && profileResult.data.price > 0) {
+                        return profileResult;
+                    }
                 }
 
-                console.log(`Finnhub failed for ${symbol}. Falling back to FMP... Reason: ${result.reason}`);
-                result = await this.fetchFmpFundData(symbol); // Try FMP second
+                console.log(`Finnhub failed or was incomplete for ${symbol}. Falling back to FMP...`);
+                
+                // 2. Try FMP second
+                result = await this.fetchFmpFundData(symbol);
 
-                if (result.success) {
+                if (result.success && result.data.price > 0) {
                     return result;
                 }
 
-                console.log(`FMP failed for ${symbol}. Falling back to Alpha Vantage... Reason: ${result.reason}`);
-                result = await this.fetchAlphaVantageFundData(symbol); // Try Alpha Vantage last
+                console.log(`FMP failed for ${symbol}. Falling back to Alpha Vantage...`);
+                
+                // 3. Try Alpha Vantage last
+                result = await this.fetchAlphaVantageFundData(symbol); 
 
-                if (result.success) {
+                if (result.success && result.data.price > 0) {
                     return result;
                 }
                 
@@ -1706,9 +1735,6 @@
                     return { success: false, symbol, reason: error.message };
                 }
             }
-            
-            // Utility function to check for mutual fund symbol pattern (unchanged)
-            isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
         }
         
         class StockTracker {
@@ -2206,7 +2232,7 @@
                         if(this.elements.platformFilter) this.elements.platformFilter.style.display = 'block';
 
                         const allItems = [...this.stocks, ...this.mutualFunds];
-                        const platforms = ['All Platforms', ...[...new Set(allItems.flatMap(s => s.transactions.map(t => t.platform)).filter(p => p))].sort()];
+                        const platforms = ['All Platforms', ...new Set(allItems.flatMap(s => s.transactions.map(t => t.platform)).filter(p => p))].sort();
                         const currentSelection = this.elements.platformFilter ? this.elements.platformFilter.value : 'All Platforms';
                         if (this.elements.platformFilter) {
                             this.elements.platformFilter.innerHTML = platforms.map(p => `<option value="${p}">${p}</option>`).join('');
@@ -2612,8 +2638,7 @@
                 
                 const allItems = [...this.stocks, ...this.mutualFunds];
                 const predefinedPlatforms = ['Fidelity', 'Robinhood', 'Vanguard', 'Charles Schwab', 'E*TRADE', 'Merrill Edge', 'Uncategorized'];
-                const existingPlatforms = [...new Set(allItems.flatMap(s => s.transactions.map(t => t.platform)).filter(p => p))];
-                const allPlatforms = [...new Set([...predefinedPlatforms, ...existingPlatforms])].sort();
+                const existingPlatforms = [...new Set(allItems.flatMap(s => s.transactions.map(t => t.platform)).filter(p => p))].sort();
                 const platformSelect = this.elements.modalPlatform;
                 if(platformSelect) {
                     platformSelect.innerHTML = `<option value="">Select...</option>`;
