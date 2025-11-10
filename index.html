@@ -1,6 +1,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -4541,7 +4542,15 @@ window.portfolioChart = new Chart(ctx, {
           safeDestroyChartOnCanvas('portfolioPerformanceChart');
         } catch(e){ console.warn(e); }
         if (typeof orig === 'function') {
-          try { await orig.apply(this, arguments); }
+          try {
+            var args = Array.prototype.slice.call(arguments);
+            if (args.length && typeof args[0] === 'string') {
+              var r = args[0].toString().trim();
+              if (r.toUpperCase() === 'ALL') r = 'All';
+              args[0] = r;
+            }
+            await orig.apply(this, args);
+          }
           catch(err){ console.warn('patched renderPortfolioPerformanceChart error', err); }
         }
       };
@@ -4632,6 +4641,51 @@ window.portfolioChart = new Chart(ctx, {
 })();
 </script>
 <!-- END: Patch -->
+
+<script>
+(function(){
+  function attachAuthButtons() {
+    const signInBtn = document.getElementById('google-signin-btn');
+    const signOutBtn = document.getElementById('sign-out-btn');
+    if (signInBtn) {
+      signInBtn.addEventListener('click', function(e){
+        if (window.stockTracker && typeof window.stockTracker.signIn === 'function') {
+          try { window.stockTracker.signIn(); } catch(err){ console.error('Error calling stockTracker.signIn()', err); }
+        } else {
+          console.warn('stockTracker not ready for signIn, will wait and retry...');
+          let attempts = 0;
+          const iv = setInterval(()=>{
+            attempts++;
+            if (window.stockTracker && typeof window.stockTracker.signIn === 'function') {
+              clearInterval(iv);
+              try { window.stockTracker.signIn(); } catch(err){ console.error(err); }
+            } else if (attempts > 10) {
+              clearInterval(iv);
+              console.warn('stockTracker.signIn not available after retries.');
+            }
+          }, 300);
+        }
+      });
+    }
+    if (signOutBtn) {
+      signOutBtn.addEventListener('click', function(){
+        if (window.stockTracker && typeof window.stockTracker.signOut === 'function') {
+          try { window.stockTracker.signOut(); } catch(err){ console.error('Error calling stockTracker.signOut()', err); }
+        } else {
+          console.warn('stockTracker not ready for signOut');
+        }
+      });
+    }
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    attachAuthButtons();
+  } else {
+    window.addEventListener('DOMContentLoaded', attachAuthButtons);
+  }
+})();
+</script>
+
 </body>
 </html>
 
