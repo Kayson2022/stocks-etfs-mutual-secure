@@ -1,7 +1,5 @@
 
 
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1208,18 +1206,7 @@
         return gradient;
     }
 
-    const chart = 
-// --- FIX: Properly destroy existing Chart.js instance before re-rendering ---
-if (window.portfolioChart && typeof window.portfolioChart.destroy === 'function') {
-    try {
-        window.portfolioChart.destroy();
-        console.log("Previous portfolio chart destroyed before rendering new one.");
-    } catch (err) {
-        console.warn("Error destroying previous chart:", err);
-    }
-}
-
-window.portfolioChart = new Chart(ctx, {
+    const chart = new Chart(ctx, {
       type: "line",
       data: {
         datasets: [{
@@ -3332,18 +3319,7 @@ window.portfolioChart = new Chart(ctx, {
                     const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                     const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
 
-                    this.cardChartInstances[chartId] = 
-// --- FIX: Properly destroy existing Chart.js instance before re-rendering ---
-if (window.portfolioChart && typeof window.portfolioChart.destroy === 'function') {
-    try {
-        window.portfolioChart.destroy();
-        console.log("Previous portfolio chart destroyed before rendering new one.");
-    } catch (err) {
-        console.warn("Error destroying previous chart:", err);
-    }
-}
-
-window.portfolioChart = new Chart(ctx, {
+                    this.cardChartInstances[chartId] = new Chart(ctx, {
                         type: 'line',
                         data: {
                             datasets: [{
@@ -3590,18 +3566,7 @@ window.portfolioChart = new Chart(ctx, {
                 const totalPLToday = stockMetrics.totalPLToday + fundMetrics.totalPLToday;
                 const totalPLTodayFormatted = `${totalPLToday >= 0 ? '+' : ''}${this.formatCurrency(totalPLToday)}`;
 
-                this.portfolioPerformanceChartInstance = 
-// --- FIX: Properly destroy existing Chart.js instance before re-rendering ---
-if (window.portfolioChart && typeof window.portfolioChart.destroy === 'function') {
-    try {
-        window.portfolioChart.destroy();
-        console.log("Previous portfolio chart destroyed before rendering new one.");
-    } catch (err) {
-        console.warn("Error destroying previous chart:", err);
-    }
-}
-
-window.portfolioChart = new Chart(ctx, {
+                this.portfolioPerformanceChartInstance = new Chart(ctx, {
                     type: 'line', 
                     data: {
                         datasets: [{ 
@@ -4633,120 +4598,5 @@ window.portfolioChart = new Chart(ctx, {
 })();
 </script>
 <!-- END: Patch -->
-
-<script>
-(function waitForStockTracker(){
-  if (window.stockTracker && typeof window.stockTracker.signIn === 'function') {
-    const signInBtn = document.getElementById('google-signin-btn') || document.getElementById('googleLogin') || document.getElementById('sign-in-btn');
-    const signOutBtn = document.getElementById('sign-out-btn') || document.getElementById('signOut');
-
-    if (signInBtn) {
-      signInBtn.addEventListener('click', () => {
-        console.log("Google login clicked, calling stockTracker.signIn()");
-        try { window.stockTracker.signIn(); } catch (err) { console.error("SignIn error", err); }
-      });
-    }
-
-    if (signOutBtn) {
-      signOutBtn.addEventListener('click', () => {
-        console.log("Sign-out clicked");
-        try { window.stockTracker.signOut(); } catch (err) { console.error("SignOut error", err); }
-      });
-    }
-
-    console.log("✅ stockTracker is ready — auth buttons attached.");
-  } else {
-    // Retry every 500ms until stockTracker loads
-    setTimeout(waitForStockTracker, 500);
-  }
-})();
-</script>
-
 </body>
 </html>
-
-<script>
-// --- FIXED NEWS FETCH FUNCTION ---
-async function fetchNews(symbol) {
-  const container = document.getElementById("newsContainer");
-  container.innerHTML = `<div class='loading'>Fetching latest news...</div>`;
-
-  let articles = [];
-  let finnhubKey = localStorage.getItem("finnhubKey") || "YOUR_DEFAULT_KEY_HERE";
-  const finnhubUrl = `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=2024-11-01&to=2025-11-10&token=${finnhubKey}`;
-
-  try {
-    const finnhubRes = await fetch(finnhubUrl);
-    if (finnhubRes.ok) {
-      const data = await finnhubRes.json();
-      if (data && data.length > 0) {
-        console.log("Fetched from Finnhub");
-        articles = data.map(n => ({
-          source: n.source,
-          headline: n.headline,
-          datetime: new Date(n.datetime * 1000).toLocaleString(),
-          url: n.url
-        }));
-      }
-    }
-  } catch (e) {
-    console.warn("Finnhub fetch failed:", e);
-  }
-
-  if (articles.length === 0) {
-    console.log("Falling back to FMP...");
-    try {
-      const fmpUrl = `https://financialmodelingprep.com/api/v3/stock_news?tickers=${symbol}&limit=10&apikey=demo`;
-      const fmpRes = await fetch(fmpUrl);
-      if (fmpRes.ok) {
-        const fmpData = await fmpRes.json();
-        articles = fmpData.map(n => ({
-          source: n.site || n.source,
-          headline: n.title,
-          datetime: new Date(n.publishedDate).toLocaleString(),
-          url: n.url
-        }));
-      }
-    } catch (e) {
-      console.warn("FMP fetch failed:", e);
-    }
-  }
-
-  container.innerHTML = "";
-  if (articles.length === 0) {
-    container.innerHTML = `<div class='no-news'>No news found for ${symbol}.</div>`;
-    return;
-  }
-
-  const now = new Date().toLocaleString();
-  container.innerHTML = `<div class='last-updated'>Last Updated: ${now}</div>`;
-
-  articles.slice(0, 10).forEach(a => {
-    const card = document.createElement("div");
-    card.className = "news-card";
-    card.innerHTML = `
-      <h4><a href="${a.url}" target="_blank">${a.headline}</a></h4>
-      <p><b>${a.source}</b> • ${a.datetime}</p>
-    `;
-    container.appendChild(card);
-  });
-
-  const loadMore = document.createElement("button");
-  loadMore.textContent = "Load More";
-  loadMore.className = "load-more-btn";
-  loadMore.onclick = () => {
-    const existing = container.querySelectorAll('.news-card').length;
-    const extra = articles.slice(existing, existing + 10);
-    extra.forEach(a => {
-      const card = document.createElement("div");
-      card.className = "news-card";
-      card.innerHTML = `
-        <h4><a href="${a.url}" target="_blank">${a.headline}</a></h4>
-        <p><b>${a.source}</b> • ${a.datetime}</p>
-      `;
-      container.appendChild(card);
-    });
-  };
-  container.appendChild(loadMore);
-}
-</script>
