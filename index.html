@@ -4542,15 +4542,7 @@ window.portfolioChart = new Chart(ctx, {
           safeDestroyChartOnCanvas('portfolioPerformanceChart');
         } catch(e){ console.warn(e); }
         if (typeof orig === 'function') {
-          try {
-            var args = Array.prototype.slice.call(arguments);
-            if (args.length && typeof args[0] === 'string') {
-              var r = args[0].toString().trim();
-              if (r.toUpperCase() === 'ALL') r = 'All';
-              args[0] = r;
-            }
-            await orig.apply(this, args);
-          }
+          try { await orig.apply(this, arguments); }
           catch(err){ console.warn('patched renderPortfolioPerformanceChart error', err); }
         }
       };
@@ -4643,45 +4635,29 @@ window.portfolioChart = new Chart(ctx, {
 <!-- END: Patch -->
 
 <script>
-(function(){
-  function attachAuthButtons() {
-    const signInBtn = document.getElementById('google-signin-btn');
-    const signOutBtn = document.getElementById('sign-out-btn');
-    if (signInBtn) {
-      signInBtn.addEventListener('click', function(e){
-        if (window.stockTracker && typeof window.stockTracker.signIn === 'function') {
-          try { window.stockTracker.signIn(); } catch(err){ console.error('Error calling stockTracker.signIn()', err); }
-        } else {
-          console.warn('stockTracker not ready for signIn, will wait and retry...');
-          let attempts = 0;
-          const iv = setInterval(()=>{
-            attempts++;
-            if (window.stockTracker && typeof window.stockTracker.signIn === 'function') {
-              clearInterval(iv);
-              try { window.stockTracker.signIn(); } catch(err){ console.error(err); }
-            } else if (attempts > 10) {
-              clearInterval(iv);
-              console.warn('stockTracker.signIn not available after retries.');
-            }
-          }, 300);
-        }
-      });
-    }
-    if (signOutBtn) {
-      signOutBtn.addEventListener('click', function(){
-        if (window.stockTracker && typeof window.stockTracker.signOut === 'function') {
-          try { window.stockTracker.signOut(); } catch(err){ console.error('Error calling stockTracker.signOut()', err); }
-        } else {
-          console.warn('stockTracker not ready for signOut');
-        }
-      });
-    }
-  }
+(function waitForStockTracker(){
+  if (window.stockTracker && typeof window.stockTracker.signIn === 'function') {
+    const signInBtn = document.getElementById('google-signin-btn') || document.getElementById('googleLogin') || document.getElementById('sign-in-btn');
+    const signOutBtn = document.getElementById('sign-out-btn') || document.getElementById('signOut');
 
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    attachAuthButtons();
+    if (signInBtn) {
+      signInBtn.addEventListener('click', () => {
+        console.log("Google login clicked, calling stockTracker.signIn()");
+        try { window.stockTracker.signIn(); } catch (err) { console.error("SignIn error", err); }
+      });
+    }
+
+    if (signOutBtn) {
+      signOutBtn.addEventListener('click', () => {
+        console.log("Sign-out clicked");
+        try { window.stockTracker.signOut(); } catch (err) { console.error("SignOut error", err); }
+      });
+    }
+
+    console.log("✅ stockTracker is ready — auth buttons attached.");
   } else {
-    window.addEventListener('DOMContentLoaded', attachAuthButtons);
+    // Retry every 500ms until stockTracker loads
+    setTimeout(waitForStockTracker, 500);
   }
 })();
 </script>
