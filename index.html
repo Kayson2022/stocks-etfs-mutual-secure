@@ -1247,23 +1247,31 @@
   </div>
 
   <script>
-  // This Chart.js setup script remains here for the portfolio performance chart initialization and logic
+  // ==================================================================
+  // == GLOBAL JAVASCRIPT: Fixes the 'getRgbColor is not defined' error
+  // ==================================================================
+    
+  /**
+   * Helper function to dynamically get the chart color based on theme.
+   * Defined globally on window to be accessible from the module script.
+   */
+  window.getRgbColor = function(name) {
+      const style = getComputedStyle(document.body);
+      // Returns the comma-separated RGB string: "r, g, b"
+      return style.getPropertyValue(name).trim(); 
+  };
+    
   document.addEventListener("DOMContentLoaded", () => {
     const canvas = document.getElementById("portfolioPerformanceChart");
     const ctx = canvas.getContext("2d");
 
-    // Helper function to dynamically get the chart color based on theme
-    function getRgbColor(name) {
-        const style = getComputedStyle(document.body);
-        // Returns the comma-separated RGB string: "r, g, b"
-        return style.getPropertyValue(name).trim(); 
-    }
     
     // MODIFIED: Inject dynamic RGB values into the gradient creation function
     function createGradient(ctx, area, isPositive, isBenchmark = false) {
         let fillRgb;
         // Use the new dedicated fill color for the main portfolio chart
-        fillRgb = getRgbColor('--chart-fill-color-rgb');
+        // FIX: Using window.getRgbColor for scope access
+        fillRgb = window.getRgbColor('--chart-fill-color-rgb');
         
         const gradient = ctx.createLinearGradient(0, 0, 0, area.height);
         // Use the fetched RGB value directly inside the rgba() function
@@ -3631,8 +3639,9 @@
                 }
                 
                 // Get dynamic colors from CSS variables
-                const lineRgb = getRgbColor('--chart-line-color');
-                const fillRgb = getRgbColor('--chart-fill-color-rgb');
+                // FIX: Use window.getRgbColor to access the global function
+                const lineRgb = window.getRgbColor('--chart-line-color');
+                const fillRgb = window.getRgbColor('--chart-fill-color-rgb');
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
 
