@@ -1821,6 +1821,97 @@
                     return { success: false, symbol, reason: error.message };
                 }
             }
+            
+            // --- NEW: Finnhub News Fetch (Primary News Source) ---
+            async fetchFinnhubCompanyNews(symbol) {
+                // Fetch news for the last 7 days
+                const now = new Date().toISOString().split('T')[0];
+                const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                
+                const url = `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${oneWeekAgo}&to=${now}&token=${this.config.finnhubApiKey}`;
+
+                // API Key check is now handled centrally in StockTracker.fetchAndRenderNews
+                
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                         // Non-critical API error, just means we should try the fallback
+                        return { success: false, reason: `Finnhub HTTP Error: ${response.status}` };
+                    }
+                    const json = await response.json();
+                    
+                    if (!Array.isArray(json) || json.length === 0) {
+                         // Data successful but empty, trigger fallback
+                        return { success: false, reason: 'Finnhub returned no company news' };
+                    }
+
+                    // Map Finnhub format to a standardized format
+                    const normalizedNews = json.map(item => ({
+                        symbol: item.related || symbol,
+                        title: item.headline,
+                        text: item.summary,
+                        url: item.url,
+                        image: item.image,
+                        source: item.source,
+                        publishedDate: new Date(item.datetime * 1000).toISOString(), // Finnhub uses Unix timestamp
+                        priority: 'Finnhub'
+                    }));
+
+                    return { success: true, data: normalizedNews };
+                } catch (error) {
+                    console.error(`Error fetching Finnhub news for ${symbol}:`, error);
+                    return { success: false, reason: `Finnhub Fetch Error: ${error.message}` };
+                }
+            }
+
+            // --- NEW: FMP News Fetch (Fallback News Source) ---
+            async fetchFmpTickerNews(symbol) {
+                 // Using FMP's general news endpoint filtered by tickers
+                 const url = `https://financialmodelingprep.com/api/v3/general-news?limit=10&tickers=${symbol}&apikey=${this.config.fmpApiKey}`;
+                 
+                 // API Key check is now handled centrally in StockTracker.fetchAndRenderNews
+
+                 try {
+                    const response = await fetch(url);
+                    if (!response.ok) return { success: false, reason: `FMP HTTP Error: ${response.status}` };
+                    const json = await response.json();
+                    
+                    if (!Array.isArray(json) || json.length === 0) {
+                        return { success: false, reason: 'FMP returned no filtered news' };
+                    }
+                    
+                    // FMP data is usually in the required format, add priority flag
+                    const normalizedNews = json.map(item => ({...item, priority: 'FMP' }));
+
+                    return { success: true, data: normalizedNews };
+                } catch (error) {
+                    console.error(`Error fetching FMP news for ${symbol}:`, error);
+                    return { success: false, reason: `FMP Fetch Error: ${error.message}` };
+                }
+            }
+
+            // --- NEW: Unified News Fetcher with Fallback ---
+            async fetchSymbolNews(symbol) {
+                // 1. Try Finnhub (Primary)
+                if (this.config.finnhubApiKey && this.config.finnhubApiKey !== 'YOUR_FINNHUB_API_KEY') {
+                    let result = await this.fetchFinnhubCompanyNews(symbol);
+                    if (result.success) {
+                        return result.data;
+                    }
+                    console.log(`Finnhub news failed for ${symbol}. Reason: ${result.reason}. Falling back to FMP...`);
+                }
+
+                // 2. Try FMP (Fallback)
+                if (this.config.fmpApiKey && this.config.fmpApiKey !== 'YOUR_FMP_API_KEY') {
+                    let result = await this.fetchFmpTickerNews(symbol);
+                    if (result.success) {
+                        return result.data;
+                    }
+                    console.error(`FMP news also failed for ${symbol}. Reason: ${result.reason}.`);
+                }
+                
+                return []; // Return empty array on final failure
+            }
         }
         
         class StockTracker {
@@ -4070,50 +4161,58 @@
                 const container = this.elements.newsArticlesContainer;
                 if (!container) return;
 
-                const hasNewsKey = this.config.fmpApiKey && this.config.fmpApiKey !== 'YOUR_FMP_API_KEY';
-                if (!hasNewsKey) {
+                const hasFinnhubKey = this.config.finnhubApiKey && this.config.finnhubApiKey !== 'YOUR_FINNHUB_API_KEY';
+                const hasFmpKey = this.config.fmpApiKey && this.config.fmpApiKey !== 'YOUR_FMP_API_KEY';
+                
+                if (!hasFinnhubKey && !hasFmpKey) {
                     container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: var(--color-negative);">
-                        <p style="font-size: 1.1rem; font-weight: 600;">⚠️ FMP API Key Missing for News</p>
-                        <p style="margin-top: 10px; color: var(--text-secondary);">Please enter your Financial Modeling Prep (FMP) API Key in the <button class="btn-primary" style="display: inline-flex; margin: 0 5px;" onclick="window.stockTracker.openSettingsModal()">Settings</button> panel to enable real-time news updates.</p>
+                        <p style="font-size: 1.1rem; font-weight: 600;">⚠️ API Keys Missing for News</p>
+                        <p style="margin-top: 10px; color: var(--text-secondary);">Please enter your <strong>Finnhub</strong> and/or <strong>FMP</strong> API Keys in the <button class="btn-primary" style="display: inline-flex; margin: 0 5px;" onclick="window.stockTracker.openSettingsModal()">Settings</button> panel to enable real-time news updates.</p>
                     </div>`;
                     return;
                 }
 
-                // Only fetch if news is empty or older than 1 hour
                 const now = Date.now();
-                if (this.newsFeed.length === 0 || now - this.newsFetchTime > 3600000) {
+                // Check if news is older than 30 minutes (reduced refresh rate for API consumption)
+                if (this.newsFeed.length === 0 || now - this.newsFetchTime > 1800000) {
                     this.showLoading(true, "Fetching latest news...");
                     
-                    const symbols = [...new Set(this.stocks.map(s => s.symbol))];
-                    let newsSymbols = symbols;
-                    let newsType = 'personalized';
-
-                    if (symbols.length === 0) {
-                        // If no stocks are added, use major indices/stocks for general market news (Improved UX)
-                        newsSymbols = ['SPY', 'QQQ', 'AAPL', 'MSFT', 'GOOGL'];
-                        newsType = 'general market';
-                    }
-
-                    const symbolList = newsSymbols.join(',');
-                    const url = `https://financialmodelingprep.com/api/v3/general-news?limit=50&tickers=${symbolList}&apikey=${this.config.fmpApiKey}`;
+                    const portfolioSymbols = [...new Set([...this.stocks, ...this.mutualFunds].map(s => s.symbol))];
+                    let newsSymbols = portfolioSymbols;
                     
-                    try {
-                        const response = await fetch(url);
-                        if (!response.ok) throw new Error(`FMP HTTP Error: ${response.status}`);
-                        this.newsFeed = await response.json();
-                        this.newsFetchTime = now;
-                    } catch (error) {
-                        this.showError(`Failed to fetch ${newsType} news: ${error.message}`);
-                        this.showLoading(false);
-                        return;
+                    if (portfolioSymbols.length === 0) {
+                        // Fallback: If no stocks are added, use major indices/stocks for general market news
+                        newsSymbols = ['SPY', 'QQQ', 'AAPL', 'MSFT', 'GOOGL'];
                     }
+
+                    // --- Fetch News for all symbols with Finnhub priority and FMP fallback ---
+                    const newsPromises = newsSymbols.map(symbol => 
+                        this.apiService.fetchSymbolNews(symbol).then(news => ({ symbol, news }))
+                    );
+                    
+                    const newsResults = await Promise.all(newsPromises);
+                    
+                    // Aggregate and deduplicate the news articles
+                    let combinedNews = newsResults.flatMap(result => result.news);
+                    
+                    // Use a Set to track URLs and deduplicate articles
+                    const uniqueUrls = new Set();
+                    this.newsFeed = combinedNews
+                        .filter(article => {
+                            if (uniqueUrls.has(article.url)) return false;
+                            uniqueUrls.add(article.url);
+                            return true;
+                        })
+                        .sort((a, b) => new Date(b.publishedDate) - new Date(a.publishedDate)); // Sort newest first
+                        
+                    this.newsFetchTime = now;
                 }
                 this.showLoading(false);
                 
                 // Update title based on whether news is personalized or general
                 const titleElement = document.querySelector('#news-tab .watchlist-title');
+                let symbolsText = (this.stocks.length > 0 || this.mutualFunds.length > 0) ? 'Your Portfolio' : 'General Market';
                 if (titleElement) {
-                     const symbolsText = newsType === 'personalized' ? 'Your Stocks' : 'General Market';
                      titleElement.innerHTML = `📰 Top News for ${symbolsText}`;
                 }
 
@@ -4123,7 +4222,7 @@
                         <div class="news-article-content">
                             <h4>${article.title}</h4>
                             <p>${article.text}</p>
-                            <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">Source: ${article.source} (${new Date(article.publishedDate).toLocaleDateString()})</span>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">Source: ${article.source} (${new Date(article.publishedDate).toLocaleDateString()}) - Priority: ${article.priority}</span>
                         </div>
                     </a>
                 `).join('');
