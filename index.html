@@ -2341,8 +2341,19 @@
                 const tabContent = document.getElementById(`${tab}-tab`);
                 if(tabContent) tabContent.classList.add('active');
 
-                if (tab === 'news') this.fetchAndRenderNews();
-                else this.renderContent();
+                // FIX: Explicitly hide the stocks grid if switching to news
+                if (tab === 'news') {
+                    if (this.elements.stocksGrid) this.elements.stocksGrid.style.display = 'grid'; // News will be handled by fetchAndRenderNews, but ensure parent container is available
+                    this.fetchAndRenderNews();
+                    if (this.elements.stocksGrid) this.elements.stocksGrid.innerHTML = ''; // Clear the grid to prevent showing portfolio content below the news tab
+                    if (this.elements.portfolioPerformanceContainer) this.elements.portfolioPerformanceContainer.style.display = 'none';
+                    if (this.elements.diversificationChartContainer) this.elements.diversificationChartContainer.style.display = 'none';
+                    return;
+                } else {
+                    if (this.elements.stocksGrid) this.elements.stocksGrid.style.display = 'grid';
+                }
+                
+                this.renderContent();
             }
 
             sortItems(items, sortBy) {
@@ -2399,8 +2410,9 @@
                      [items, type] = [this.watchlist, 'watchlist'];
                      if(this.elements.watchlistCount) this.elements.watchlistCount.textContent = `(${this.watchlist.length})`;
                 } else if (this.currentTab === 'news') {
+                    // This block should ideally not be reached if switchTab worked, but keeping as safeguard
                     this.fetchAndRenderNews();
-                    return;
+                    return; 
                 }
                 
                 this.renderPortfolioSummary(); // Always render the combined summary
@@ -3184,7 +3196,14 @@
                     if(footerBtn) footerBtn.textContent = 'Expand';
                 }
 
-                groupWrapper.append(header, summaryContainer, content, footer);
+                // Append summary ONLY if not on a non-portfolio tab
+                if (this.currentTab === 'stocks' || this.currentTab === 'funds') {
+                    groupWrapper.append(header, summaryContainer, content, footer);
+                } else {
+                    // Only append header, content, and footer for other tabs like Watchlist
+                    groupWrapper.append(header, content, footer);
+                }
+                
                 parent.appendChild(groupWrapper);
                 this.renderCards(itemList, content, type);
             }
