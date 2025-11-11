@@ -2272,7 +2272,7 @@
                     case 'pl_overall':
                         return items.sort((a, b) => {
                             const statsA = this.calculateTransactionStats(a.transactions, a.price);
-                            const statsB = this.calculateTransactionStats(b.transactions, b.price);
+                            const statsB = this.calculateTransactionStats(b.transactions, a.price);
                             const totalPlA = statsA.unrealizedPL + statsA.realizedPL;
                             const totalPlB = statsB.unrealizedPL + statsB.realizedPL;
                             return totalPlB - totalPlA;
@@ -4074,7 +4074,7 @@
                 if (!hasNewsKey) {
                     container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: var(--color-negative);">
                         <p style="font-size: 1.1rem; font-weight: 600;">⚠️ FMP API Key Missing for News</p>
-                        <p style="margin-top: 10px; color: var(--text-secondary);">Please enter your Financial Modeling Prep (FMP) API Key in the Settings panel to enable real-time news updates.</p>
+                        <p style="margin-top: 10px; color: var(--text-secondary);">Please enter your Financial Modeling Prep (FMP) API Key in the <button class="btn-primary" style="display: inline-flex; margin: 0 5px;" onclick="window.stockTracker.openSettingsModal()">Settings</button> panel to enable real-time news updates.</p>
                     </div>`;
                     return;
                 }
@@ -4083,14 +4083,18 @@
                 const now = Date.now();
                 if (this.newsFeed.length === 0 || now - this.newsFetchTime > 3600000) {
                     this.showLoading(true, "Fetching latest news...");
+                    
                     const symbols = [...new Set(this.stocks.map(s => s.symbol))];
+                    let newsSymbols = symbols;
+                    let newsType = 'personalized';
+
                     if (symbols.length === 0) {
-                        this.showLoading(false);
-                        container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: var(--text-secondary);">Add stocks to your portfolio to see personalized news updates here.</div>`;
-                        return;
+                        // If no stocks are added, use major indices/stocks for general market news (Improved UX)
+                        newsSymbols = ['SPY', 'QQQ', 'AAPL', 'MSFT', 'GOOGL'];
+                        newsType = 'general market';
                     }
 
-                    const symbolList = symbols.join(',');
+                    const symbolList = newsSymbols.join(',');
                     const url = `https://financialmodelingprep.com/api/v3/general-news?limit=50&tickers=${symbolList}&apikey=${this.config.fmpApiKey}`;
                     
                     try {
@@ -4099,13 +4103,20 @@
                         this.newsFeed = await response.json();
                         this.newsFetchTime = now;
                     } catch (error) {
-                        this.showError(`Failed to fetch news: ${error.message}`);
+                        this.showError(`Failed to fetch ${newsType} news: ${error.message}`);
                         this.showLoading(false);
                         return;
                     }
                 }
                 this.showLoading(false);
                 
+                // Update title based on whether news is personalized or general
+                const titleElement = document.querySelector('#news-tab .watchlist-title');
+                if (titleElement) {
+                     const symbolsText = newsType === 'personalized' ? 'Your Stocks' : 'General Market';
+                     titleElement.innerHTML = `📰 Top News for ${symbolsText}`;
+                }
+
                 container.innerHTML = this.newsFeed.map(article => `
                     <a href="${article.url}" target="_blank" class="news-article-card">
                         <img src="${article.image}" alt="${article.title}" onerror="this.onerror=null; this.src='https://placehold.co/80x80/6c757d/ffffff?text=News';">
@@ -4116,6 +4127,10 @@
                         </div>
                     </a>
                 `).join('');
+                
+                if (this.newsFeed.length === 0) {
+                     container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: var(--text-secondary);">No relevant news articles found at this time.</div>`;
+                }
             }
         }
         
