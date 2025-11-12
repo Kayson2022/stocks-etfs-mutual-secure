@@ -601,9 +601,8 @@
             border: none;
         }
         /* Specific override for the 1W button to match the image's style exactly */
-        #portfolio-performance-container .chart-range-btn[data-range="1W"] {
-            background-color: var(--accent-primary);
-            color: white;
+        #portfolio-performance-container .chart-range-btn[data-range="1Y"] {
+            /* Note: We keep 1Y active by default, styles controlled by JS now */
         }
         #portfolio-performance-container .chart-range-btn:not(.active) {
             background-color: var(--bg-tertiary);
@@ -763,7 +762,8 @@
         }
         .transaction-btn {
             padding: 10px; font-size: 0.9rem;
-            background-color: var(--accent-primary); color: white; border: none;
+            background-color: var(--accent-primary); color: white;
+            border: none;
             border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; transition: var(--transition);
         }
         .transaction-btn:hover {
@@ -1053,7 +1053,7 @@
             font-weight: 500;
             padding: 8px 16px;
         }
-        .chart-controls .chart-range-btn[data-range="1W"] {
+        .chart-controls .chart-range-btn[data-range="1Y"] {
             font-weight: 700;
         }
         .chart-controls .chart-range-btn.active {
@@ -1410,7 +1410,7 @@
       });
     });
     
-    // Set 1W as active by default to match the image
+    // Set 1Y as active by default to match the image
     const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1Y"]');
     if (initialRangeButton) {
         initialRangeButton.classList.add('active');
@@ -1907,7 +1907,7 @@
             // --- NEW: FMP General News Fetch (Final News Fallback) ---
             async fetchFmpGeneralNews() {
                 // Fetches general news (not ticker-specific)
-                const url = `https://financialmodelingprep.com/api/v3/general-news?limit=10&apikey=${this.config.fmpApiKey}`;
+                const url = `https://modelingprep.com/api/v3/general-news?limit=10&apikey=${this.config.fmpApiKey}`;
 
                 try {
                     const response = await fetch(url);
@@ -3430,8 +3430,8 @@
                         </div>
                         <div class="stock-info">${stockInfoHTML}</div>
                         ${cardChartHTML}
-                        ${cardActionsHTML}
                         <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}` : ''}</div>
+                        ${cardActionsHTML}
                     `;
                     
                     container.appendChild(card);
@@ -3567,7 +3567,7 @@
                     let timeUnit = 'month';
                     if (range === '1W' || range === '1M') {
                         timeUnit = 'day';
-                    } else if (range === '3Y' || range === '5Y' || range === 'ALL') {
+                    } else if (range === '3Y' || range === '5Y' || range === 'All') {
                         timeUnit = 'year';
                     }
 
@@ -3817,8 +3817,10 @@
 
                 // --- Dynamic X-Axis Unit Logic ---
                 let timeUnit = 'month';
+                // FIX: Use 'day' for 1W/1M ranges for better granularity
                 if (range === '1W' || range === '1M') {
                     timeUnit = 'day';
+                // FIX: Use 'year' for ranges 3Y and above to prevent compression
                 } else if (range === '3Y' || range === '5Y' || range === 'ALL') {
                     timeUnit = 'year';
                 }
@@ -4208,30 +4210,43 @@
                 const sessionDocRef = doc(db, "sessions", this.userId);
                 
                 // Set the current session ID on login (used for multi-device sign-out)
-                setDoc(sessionDocRef, { 
-                    lastLogin: serverTimestamp(),
-                    activeSession: this.sessionId,
-                    userId: this.userId
-                }, { merge: true }).catch(err => console.error("Error writing session ID:", err));
+                try {
+                    setDoc(sessionDocRef, { 
+                        lastLogin: serverTimestamp(),
+                        activeSession: this.sessionId,
+                        userId: this.userId
+                    }, { merge: true }).catch(err => console.error("Error writing session ID:", err));
+                } catch (err) {
+                    console.error("Error setting initial session doc (check rules):", err);
+                }
 
                 // Listen for changes to the activeSession field
-                this.sessionUnsubscribe = onSnapshot(sessionDocRef, (doc) => {
-                    if (doc.exists() && doc.data().activeSession !== this.sessionId) {
-                        // A different session has become the 'active' one (i.e., this session was signed out remotely)
-                        this.showError("You have been signed out because a new session was started or an admin action was taken.");
-                        this.signOut();
-                    }
-                }, (error) => {
-                    console.error("Error listening to session document:", error);
-                });
+                try {
+                    this.sessionUnsubscribe = onSnapshot(sessionDocRef, (doc) => {
+                        if (doc.exists() && doc.data().activeSession !== this.sessionId) {
+                            // A different session has become the 'active' one (i.e., this session was signed out remotely)
+                            this.showError("You have been signed out because a new session was started or an admin action was taken.");
+                            this.signOut();
+                        }
+                    }, (error) => {
+                        console.error("Error listening to session document:", error);
+                    });
+                } catch (err) {
+                    console.error("Error setting up session listener (check rules):", err);
+                }
             }
             async signOutOtherSessions() {
                 if (!this.userId) return;
                  this.openConfirmModal("Are you sure you want to sign out all other devices? This session will remain active.", async () => {
                     const sessionDocRef = doc(db, "sessions", this.userId);
                     // Update the activeSession ID to the current one, which invalidates all others (as they are watching for a mismatch)
-                    await setDoc(sessionDocRef, { activeSession: this.sessionId, forceSignOut: Date.now() }, { merge: true });
-                    this.showSuccess("All other sessions have been signed out.");
+                    try {
+                        await setDoc(sessionDocRef, { activeSession: this.sessionId, forceSignOut: Date.now() }, { merge: true });
+                        this.showSuccess("All other sessions have been signed out.");
+                    } catch (err) {
+                         this.showError(`Failed to sign out other sessions. Check Firebase permissions.`);
+                         console.error("Error signing out other sessions:", err);
+                    }
                  });
             }
             
