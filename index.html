@@ -1971,7 +1971,7 @@
 
                 // 2. Try FMP (Fallback - Ticker-specific, includes 403 general fallback)
                 if (this.config.fmpApiKey && this.config.fmpApiKey !== 'YOUR_FMP_API_KEY') {
-                    let result = await this.fetchFmpTickerNews(symbol);
+                    let result = await this.apiService.fetchFmpTickerNews(symbol);
                     if (result.success) {
                         return result.data;
                     }
@@ -3869,7 +3869,13 @@
              * ==================================================================
              */
             renderTodayPerformanceBarChart() {
-                // 1. Prepare Data for Bar Chart
+                // 1. Destroy any existing historical chart instance (FIX)
+                if (this.portfolioPerformanceChartInstance) {
+                    this.portfolioPerformanceChartInstance.destroy();
+                    this.portfolioPerformanceChartInstance = null;
+                }
+                
+                // 2. Prepare Data for Bar Chart
                 const allItems = [...this.stocks, ...this.mutualFunds];
                 const data = allItems.map(item => {
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
@@ -3884,19 +3890,19 @@
                 const labels = topMovers.map(item => item.symbol);
                 const barValues = topMovers.map(item => item.change);
                 
-                // 2. Determine colors
+                // 3. Determine colors
                 const backgroundColors = barValues.map(change => 
                     change >= 0 ? 'var(--color-positive)' : 'var(--color-negative)'
                 );
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#212529';
                 
-                // 3. Destroy previous chart
+                // 4. Destroy previous bar chart instance
                 if (this.portfolioPerformanceBarChartInstance) {
                     this.portfolioPerformanceBarChartInstance.destroy();
                 }
 
-                // 4. Initialize Bar Chart
+                // 5. Initialize Bar Chart
                 const ctx = this.elements.portfolioPerformanceBarChart.getContext('2d');
                 this.portfolioPerformanceBarChartInstance = new Chart(ctx, {
                     type: 'bar',
@@ -3944,13 +3950,25 @@
             }
 
             renderHistoricalLineChart(range = '1W') {
+                // 1. Destroy any existing bar chart instance (FIX)
+                if (this.portfolioPerformanceBarChartInstance) {
+                    this.portfolioPerformanceBarChartInstance.destroy();
+                    this.portfolioPerformanceBarChartInstance = null;
+                }
+                
                 const hasHistory = this.portfolioHistory.length > 0;
                 
+                const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
+                
+                // Explicitly destroy previous line chart instance before drawing a new one (FIX)
+                if (this.portfolioPerformanceChartInstance) {
+                    this.portfolioPerformanceChartInstance.destroy();
+                    this.portfolioPerformanceChartInstance = null;
+                }
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
                 // If no history, show error on the historical canvas
                 if (!hasHistory) {
-                    const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
-                    if (this.portfolioPerformanceChartInstance) this.portfolioPerformanceChartInstance.destroy();
-                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
                     ctx.textAlign = 'center';
                     ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
                     ctx.font = "16px 'Inter', sans-serif";
@@ -3977,9 +3995,6 @@
                 const chartData = allDataPoints.filter(dp => dp.x >= startDate);
 
                 if (chartData.length <= 1) {
-                    const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
-                    if (this.portfolioPerformanceChartInstance) this.portfolioPerformanceChartInstance.destroy();
-                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
                     ctx.textAlign = 'center';
                     ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
                     ctx.font = "16px 'Inter', sans-serif";
@@ -3987,11 +4002,6 @@
                     return;
                 }
                 
-                const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
-                if (this.portfolioPerformanceChartInstance) {
-                    this.portfolioPerformanceChartInstance.destroy();
-                }
-
                 // Dynamic Colors/Styles
                 const lineRgb = window.getRgbColor('--chart-line-color');
                 const fillRgb = window.getRgbColor('--chart-fill-color-rgb');
@@ -4017,6 +4027,7 @@
                 } else if (range === '6M' || range === 'YTD' || range === '1Y') {
                     timeUnit = 'month';
                     displayFormat = 'MMM yyyy';
+                // FIX: Corrected syntax error here: range === '5Y || range === 'ALL'
                 } else if (range === '3Y' || range === '5Y' || range === 'ALL') {
                     timeUnit = 'year';
                     displayFormat = 'yyyy';
@@ -4092,15 +4103,16 @@
                 if (!container || container.style.display === 'none') return;
                 
                 // Determine if we are rendering the bar chart (default/today view) or a historical line chart
-                const isBarChart = range === 'BAR_TODAY' || (range === '1W' && this.elements.barChartWrapper.style.display !== 'none' && !this.portfolioPerformanceChartInstance);
+                const isBarChart = range === 'BAR_TODAY';
 
-                // If the user clicks a historical button, we force the line chart view
+                // Toggle Visibility of Chart Wrappers and Update Title
                 if (range !== 'BAR_TODAY') {
+                    // Switching to historical view
                     this.elements.historicalChartWrapper.style.display = 'block';
                     this.elements.barChartWrapper.style.display = 'none';
                     this.elements.portfolioChartTitle.textContent = "Portfolio Performance History";
-                } else if (range === 'BAR_TODAY') {
-                     // If we explicitly call BAR_TODAY, force bar chart view
+                } else {
+                     // Switching to bar chart view
                     this.elements.historicalChartWrapper.style.display = 'none';
                     this.elements.barChartWrapper.style.display = 'block';
                     this.elements.portfolioChartTitle.textContent = "Today's Performance Breakdown";
@@ -4115,8 +4127,7 @@
                         const newActiveButton = this.elements.performanceChartControls.querySelector(`[data-range="${range}"]`);
                         if(newActiveButton) newActiveButton.classList.add('active');
                     }
-                    // Special case: If switching back to bar chart, we can make '1W' button visually active by default, 
-                    // as that's the most common next historical click, but we don't need to here since the initial HTML sets it.
+                    // NOTE: The BAR_TODAY view doesn't have an associated button, so no button is active when it's shown.
                 }
 
                 // Render the selected chart type
