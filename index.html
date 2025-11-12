@@ -1065,6 +1065,63 @@
             /* Ensure chart canvas takes available space inside wrapper */
             width: 100%;
         }
+        
+        /* --- Diversification Chart Styling (New Bar Chart Style) --- */
+        #diversification-chart-container {
+             padding: 24px;
+             border-radius: 20px;
+        }
+        #diversification-chart-container h4 {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+        .diversification-content {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+        .diversification-chart-wrapper {
+            flex-grow: 1;
+            min-width: 300px;
+            max-width: 100%;
+            height: 400px;
+        }
+        .diversification-legend {
+            flex-shrink: 0;
+            width: 100%;
+            max-width: 400px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            padding: 20px 0;
+            border-top: 1px solid var(--border-color);
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.95rem;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            margin-right: 8px;
+        }
+        @media (min-width: 768px) {
+            .diversification-content { flex-wrap: nowrap; }
+            .diversification-chart-wrapper { max-width: 60%; }
+             .diversification-legend { 
+                 width: auto;
+                 margin-top: 0;
+                 border-top: none;
+                 flex-grow: 1;
+                 padding: 0;
+                 grid-template-columns: 1fr; /* Stack vertically for space */
+             }
+        }
         /* === END CHART STYLES === */
     </style>
 </head>
@@ -1410,14 +1467,14 @@
       });
     });
     
-    // Set 1Y as active by default to match the image
-    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1Y"]');
+    // Set 1W as active by default (Corrected initial default state to 1W)
+    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1W"]');
     if (initialRangeButton) {
         initialRangeButton.classList.add('active');
     }
 
 
-    updateChart('1Y');
+    updateChart('1W');
 
     var combinedEl = document.getElementById("combined-total-value");
     if (combinedEl) {
@@ -1425,7 +1482,7 @@
         var newVal = getCombinedTotalFromDOM();
         if (newVal && newVal !== initialCombined) {
           fullData = generatePlaceholderData(newVal, 365 * 5);
-          updateChart(document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range') || '1Y');
+          updateChart(document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range') || '1W');
         }
       });
       // REMOVED: Mutation observer setup to prevent Chart.js race condition/crash.
@@ -1437,7 +1494,7 @@
         const ph = window.stockTracker.portfolioHistory;
         if (Array.isArray(ph) && ph.length) {
           fullData = ph.map(d => ({ x: d.date, y: Number(d.value) }));
-          updateChart(document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range') || '1Y');
+          updateChart(document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range') || '1W');
         }
       };
       // tryUseReal(); // Removed direct call to prevent initial race condition
@@ -1907,7 +1964,8 @@
             // --- NEW: FMP General News Fetch (Final News Fallback) ---
             async fetchFmpGeneralNews() {
                 // Fetches general news (not ticker-specific)
-                const url = `https://modelingprep.com/api/v3/general-news?limit=10&apikey=${this.config.fmpApiKey}`;
+                // FIX: Corrected URL typo (modelingprep -> financialmodelingprep)
+                const url = `https://financialmodelingprep.com/api/v3/general-news?limit=10&apikey=${this.config.fmpApiKey}`;
 
                 try {
                     const response = await fetch(url);
@@ -3687,34 +3745,132 @@
                 };
                 reader.readAsText(file);
             }
+            // --- NEW: Render Diversification Chart (Style changed to match the visual request) ---
             renderDiversificationChart() {
                 const container = this.elements.diversificationChartContainer;
                 const allItems = [...this.stocks, ...this.mutualFunds];
+                const totalPortfolioValue = allItems.reduce((sum, item) => sum + this.calculateTransactionStats(item.transactions, item.price).currentValue, 0);
+                
                 const hasTransactions = allItems.some(s => s.transactions && s.transactions.length > 0 && this.calculateTransactionStats(s.transactions).currentValue > 0);
+                
                 if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && hasTransactions ? 'block' : 'none';
                 if (!container || container.style.display === 'none') return;
+                
                 const industryData = allItems.reduce((acc, stock) => {
                     const { currentValue } = this.calculateTransactionStats(stock.transactions, stock.price);
                     if (currentValue > 0) acc[stock.industry || 'Other'] = (acc[stock.industry || 'Other'] || 0) + currentValue;
                     return acc;
                 }, {});
-                const sortedData = Object.entries(industryData).sort(([, a], [, b]) => b - a);
-                const labels = sortedData.map(([label]) => label);
-                const data = sortedData.map(([, value]) => value);
+                
+                const sortedData = Object.entries(industryData)
+                    .map(([label, value]) => ({ 
+                        label, 
+                        value, 
+                        percentage: totalPortfolioValue > 0 ? (value / totalPortfolioValue) * 100 : 0 
+                    }))
+                    .sort((a, b) => b.value - a.value);
+
+                const labels = sortedData.map(item => item.label);
+                const data = sortedData.map(item => item.value);
+
                 if (this.diversificationChartInstance) {
                     this.diversificationChartInstance.destroy();
                 }
-                const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+
+                // Custom color palette matching the requested style (vibrant colors)
+                const colors = [
+                    '#E74C3C', '#F39C12', '#2ECC71', '#9B59B6', '#3498DB', 
+                    '#1ABC9C', '#F1C40F', '#7F8C8D', '#95A5A6', '#D35400',
+                    '#5D6D7E', '#2E86C1', '#A93226', '#1E8449', '#6C3483'
+                ];
+                
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
-                const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
-                if(this.elements.diversificationChart) {
-                    this.diversificationChartInstance = new Chart(this.elements.diversificationChart, {
+                const labelColor = this.isDarkMode ? '#f1f1f1' : '#212529';
+                
+                // Dynamic mapping of colors to data points
+                const backgroundColors = sortedData.map((_, index) => colors[index % colors.length]);
+
+                // Create custom legend HTML
+                const legendHtml = sortedData.map((item, index) => {
+                    // Check if the allocation is substantial enough to be in the main legend (e.g., > 2%)
+                    if (item.percentage >= 2 || index < 6) { 
+                        return `
+                            <div class="legend-item">
+                                <span class="legend-color" style="background-color: ${backgroundColors[index]};"></span>
+                                ${item.label}: ${this.formatNumber(item.percentage, 1)}% 
+                                (${this.formatCurrency(item.value)})
+                            </div>
+                        `;
+                    }
+                    return '';
+                }).join('');
+                
+                // Clear and render the main container layout
+                container.innerHTML = `
+                    <h4>Asset Allocation Breakdown by Industry</h4>
+                    <div class="diversification-content">
+                        <div class="diversification-chart-wrapper">
+                            <canvas id="diversificationChart"></canvas>
+                        </div>
+                        <div class="diversification-legend" id="diversification-legend">
+                            ${legendHtml}
+                        </div>
+                    </div>
+                `;
+                
+                const chartCanvas = document.getElementById('diversificationChart');
+                if(chartCanvas) {
+                    this.diversificationChartInstance = new Chart(chartCanvas, {
                         type: 'bar',
-                        data: { labels, datasets: [{ label: 'Value', data, backgroundColor: colors }] },
-                        options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: 'Portfolio by Industry', color: labelColor }, legend: { display: false } }, scales: { y: { ticks: { color: labelColor }, grid: { color: gridColor } }, x: { ticks: { color: labelColor }, grid: { color: gridColor } } } }
+                        data: { 
+                            labels, 
+                            datasets: [{ 
+                                label: 'Value (USD)', 
+                                data, 
+                                backgroundColor: backgroundColors,
+                                borderRadius: 5, // Rounded corners for bars
+                            }] 
+                        },
+                        options: { 
+                            responsive: true, 
+                            maintainAspectRatio: false, 
+                            indexAxis: 'x', // Vertical bars
+                            plugins: { 
+                                title: { display: false }, 
+                                legend: { display: false }, // Use custom HTML legend
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => {
+                                            const value = context.parsed.y;
+                                            const percentage = totalPortfolioValue > 0 ? (value / totalPortfolioValue) * 100 : 0;
+                                            return `${context.label}: ${this.formatCurrency(value)} (${this.formatNumber(percentage, 1)}%)`;
+                                        }
+                                    }
+                                }
+                            }, 
+                            scales: { 
+                                y: { 
+                                    ticks: { 
+                                        color: labelColor, 
+                                        callback: (value) => this.formatCurrency(value) 
+                                    }, 
+                                    grid: { color: gridColor, drawBorder: false } 
+                                }, 
+                                x: { 
+                                    ticks: { 
+                                        color: labelColor,
+                                        maxRotation: 45, // Rotate labels for better fit
+                                        minRotation: 45 
+                                    }, 
+                                    grid: { color: gridColor, drawBorder: false } 
+                                } 
+                            } 
+                        }
                     });
                 }
             }
+            // --- END Diversification Chart Update ---
+            
             async updatePortfolioHistory() {
                 const allItems = [...this.stocks, ...this.mutualFunds];
                  const today = new Date().toISOString().slice(0, 10);
@@ -3730,10 +3886,8 @@
              * ==================================================================
              * ==      REDESIGNED PORTFOLIO PERFORMANCE CHART FUNCTION         ==
              * ==================================================================
-             * Updated to match the provided image: smooth curve, soft purple fill, subtle points, 
-             * clean axis ticks/gridlines, and the 1W button is active by default.
              */
-            renderPortfolioPerformanceChart(range = '1Y') {
+            renderPortfolioPerformanceChart(range = '1W') {
                 const container = this.elements.portfolioPerformanceContainer;
                 const hasHistory = this.portfolioHistory.length > 0;
 
@@ -3903,7 +4057,7 @@
                 if (refreshInterval < 10) { this.showError("Refresh interval must be at least 10 seconds."); return; }
 
                 localStorage.setItem('finnhubApiKey', finnhubKey);
-                localStorage.setItem('alphaVantageKey', alphaVantageKey);
+                localStorage.setItem('alphaVantageApiKey', alphaVantageKey);
                 localStorage.setItem('fmpApiKey', fmpKey);
                 localStorage.setItem('refreshIntervalMs', refreshInterval * 1000);
 
