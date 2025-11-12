@@ -806,7 +806,11 @@
              overflow: hidden;
         }
         .transactions-container.collapsed {
-            max-height: 0; opacity: 0; margin-top: 0; padding-top: 0; pointer-events: none;
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            padding-top: 0;
+            pointer-events: none;
         }
         .transaction-entry {
             background-color: var(--bg-tertiary);
@@ -1235,7 +1239,7 @@
       <button class="chart-range-btn" data-range="1M">1M</button>
       <button class="chart-range-btn" data-range="6M">6M</button>
       <button class="chart-range-btn" data-range="YTD">YTD</button>
-      <button class="chart-range-btn" data-range="1Y">1Y</button>
+      <button class="chart-range-btn active" data-range="1Y">1Y</button>
       <button class="chart-range-btn" data-range="3Y">3Y</button>
       <button class="chart-range-btn" data-range="5Y">5Y</button>
       <button class="chart-range-btn" data-range="ALL">ALL</button>
@@ -1407,13 +1411,13 @@
     });
     
     // Set 1W as active by default to match the image
-    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1W"]');
+    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1Y"]');
     if (initialRangeButton) {
         initialRangeButton.classList.add('active');
     }
 
 
-    updateChart('1W');
+    updateChart('1Y');
 
     var combinedEl = document.getElementById("combined-total-value");
     if (combinedEl) {
@@ -1421,10 +1425,11 @@
         var newVal = getCombinedTotalFromDOM();
         if (newVal && newVal !== initialCombined) {
           fullData = generatePlaceholderData(newVal, 365 * 5);
-          updateChart(document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range') || '1W');
+          updateChart(document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range') || '1Y');
         }
       });
-      observer.observe(combinedEl, { childList: true, subtree: true, characterData: true });
+      // REMOVED: Mutation observer setup to prevent Chart.js race condition/crash.
+      // observer.observe(combinedEl, { childList: true, subtree: true, characterData: true });
     }
 
     if (window.stockTracker) {
@@ -1432,10 +1437,10 @@
         const ph = window.stockTracker.portfolioHistory;
         if (Array.isArray(ph) && ph.length) {
           fullData = ph.map(d => ({ x: d.date, y: Number(d.value) }));
-          updateChart(document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range') || '1W');
+          updateChart(document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range') || '1Y');
         }
       };
-      tryUseReal();
+      // tryUseReal(); // Removed direct call to prevent initial race condition
       window.addEventListener('portfolioHistoryUpdated', tryUseReal);
     }
   });
@@ -1873,7 +1878,16 @@
 
                  try {
                     const response = await fetch(url);
-                    if (!response.ok) return { success: false, reason: `FMP HTTP Error: ${response.status}` };
+                    
+                    if (!response.ok) {
+                        // FIX: If the specific ticker news endpoint fails with 403, try the general feed as a final fallback.
+                        if (response.status === 403) {
+                             console.warn(`FMP ticker-specific news failed with 403 for ${symbol}. Attempting general FMP news fallback.`);
+                             return await this.fetchFmpGeneralNews();
+                        }
+                        return { success: false, reason: `FMP HTTP Error: ${response.status}` };
+                    }
+                    
                     const json = await response.json();
                     
                     if (!Array.isArray(json) || json.length === 0) {
@@ -1885,10 +1899,35 @@
 
                     return { success: true, data: normalizedNews };
                 } catch (error) {
-                    console.error(`Error fetching FMP news for ${symbol}:`, error);
+                    console.error(`Error fetching FMP ticker news for ${symbol}:`, error);
                     return { success: false, reason: `FMP Fetch Error: ${error.message}` };
                 }
             }
+            
+            // --- NEW: FMP General News Fetch (Final News Fallback) ---
+            async fetchFmpGeneralNews() {
+                // Fetches general news (not ticker-specific)
+                const url = `https://financialmodelingprep.com/api/v3/general-news?limit=10&apikey=${this.config.fmpApiKey}`;
+
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) return { success: false, reason: `FMP General HTTP Error: ${response.status}` };
+                    const json = await response.json();
+
+                    if (!Array.isArray(json) || json.length === 0) {
+                        return { success: false, reason: 'FMP returned no general news' };
+                    }
+
+                    // FMP data is usually in the required format, add priority flag
+                    const normalizedNews = json.map(item => ({...item, priority: 'FMP (General)' }));
+
+                    return { success: true, data: normalizedNews };
+                } catch (error) {
+                    console.error("Error fetching FMP general news:", error);
+                    return { success: false, reason: `FMP General Fetch Error: ${error.message}` };
+                }
+            }
+
 
             // --- NEW: Unified News Fetcher with Fallback ---
             async fetchSymbolNews(symbol) {
@@ -1901,7 +1940,7 @@
                     console.log(`Finnhub news failed for ${symbol}. Reason: ${result.reason}. Falling back to FMP...`);
                 }
 
-                // 2. Try FMP (Fallback)
+                // 2. Try FMP (Fallback - Ticker-specific, includes 403 general fallback)
                 if (this.config.fmpApiKey && this.config.fmpApiKey !== 'YOUR_FMP_API_KEY') {
                     let result = await this.fetchFmpTickerNews(symbol);
                     if (result.success) {
@@ -2341,15 +2380,20 @@
                 const tabContent = document.getElementById(`${tab}-tab`);
                 if(tabContent) tabContent.classList.add('active');
 
-                // FIX: Explicitly hide the stocks grid if switching to news
+                // FIX: Explicitly control visibility of non-news content containers
                 if (tab === 'news') {
-                    if (this.elements.stocksGrid) this.elements.stocksGrid.style.display = 'grid'; // News will be handled by fetchAndRenderNews, but ensure parent container is available
-                    this.fetchAndRenderNews();
-                    if (this.elements.stocksGrid) this.elements.stocksGrid.innerHTML = ''; // Clear the grid to prevent showing portfolio content below the news tab
+                    // News tab is active
+                    if (this.elements.stocksGrid) {
+                        this.elements.stocksGrid.innerHTML = ''; // Clear content
+                        this.elements.stocksGrid.style.display = 'grid'; // Keep grid display, but empty for news tab
+                    }
+                    if (this.elements.portfolioSummary) this.elements.portfolioSummary.style.display = 'none';
                     if (this.elements.portfolioPerformanceContainer) this.elements.portfolioPerformanceContainer.style.display = 'none';
                     if (this.elements.diversificationChartContainer) this.elements.diversificationChartContainer.style.display = 'none';
+                    this.fetchAndRenderNews();
                     return;
                 } else {
+                    // Portfolio, Funds, Watchlist tabs are active
                     if (this.elements.stocksGrid) this.elements.stocksGrid.style.display = 'grid';
                 }
                 
@@ -3519,6 +3563,14 @@
                     const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                     const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
 
+                    // --- Dynamic X-Axis Unit Logic ---
+                    let timeUnit = 'month';
+                    if (range === '1W' || range === '1M') {
+                        timeUnit = 'day';
+                    } else if (range === '3Y' || range === '5Y' || range === 'ALL') {
+                        timeUnit = 'year';
+                    }
+
                     this.cardChartInstances[chartId] = new Chart(ctx, {
                         type: 'line',
                         data: {
@@ -3537,7 +3589,7 @@
                             scales: {
                                 x: {
                                     type: 'time',
-                                    time: { unit: 'month' },
+                                    time: { unit: timeUnit },
                                     ticks: { color: labelColor, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
                                     grid: { display: false }
                                 },
@@ -3681,7 +3733,7 @@
              * Updated to match the provided image: smooth curve, soft purple fill, subtle points, 
              * clean axis ticks/gridlines, and the 1W button is active by default.
              */
-            renderPortfolioPerformanceChart(range = '1W') {
+            renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
                 const hasHistory = this.portfolioHistory.length > 0;
 
@@ -3762,6 +3814,14 @@
                     gradient.addColorStop(1, `rgba(${fillRgb}, 0)`);
                     return gradient;
                 };
+
+                // --- Dynamic X-Axis Unit Logic ---
+                let timeUnit = 'month';
+                if (range === '1W' || range === '1M') {
+                    timeUnit = 'day';
+                } else if (range === '3Y' || range === '5Y' || range === 'ALL') {
+                    timeUnit = 'year';
+                }
                 
                 // Destroy the placeholder instance created in the HTML script block
                 if (window.Chart.getChart(this.elements.portfolioPerformanceChart)) {
@@ -3806,7 +3866,7 @@
                             x: {
                                 type: 'time',
                                 time: { 
-                                    unit: range === '1W' || range === '1M' ? 'day' : (range === '6M' || range === '1Y' ? 'month' : 'year'),
+                                    unit: timeUnit,
                                     tooltipFormat: 'MM/dd/yyyy'
                                 },
                                 ticks: { color: labelColor, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
@@ -3841,7 +3901,7 @@
                 if (refreshInterval < 10) { this.showError("Refresh interval must be at least 10 seconds."); return; }
 
                 localStorage.setItem('finnhubApiKey', finnhubKey);
-                localStorage.setItem('alphaVantageApiKey', alphaVantageKey);
+                localStorage.setItem('alphaVantageKey', alphaVantageKey);
                 localStorage.setItem('fmpApiKey', fmpKey);
                 localStorage.setItem('refreshIntervalMs', refreshInterval * 1000);
 
