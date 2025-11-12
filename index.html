@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1298,16 +1299,15 @@
       <button class="chart-range-btn" data-range="5Y">5Y</button>
       <button class="chart-range-btn" data-range="ALL">ALL</button>
     </div>
-    <h4 id="portfolio-chart-title">Portfolio Performance History</h4>
+    <h4 id="portfolio-chart-title">Today's Performance Breakdown</h4>
   </div>
   
-  <!-- REVERTED: Historical Chart is the default view -->
-  <div class="canvas-wrapper" id="historical-chart-wrapper" style="height: 400px;">
+  <div class="canvas-wrapper" id="historical-chart-wrapper" style="display: none; height: 400px;">
     <canvas id="portfolioPerformanceChart"></canvas>
   </div>
   
-  <!-- Bar Chart wrapper is now hidden by default -->
-  <div class="canvas-wrapper" id="bar-chart-wrapper" style="display: none; height: 400px;">
+  <!-- NEW: Canvas for the Bar Chart (Default View) -->
+  <div class="canvas-wrapper" id="bar-chart-wrapper" style="height: 400px;">
     <canvas id="portfolioPerformanceBarChart"></canvas>
   </div>
 
@@ -1406,7 +1406,76 @@
       }
     });
 
-    // Removed Placeholder data generation and chart update logic
+    function getCombinedTotalFromDOM() {
+      var el = document.getElementById("combined-total-value");
+      if (!el) return null;
+      var text = el.innerText || el.textContent || '';
+      var num = parseFloat(text.replace(/[^0-9.\-]/g, ''));
+      return isNaN(num) ? null : num;
+    }
+
+    function generatePlaceholderData(latestValue, daysBack) {
+      var arr = [];
+      var today = new Date();
+      for (var i = daysBack; i >= 0; i--) {
+        var d = new Date(today);
+        d.setDate(today.getDate() - i);
+        var variation = Math.sin(i/15) * (latestValue * 0.01) + (Math.random() - 0.5) * 500;
+        var value = Math.max(0, Math.round(latestValue + variation - i * 5));
+        arr.push({ x: d, y: value });
+      }
+      return arr;
+    }
+
+    var initialCombined = getCombinedTotalFromDOM() || 50000;
+    var fullData = generatePlaceholderData(initialCombined, 365 * 5);
+
+    function rangeStartDate(range) {
+      var now = new Date();
+      switch(range) {
+        case '1W': return new Date(now.getFullYear(), now.getMonth(), now.getDate()-7);
+        case '1M': return new Date(now.getFullYear(), now.getMonth()-1, now.getDate());
+        case '6M': return new Date(now.getFullYear(), now.getMonth()-6, now.getDate());
+        case 'YTD': return new Date(now.getFullYear(), 0, 1);
+        case '1Y': return new Date(now.getFullYear()-1, now.getMonth(), now.getDate());
+        case '3Y': return new Date(now.getFullYear()-3, now.getMonth(), now.getDate());
+        case '5Y': return new Date(now.getFullYear()-5, now.getMonth(), now.getDate());
+        case 'ALL': default: return new Date(0);
+      }
+    }
+
+    function updateChart(range) {
+      var start = rangeStartDate(range);
+      var filtered = fullData.filter(p => new Date(p.x) >= start);
+      chart.data.datasets[0].data = filtered;
+      chart.update();
+    }
+    
+    // NOTE: We only bind button events here. The initial chart rendering is managed 
+    // entirely by the StockTracker.renderPortfolioPerformanceChart method after data loads.
+    document.querySelectorAll('#performance-chart-controls .chart-range-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        document.querySelectorAll('#performance-chart-controls .chart-range-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        // Let StockTracker handle the real chart update (fixes chart race condition)
+        if (window.stockTracker) {
+            window.stockTracker.renderPortfolioPerformanceChart(e.target.getAttribute('data-range'));
+        } else {
+            // Fallback for placeholder chart logic (if StockTracker hasn't initialized)
+            updateChart(e.target.getAttribute('data-range'));
+        }
+      });
+    });
+    
+    // Set 1W as active by default (The initial view is the bar chart, so 1W is active if switching back to historical)
+    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1W"]');
+    if (initialRangeButton) {
+        initialRangeButton.classList.add('active');
+    }
+
+    updateChart('1W');
+
+    // Remaining placeholder logic removed to prevent conflicts with module code.
   });
   </script>
 
@@ -3888,7 +3957,7 @@
                     return;
                 }
 
-                // Logic to select data range
+                // Logic to select data range (copied from previous version)
                 const allDataPoints = this.portfolioHistory.map(e => ({ x: new Date(e.date), y: e.value }));
                 const now = new Date();
                 let startDate = new Date();
@@ -3904,8 +3973,6 @@
                     case 'ALL': startDate = allDataPoints.length > 0 ? new Date(allDataPoints[0].x) : new Date(0); break;
                     default: startDate.setFullYear(now.getFullYear() - 1); break;
                 }
-                
-                // FIX: Ensure the data is filtered using the correct calculated startDate object.
                 const chartData = allDataPoints.filter(dp => dp.x >= startDate);
 
                 if (chartData.length <= 1) {
@@ -4001,7 +4068,7 @@
                 });
             }
 
-            renderPortfolioPerformanceChart(range = '1W') {
+            renderPortfolioPerformanceChart(range = 'BAR_TODAY') {
                 const container = this.elements.portfolioPerformanceContainer;
                 
                 if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && (this.stocks.length > 0 || this.mutualFunds.length > 0) ? 'block' : 'none';
@@ -4020,9 +4087,7 @@
                     buttons.forEach(btn => btn.classList.remove('active'));
                     
                     if (!isBarChart) {
-                        // FIX: Ensure 1W is active if no range is specified (default behavior)
-                        const activeRange = range === 'BAR_TODAY' ? '1W' : range;
-                        const newActiveButton = this.elements.performanceChartControls.querySelector(`[data-range="${activeRange}"]`);
+                        const newActiveButton = this.elements.performanceChartControls.querySelector(`[data-range="${range}"]`);
                         if(newActiveButton) newActiveButton.classList.add('active');
                     }
                 }
