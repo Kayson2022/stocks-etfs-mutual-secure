@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -67,8 +66,8 @@
             --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
 
             /* NEW CHART COLORS to match image (Dark Mode) */
-            --chart-line-color: #f1f1f1; /* White line for dark mode */
-            --chart-fill-color-rgb: 191, 148, 228; /* Lighter Purple for dark fill (e.g., #BF94E4) */
+            --chart-line-color: #70ff9c; /* Bright Green for Line */
+            --chart-fill-color-rgb: 83, 166, 126; /* Darker Green for fill (e.g., #53a67e) */
         }
 
         /* --- Privacy Mode --- */
@@ -1053,9 +1052,9 @@
             font-weight: 500;
             padding: 8px 16px;
         }
-        .chart-controls .chart-range-btn[data-range="1Y"] {
+        /* REMOVED .chart-controls .chart-range-btn[data-range="1Y"] {
             font-weight: 700;
-        }
+        } */
         .chart-controls .chart-range-btn.active {
             background-color: var(--accent-primary);
             color: white;
@@ -1290,7 +1289,7 @@
 <div id="portfolio-performance-container" class="chart-container">
   <div class="chart-header">
     <div class="chart-controls" id="performance-chart-controls">
-      <button class="chart-range-btn" data-range="1W">1W</button>
+      <button class="chart-range-btn active" data-range="1W">1W</button>
       <button class="chart-range-btn" data-range="1M">1M</button>
       <button class="chart-range-btn" data-range="6M">6M</button>
       <button class="chart-range-btn" data-range="YTD">YTD</button>
@@ -1339,7 +1338,7 @@
         fillRgb = window.getRgbColor('--chart-fill-color-rgb');
         
         const gradient = ctx.createLinearGradient(0, 0, 0, area.height);
-        gradient.addColorStop(0, `rgba(${fillRgb}, 0.2)`); /* Reduced opacity for lighter fill */
+        gradient.addColorStop(0, `rgba(${fillRgb}, 0.3)`); /* Slightly increased opacity for better fill */
         gradient.addColorStop(1, `rgba(${fillRgb}, 0)`);
         return gradient;
     }
@@ -1350,12 +1349,13 @@
         datasets: [{
           label: "Portfolio Value ($)",
           data: [],
-          borderColor: "#10b981",
+          // Using Theme colors for initial placeholder (will be overwritten by StockTracker.renderHistoricalLineChart)
+          borderColor: window.getRgbColor('--chart-line-color'),
           borderWidth: 2.5,
           pointRadius: 3,
-          pointBackgroundColor: "#10b981",
+          pointBackgroundColor: window.getRgbColor('--chart-line-color'),
           pointHoverRadius: 6,
-          pointHoverBackgroundColor: "#34d399",
+          pointHoverBackgroundColor: window.getRgbColor('--chart-line-color'),
           hoverBorderWidth: 3,
           pointHoverBorderColor: "rgba(255,255,255,0.9)",
           tension: 0.35,
@@ -1363,7 +1363,6 @@
           backgroundColor: function(context) {
             const chartArea = context.chart.chartArea;
             if (!chartArea) return null;
-            // For portfolio chart, we assume positive for the initial placeholder state
             return createGradient(context.chart.ctx, chartArea, true); 
           },
         }]
@@ -1459,6 +1458,7 @@
         e.target.classList.add('active');
         // Let StockTracker handle the real chart update (fixes chart race condition)
         if (window.stockTracker) {
+            // Passing the range to the main renderer
             window.stockTracker.renderPortfolioPerformanceChart(e.target.getAttribute('data-range'));
         } else {
             // Fallback for placeholder chart logic (if StockTracker hasn't initialized)
@@ -1467,11 +1467,7 @@
       });
     });
     
-    // Set 1W as active by default (The initial view is the bar chart, so 1W is active if switching back to historical)
-    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1W"]');
-    if (initialRangeButton) {
-        initialRangeButton.classList.add('active');
-    }
+    // Initial active button is set in the HTML now: 1W
 
     updateChart('1W');
 
@@ -2252,6 +2248,10 @@
                     this.elements.performanceChartControls.addEventListener('click', (e) => {
                         if (e.target.classList.contains('chart-range-btn')) {
                             const range = e.target.dataset.range;
+                            // When clicking a button, we switch to historical chart view
+                            this.elements.historicalChartWrapper.style.display = 'block';
+                            this.elements.barChartWrapper.style.display = 'none';
+                            this.elements.portfolioChartTitle.textContent = "Portfolio Performance History";
                             this.renderPortfolioPerformanceChart(range);
                         }
                     });
@@ -2562,7 +2562,7 @@
                 }
 
                 this.renderDiversificationChart();
-                this.renderPortfolioPerformanceChart();
+                this.renderPortfolioPerformanceChart('BAR_TODAY'); // RENDER BAR CHART AS DEFAULT ON RENDER
                 if (sortedItems.length === 0 && type !== 'stock' && type !== 'fund' && grid) {
                      grid.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your ${type} list is empty.</div>`;
                 }
@@ -3857,6 +3857,7 @@
                 const lastEntry = this.portfolioHistory.at(-1);
                 let totalValue = allItems.reduce((sum, item) => sum + this.calculateTransactionStats(item.transactions, item.price).currentValue, 0);
                 if (totalValue <= 0) return;
+                // Only track history if we have positive portfolio value
                 if (!lastEntry || lastEntry.date !== today) this.portfolioHistory.push({ date: today, value: totalValue });
                 else lastEntry.value = totalValue;
                 await this.saveData();
@@ -3957,7 +3958,7 @@
                     return;
                 }
 
-                // Logic to select data range (copied from previous version)
+                // Logic to select data range
                 const allDataPoints = this.portfolioHistory.map(e => ({ x: new Date(e.date), y: e.value }));
                 const now = new Date();
                 let startDate = new Date();
@@ -4003,12 +4004,22 @@
                     return gradient;
                 };
 
-                // Dynamic X-Axis Unit Logic
+                // Dynamic X-Axis Unit Logic (FIXED: Use 'day' for small ranges for tighter plotting)
                 let timeUnit = 'month';
-                if (range === '1W' || range === '1M') {
+                let displayFormat = 'MMM yyyy';
+
+                if (range === '1W') {
                     timeUnit = 'day';
+                    displayFormat = 'MM-dd';
+                } else if (range === '1M') {
+                    timeUnit = 'day';
+                    displayFormat = 'MM-dd';
+                } else if (range === '6M' || range === 'YTD' || range === '1Y') {
+                    timeUnit = 'month';
+                    displayFormat = 'MMM yyyy';
                 } else if (range === '3Y' || range === '5Y' || range === 'ALL') {
                     timeUnit = 'year';
+                    displayFormat = 'yyyy';
                 }
                 
                 // Initialize the chart
@@ -4020,7 +4031,7 @@
                             data: chartData,
                             borderColor: lineRgb, 
                             borderWidth: 3,
-                            pointRadius: 1.5, 
+                            pointRadius: 3, // Increased point radius for visibility on daily data
                             pointBackgroundColor: lineRgb,
                             pointHitRadius: 10,
                             tension: 0.4, 
@@ -4050,13 +4061,19 @@
                                 type: 'time',
                                 time: { 
                                     unit: timeUnit,
-                                    tooltipFormat: 'MM/dd/yyyy'
+                                    tooltipFormat: 'MM/dd/yyyy',
+                                    displayFormats: {
+                                        day: displayFormat,
+                                        month: displayFormat,
+                                        year: displayFormat
+                                    }
                                 },
                                 ticks: { color: labelColor, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
                                 grid: { color: gridColor, drawBorder: false }
                             },
                             y: {
                                 type: 'linear',
+                                title: { display: true, text: 'Value (USD)' },
                                 ticks: {
                                     color: labelColor,
                                     callback: (val) => this.formatCurrency(val)
@@ -4074,26 +4091,36 @@
                 if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && (this.stocks.length > 0 || this.mutualFunds.length > 0) ? 'block' : 'none';
                 if (!container || container.style.display === 'none') return;
                 
-                const isBarChart = range === 'BAR_TODAY';
+                // Determine if we are rendering the bar chart (default/today view) or a historical line chart
+                const isBarChart = range === 'BAR_TODAY' || (range === '1W' && this.elements.barChartWrapper.style.display !== 'none' && !this.portfolioPerformanceChartInstance);
 
-                // Toggle Visibility of Chart Wrappers and Update Title
-                if (this.elements.historicalChartWrapper) this.elements.historicalChartWrapper.style.display = isBarChart ? 'none' : 'block';
-                if (this.elements.barChartWrapper) this.elements.barChartWrapper.style.display = isBarChart ? 'block' : 'none';
-                if (this.elements.portfolioChartTitle) this.elements.portfolioChartTitle.textContent = isBarChart ? "Today's Performance Breakdown" : "Portfolio Performance History";
-
-                // Update active state of range buttons (Only relevant for historical view)
+                // If the user clicks a historical button, we force the line chart view
+                if (range !== 'BAR_TODAY') {
+                    this.elements.historicalChartWrapper.style.display = 'block';
+                    this.elements.barChartWrapper.style.display = 'none';
+                    this.elements.portfolioChartTitle.textContent = "Portfolio Performance History";
+                } else if (range === 'BAR_TODAY') {
+                     // If we explicitly call BAR_TODAY, force bar chart view
+                    this.elements.historicalChartWrapper.style.display = 'none';
+                    this.elements.barChartWrapper.style.display = 'block';
+                    this.elements.portfolioChartTitle.textContent = "Today's Performance Breakdown";
+                }
+                
+                // Update active state of range buttons
                 if(this.elements.performanceChartControls) {
                     const buttons = this.elements.performanceChartControls.querySelectorAll('.chart-range-btn');
                     buttons.forEach(btn => btn.classList.remove('active'));
                     
-                    if (!isBarChart) {
+                    if (range !== 'BAR_TODAY') {
                         const newActiveButton = this.elements.performanceChartControls.querySelector(`[data-range="${range}"]`);
                         if(newActiveButton) newActiveButton.classList.add('active');
                     }
+                    // Special case: If switching back to bar chart, we can make '1W' button visually active by default, 
+                    // as that's the most common next historical click, but we don't need to here since the initial HTML sets it.
                 }
 
                 // Render the selected chart type
-                if (isBarChart) {
+                if (this.elements.barChartWrapper.style.display !== 'none') {
                     this.renderTodayPerformanceBarChart();
                 } else {
                     this.renderHistoricalLineChart(range);
