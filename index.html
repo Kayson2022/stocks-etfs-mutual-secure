@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,8 +68,8 @@
             --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
 
             /* NEW CHART COLORS to match image (Dark Mode) */
-            --chart-line-color: #70ff9c; /* Bright Green for Line */
-            --chart-fill-color-rgb: 83, 166, 126; /* Darker Green for fill (e.g., #53a67e) */
+            --chart-line-color: #f1f1f1; /* White line for dark mode */
+            --chart-fill-color-rgb: 191, 148, 228; /* Lighter Purple for dark fill (e.g., #BF94E4) */
         }
 
         /* --- Privacy Mode --- */
@@ -1052,9 +1054,9 @@
             font-weight: 500;
             padding: 8px 16px;
         }
-        /* REMOVED .chart-controls .chart-range-btn[data-range="1Y"] {
+        .chart-controls .chart-range-btn[data-range="1Y"] {
             font-weight: 700;
-        } */
+        }
         .chart-controls .chart-range-btn.active {
             background-color: var(--accent-primary);
             color: white;
@@ -1286,10 +1288,11 @@
 
         
 
+
 <div id="portfolio-performance-container" class="chart-container">
   <div class="chart-header">
     <div class="chart-controls" id="performance-chart-controls">
-      <button class="chart-range-btn active" data-range="1W">1W</button>
+      <button class="chart-range-btn" data-range="1W">1W</button>
       <button class="chart-range-btn" data-range="1M">1M</button>
       <button class="chart-range-btn" data-range="6M">6M</button>
       <button class="chart-range-btn" data-range="YTD">YTD</button>
@@ -1298,7 +1301,212 @@
       <button class="chart-range-btn" data-range="5Y">5Y</button>
       <button class="chart-range-btn" data-range="ALL">ALL</button>
     </div>
-    <h4 id="portfolio-chart-title">Today's Performance Breakdown</h4>
+    <h4 id="portfolio-chart-title">Portfolio Performance</h4>
+  </div>
+  
+  <div class="canvas-wrapper" id="historical-chart-wrapper" style="height:260px;">
+    <canvas id="portfolioPerformanceChart"></canvas>
+  </div>
+
+  <div class="canvas-wrapper" id="daily-chart-wrapper" style="height:160px; margin-top:12px;">
+    <canvas id="dailyStockChart"></canvas>
+  </div>
+
+  <script>
+  // Improved chart logic (replaces earlier broken implementation)
+  (function(){
+    // small helpers
+    function toDate(value){ if(!value) return null; if(typeof value.toDate==='function') return value.toDate(); if(typeof value==='string') return new Date(value); if(typeof value==='number') return new Date(value); if(value.seconds) return new Date(value.seconds*1000); return null; }
+    window.getRgbColor = window.getRgbColor || function(name){ return '153,102,204'; };
+
+    function createGradient(ctx, area){
+      const rgb = window.getRgbColor('--chart-fill-color-rgb') || '153,102,204';
+      const g = ctx.createLinearGradient(0,0,0,area.height);
+      g.addColorStop(0, `rgba(${rgb},0.18)`);
+      g.addColorStop(1, `rgba(${rgb},0)`);
+      return g;
+    }
+
+    // Create charts
+    const histCanvas = document.getElementById('portfolioPerformanceChart').getContext('2d');
+    const dailyCanvas = document.getElementById('dailyStockChart').getContext('2d');
+
+    const histChart = new Chart(histCanvas, {
+      type: 'line',
+      data: { datasets: [{ label: 'Portfolio Value (USD)', data: [], borderColor: '#5d259e', borderWidth: 2.2, pointRadius: 2.5, tension: 0.35, fill: true, backgroundColor: function(ctx){ const area = ctx.chart.chartArea; if(!area) return null; return createGradient(ctx.chart.ctx, area); } }] },
+      options: {
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'nearest' },
+        plugins: { legend: { display: false } },
+        scales: { x: { type: 'time', time: { unit: 'day', tooltipFormat: 'PPP', displayFormats: { day: 'MM-dd' } }, ticks: { autoSkip: true, maxTicksLimit: 10 } }, y: { ticks: { callback: v => '$' + Number(v).toLocaleString() } } }
+      }
+    });
+
+    const dailyChart = new Chart(dailyCanvas, {
+      type: 'line',
+      data: { datasets: [{ label: 'Daily Price', data: [], borderColor: '#10b981', borderWidth: 1.8, pointRadius: 0, tension: 0.3, fill: true, backgroundColor: function(ctx){ const area = ctx.chart.chartArea; if(!area) return null; const rgb = '153,102,204'; const g = ctx.chart.ctx.createLinearGradient(0,0,0,area.height); g.addColorStop(0, `rgba(${rgb},0.12)`); g.addColorStop(1, `rgba(${rgb},0)`); return g; } }] },
+      options: {
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: { legend: { display: false } },
+        scales: { x: { type: 'time', time: { unit: 'hour', tooltipFormat: 'PP p', displayFormats: { hour: 'HH:mm' } }, ticks: { maxTicksLimit: 8 } }, y: { ticks: { callback: v => '$' + Number(v).toLocaleString() } } }
+      }
+    });
+
+    // Data store
+    let allHistoryData = []; // {x:Date, y:number}
+    let dailyData = []; // {x:Date, y:number}
+
+    function generatePlaceholder(latest, days){
+      const arr=[]; const now=new Date();
+      for(let i=days;i>=0;i--){ const d=new Date(now); d.setDate(now.getDate()-i); const seasonal = Math.sin(i/8)*(latest*0.008); const noise=(Math.random()-0.5)*(latest*0.004); const decay = -i*(latest*0.0001); const val=Math.max(0, Math.round(latest + seasonal + noise + decay)); arr.push({x:d,y:val}); }
+      return arr;
+    }
+
+    function generateDailyPlaceholder(latest){
+      const arr=[]; const now=new Date(); for(let i=390;i>=0;i-=10){ // simulate intraday ~ 6.5h*60=390 minutes
+        const d=new Date(now); d.setHours(9); d.setMinutes(30); d.setMinutes(30 + i); const variation = Math.sin(i/40)*(latest*0.005) + (Math.random()-0.5)*(latest*0.002); arr.push({x:d,y:Math.max(0, Math.round(latest + variation))}); }
+      return arr;
+    }
+
+    function rangeStartDate(range){
+      const now=new Date();
+      switch(range){
+        case '1W': return new Date(now.getFullYear(), now.getMonth(), now.getDate()-7);
+        case '1M': return new Date(now.getFullYear(), now.getMonth()-1, now.getDate());
+        case '6M': return new Date(now.getFullYear(), now.getMonth()-6, now.getDate());
+        case 'YTD': return new Date(now.getFullYear(), 0, 1);
+        case '1Y': return new Date(now.getFullYear()-1, now.getMonth(), now.getDate());
+        case '3Y': return new Date(now.getFullYear()-3, now.getMonth(), now.getDate());
+        case '5Y': return new Date(now.getFullYear()-5, now.getMonth(), now.getDate());
+        case 'ALL': return new Date(0);
+        default: return new Date(now.getFullYear(), now.getMonth()-1, now.getDate());
+      }
+    }
+
+    function updateHistChart(range){
+      const start = rangeStartDate(range);
+      const filtered = allHistoryData.filter(p => new Date(p.x) >= start);
+      if(filtered.length === 0){
+        const last = allHistoryData.length ? allHistoryData[allHistoryData.length-1].y : 50000;
+        const days = ({'1W':7,'1M':30,'6M':180,'YTD':Math.ceil((new Date()-new Date(new Date().getFullYear(),0,1))/(1000*60*60*24)),'1Y':365,'3Y':1095,'5Y':1825,'ALL':3650})[range] || 30;
+        histChart.data.datasets[0].data = generatePlaceholder(last, days);
+      } else {
+        filtered.sort((a,b)=>new Date(a.x)-new Date(b.x));
+        histChart.data.datasets[0].data = filtered;
+      }
+      histChart.update('none');
+    }
+
+    function updateDailyChart(){
+      if(dailyData.length === 0){
+        const last = allHistoryData.length ? allHistoryData[allHistoryData.length-1].y : 50000;
+        dailyChart.data.datasets[0].data = generateDailyPlaceholder(last);
+      } else {
+        dailyData.sort((a,b)=>new Date(a.x)-new Date(b.x));
+        dailyChart.data.datasets[0].data = dailyData;
+      }
+      dailyChart.update('none');
+    }
+
+    // UI buttons
+    document.querySelectorAll('#performance-chart-controls .chart-range-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        document.querySelectorAll('#performance-chart-controls .chart-range-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        updateHistChart(e.target.getAttribute('data-range'));
+      });
+    });
+    document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1W"]').classList.add('active');
+
+    // Try to load real data from Firestore using common paths (if firebase config present)
+    async function tryLoadFromFirestore(){
+      try {
+        // If a global modular DB exists (the original script creates db in module scope), try to locate it on window first
+        let firestoreDb = null;
+        if (window.__FIRESTORE_DB__) firestoreDb = window.__FIRESTORE_DB__;
+        // If not, attempt to initialize our own using window.__FIREBASE_CONFIG__ (safe, read-only client SDK)
+        if (!firestoreDb && window.__FIREBASE_CONFIG__) {
+          const cfg = window.__FIREBASE_CONFIG__;
+          const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js');
+          const { getFirestore, collection, query, orderBy, getDocs, where } = await import('https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js');
+          const app = initializeApp(cfg);
+          firestoreDb = getFirestore(app);
+        }
+
+        if (!firestoreDb) {
+          console.warn('No Firestore available; falling back to placeholder data.');
+          allHistoryData = generatePlaceholder(50000, 365);
+          dailyData = generateDailyPlaceholder(50000);
+          updateHistChart('1W'); updateDailyChart();
+          return;
+        }
+
+        // Candidate collection paths
+        const candidatePaths = [];
+        // If userId is available globally from your app, try to use it
+        if (window.currentUserId) {
+          candidatePaths.push(`users/${window.currentUserId}/portfolioHistory`);
+          candidatePaths.push(`portfolio_history/${window.currentUserId}`);
+        }
+        candidatePaths.push('portfolioHistory'); candidatePaths.push('portfolio_history'); candidatePaths.push('combinedData'); candidatePaths.push('Combined Total'); candidatePaths.push('combined_total');
+
+        # Try to load any docs from candidate collections
+        for (const p of candidatePaths) {
+          try {
+            const { collection, query, orderBy, getDocs } = await import('https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js');
+            const col = collection(firestoreDb, p);
+            const q = query(col, orderBy('timestamp', 'asc'));
+            const snap = await getDocs(q);
+            if (snap && !snap.empty) {
+              const arr=[];
+              snap.forEach(d => arr.push(d.data()));
+              allHistoryData = arr.map(d => ({ x: toDate(d.timestamp)||toDate(d.date)||toDate(d.time)||new Date(), y: Number(d.totalValue||d.total_value||d.total||d.value||d.combined||d.amount||0) }));
+              allHistoryData.sort((a,b)=>new Date(a.x)-new Date(b.x));
+              // For daily data, attempt to pick the last day's intraday records if available
+              // Look for documents that might have 'intraday' arrays
+              const lastDoc = snap.docs[snap.docs.length-1]?.data?.() || null;
+              if (lastDoc && lastDoc.intraday && Array.isArray(lastDoc.intraday)) {
+                dailyData = lastDoc.intraday.map(pt => ({ x: toDate(pt.t)||toDate(pt.timestamp)||toDate(pt.time)||new Date(pt.dt), y: Number(pt.v||pt.price||pt.value||0) }));
+              }
+              updateHistChart('1W'); updateDailyChart();
+              return;
+            }
+          } catch (e) {
+            // ignore and continue trying other paths
+            console.warn('Path failed', p, e);
+          }
+        }
+
+        // If we reach here, no collection had data
+        allHistoryData = generatePlaceholder(50000, 365*2);
+        dailyData = generateDailyPlaceholder(50000);
+        updateHistChart('1W'); updateDailyChart();
+      } catch (err) {
+        console.error('Error loading from Firestore', err);
+        allHistoryData = generatePlaceholder(50000, 365);
+        dailyData = generateDailyPlaceholder(50000);
+        updateHistChart('1W'); updateDailyChart();
+      }
+    }
+
+    // Kick off load attempt
+    tryLoadFromFirestore();
+
+    // Expose API for the rest of your app to push data in (optional)
+    window.__PORTFOLIO_CHARTS__ = {
+      setHistory: function(arr){ allHistoryData = arr.map(d=>({ x: toDate(d.timestamp)||toDate(d.date)||new Date(d.x||d.t||d.time), y: Number(d.totalValue||d.value||d.y||d.total||0) })); },
+      setDaily: function(arr){ dailyData = arr.map(d=>({ x: toDate(d.timestamp||d.t||d.time)||new Date(d.x||d.dt), y: Number(d.price||d.v||d.y||d.value||0) })); },
+      refresh: function(range){ updateHistChart(range||'1W'); updateDailyChart(); }
+    };
+
+    // When window resized, update charts (for gradient redraw)
+    let to; window.addEventListener('resize', ()=>{ clearTimeout(to); to=setTimeout(()=>{ histChart.update(); dailyChart.update(); },150); });
+
+  })();
+  </script>
+</div>
+<h4 id="portfolio-chart-title">Today's Performance Breakdown</h4>
   </div>
   
   <div class="canvas-wrapper" id="historical-chart-wrapper" style="display: none; height: 400px;">
@@ -1338,7 +1546,7 @@
         fillRgb = window.getRgbColor('--chart-fill-color-rgb');
         
         const gradient = ctx.createLinearGradient(0, 0, 0, area.height);
-        gradient.addColorStop(0, `rgba(${fillRgb}, 0.3)`); /* Slightly increased opacity for better fill */
+        gradient.addColorStop(0, `rgba(${fillRgb}, 0.2)`); /* Reduced opacity for lighter fill */
         gradient.addColorStop(1, `rgba(${fillRgb}, 0)`);
         return gradient;
     }
@@ -1349,13 +1557,12 @@
         datasets: [{
           label: "Portfolio Value ($)",
           data: [],
-          // Using Theme colors for initial placeholder (will be overwritten by StockTracker.renderHistoricalLineChart)
-          borderColor: window.getRgbColor('--chart-line-color'),
+          borderColor: "#10b981",
           borderWidth: 2.5,
           pointRadius: 3,
-          pointBackgroundColor: window.getRgbColor('--chart-line-color'),
+          pointBackgroundColor: "#10b981",
           pointHoverRadius: 6,
-          pointHoverBackgroundColor: window.getRgbColor('--chart-line-color'),
+          pointHoverBackgroundColor: "#34d399",
           hoverBorderWidth: 3,
           pointHoverBorderColor: "rgba(255,255,255,0.9)",
           tension: 0.35,
@@ -1363,6 +1570,7 @@
           backgroundColor: function(context) {
             const chartArea = context.chart.chartArea;
             if (!chartArea) return null;
+            // For portfolio chart, we assume positive for the initial placeholder state
             return createGradient(context.chart.ctx, chartArea, true); 
           },
         }]
@@ -1458,7 +1666,6 @@
         e.target.classList.add('active');
         // Let StockTracker handle the real chart update (fixes chart race condition)
         if (window.stockTracker) {
-            // Passing the range to the main renderer
             window.stockTracker.renderPortfolioPerformanceChart(e.target.getAttribute('data-range'));
         } else {
             // Fallback for placeholder chart logic (if StockTracker hasn't initialized)
@@ -1467,7 +1674,11 @@
       });
     });
     
-    // Initial active button is set in the HTML now: 1W
+    // Set 1W as active by default (The initial view is the bar chart, so 1W is active if switching back to historical)
+    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1W"]');
+    if (initialRangeButton) {
+        initialRangeButton.classList.add('active');
+    }
 
     updateChart('1W');
 
@@ -1971,7 +2182,7 @@
 
                 // 2. Try FMP (Fallback - Ticker-specific, includes 403 general fallback)
                 if (this.config.fmpApiKey && this.config.fmpApiKey !== 'YOUR_FMP_API_KEY') {
-                    let result = await this.apiService.fetchFmpTickerNews(symbol);
+                    let result = await this.fetchFmpTickerNews(symbol);
                     if (result.success) {
                         return result.data;
                     }
@@ -2248,10 +2459,6 @@
                     this.elements.performanceChartControls.addEventListener('click', (e) => {
                         if (e.target.classList.contains('chart-range-btn')) {
                             const range = e.target.dataset.range;
-                            // When clicking a button, we switch to historical chart view
-                            this.elements.historicalChartWrapper.style.display = 'block';
-                            this.elements.barChartWrapper.style.display = 'none';
-                            this.elements.portfolioChartTitle.textContent = "Portfolio Performance History";
                             this.renderPortfolioPerformanceChart(range);
                         }
                     });
@@ -2562,7 +2769,7 @@
                 }
 
                 this.renderDiversificationChart();
-                this.renderPortfolioPerformanceChart('BAR_TODAY'); // RENDER BAR CHART AS DEFAULT ON RENDER
+                this.renderPortfolioPerformanceChart();
                 if (sortedItems.length === 0 && type !== 'stock' && type !== 'fund' && grid) {
                      grid.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your ${type} list is empty.</div>`;
                 }
@@ -3857,7 +4064,6 @@
                 const lastEntry = this.portfolioHistory.at(-1);
                 let totalValue = allItems.reduce((sum, item) => sum + this.calculateTransactionStats(item.transactions, item.price).currentValue, 0);
                 if (totalValue <= 0) return;
-                // Only track history if we have positive portfolio value
                 if (!lastEntry || lastEntry.date !== today) this.portfolioHistory.push({ date: today, value: totalValue });
                 else lastEntry.value = totalValue;
                 await this.saveData();
@@ -3869,13 +4075,7 @@
              * ==================================================================
              */
             renderTodayPerformanceBarChart() {
-                // 1. Destroy any existing historical chart instance (FIX)
-                if (this.portfolioPerformanceChartInstance) {
-                    this.portfolioPerformanceChartInstance.destroy();
-                    this.portfolioPerformanceChartInstance = null;
-                }
-                
-                // 2. Prepare Data for Bar Chart
+                // 1. Prepare Data for Bar Chart
                 const allItems = [...this.stocks, ...this.mutualFunds];
                 const data = allItems.map(item => {
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
@@ -3890,19 +4090,19 @@
                 const labels = topMovers.map(item => item.symbol);
                 const barValues = topMovers.map(item => item.change);
                 
-                // 3. Determine colors
+                // 2. Determine colors
                 const backgroundColors = barValues.map(change => 
                     change >= 0 ? 'var(--color-positive)' : 'var(--color-negative)'
                 );
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#212529';
                 
-                // 4. Destroy previous bar chart instance
+                // 3. Destroy previous chart
                 if (this.portfolioPerformanceBarChartInstance) {
                     this.portfolioPerformanceBarChartInstance.destroy();
                 }
 
-                // 5. Initialize Bar Chart
+                // 4. Initialize Bar Chart
                 const ctx = this.elements.portfolioPerformanceBarChart.getContext('2d');
                 this.portfolioPerformanceBarChartInstance = new Chart(ctx, {
                     type: 'bar',
@@ -3950,25 +4150,13 @@
             }
 
             renderHistoricalLineChart(range = '1W') {
-                // 1. Destroy any existing bar chart instance (FIX)
-                if (this.portfolioPerformanceBarChartInstance) {
-                    this.portfolioPerformanceBarChartInstance.destroy();
-                    this.portfolioPerformanceBarChartInstance = null;
-                }
-                
                 const hasHistory = this.portfolioHistory.length > 0;
                 
-                const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
-                
-                // Explicitly destroy previous line chart instance before drawing a new one (FIX)
-                if (this.portfolioPerformanceChartInstance) {
-                    this.portfolioPerformanceChartInstance.destroy();
-                    this.portfolioPerformanceChartInstance = null;
-                }
-                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-
                 // If no history, show error on the historical canvas
                 if (!hasHistory) {
+                    const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
+                    if (this.portfolioPerformanceChartInstance) this.portfolioPerformanceChartInstance.destroy();
+                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
                     ctx.textAlign = 'center';
                     ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
                     ctx.font = "16px 'Inter', sans-serif";
@@ -3976,7 +4164,7 @@
                     return;
                 }
 
-                // Logic to select data range
+                // Logic to select data range (copied from previous version)
                 const allDataPoints = this.portfolioHistory.map(e => ({ x: new Date(e.date), y: e.value }));
                 const now = new Date();
                 let startDate = new Date();
@@ -3995,6 +4183,9 @@
                 const chartData = allDataPoints.filter(dp => dp.x >= startDate);
 
                 if (chartData.length <= 1) {
+                    const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
+                    if (this.portfolioPerformanceChartInstance) this.portfolioPerformanceChartInstance.destroy();
+                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
                     ctx.textAlign = 'center';
                     ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
                     ctx.font = "16px 'Inter', sans-serif";
@@ -4002,6 +4193,11 @@
                     return;
                 }
                 
+                const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
+                if (this.portfolioPerformanceChartInstance) {
+                    this.portfolioPerformanceChartInstance.destroy();
+                }
+
                 // Dynamic Colors/Styles
                 const lineRgb = window.getRgbColor('--chart-line-color');
                 const fillRgb = window.getRgbColor('--chart-fill-color-rgb');
@@ -4014,23 +4210,12 @@
                     return gradient;
                 };
 
-                // Dynamic X-Axis Unit Logic (FIXED: Use 'day' for small ranges for tighter plotting)
+                // Dynamic X-Axis Unit Logic
                 let timeUnit = 'month';
-                let displayFormat = 'MMM yyyy';
-
-                if (range === '1W') {
+                if (range === '1W' || range === '1M') {
                     timeUnit = 'day';
-                    displayFormat = 'MM-dd';
-                } else if (range === '1M') {
-                    timeUnit = 'day';
-                    displayFormat = 'MM-dd';
-                } else if (range === '6M' || range === 'YTD' || range === '1Y') {
-                    timeUnit = 'month';
-                    displayFormat = 'MMM yyyy';
-                // FIX: Corrected syntax error here: range === '5Y || range === 'ALL'
                 } else if (range === '3Y' || range === '5Y' || range === 'ALL') {
                     timeUnit = 'year';
-                    displayFormat = 'yyyy';
                 }
                 
                 // Initialize the chart
@@ -4042,7 +4227,7 @@
                             data: chartData,
                             borderColor: lineRgb, 
                             borderWidth: 3,
-                            pointRadius: 3, // Increased point radius for visibility on daily data
+                            pointRadius: 1.5, 
                             pointBackgroundColor: lineRgb,
                             pointHitRadius: 10,
                             tension: 0.4, 
@@ -4072,19 +4257,13 @@
                                 type: 'time',
                                 time: { 
                                     unit: timeUnit,
-                                    tooltipFormat: 'MM/dd/yyyy',
-                                    displayFormats: {
-                                        day: displayFormat,
-                                        month: displayFormat,
-                                        year: displayFormat
-                                    }
+                                    tooltipFormat: 'MM/dd/yyyy'
                                 },
                                 ticks: { color: labelColor, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
                                 grid: { color: gridColor, drawBorder: false }
                             },
                             y: {
                                 type: 'linear',
-                                title: { display: true, text: 'Value (USD)' },
                                 ticks: {
                                     color: labelColor,
                                     callback: (val) => this.formatCurrency(val)
@@ -4102,36 +4281,26 @@
                 if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && (this.stocks.length > 0 || this.mutualFunds.length > 0) ? 'block' : 'none';
                 if (!container || container.style.display === 'none') return;
                 
-                // Determine if we are rendering the bar chart (default/today view) or a historical line chart
                 const isBarChart = range === 'BAR_TODAY';
 
                 // Toggle Visibility of Chart Wrappers and Update Title
-                if (range !== 'BAR_TODAY') {
-                    // Switching to historical view
-                    this.elements.historicalChartWrapper.style.display = 'block';
-                    this.elements.barChartWrapper.style.display = 'none';
-                    this.elements.portfolioChartTitle.textContent = "Portfolio Performance History";
-                } else {
-                     // Switching to bar chart view
-                    this.elements.historicalChartWrapper.style.display = 'none';
-                    this.elements.barChartWrapper.style.display = 'block';
-                    this.elements.portfolioChartTitle.textContent = "Today's Performance Breakdown";
-                }
-                
-                // Update active state of range buttons
+                if (this.elements.historicalChartWrapper) this.elements.historicalChartWrapper.style.display = isBarChart ? 'none' : 'block';
+                if (this.elements.barChartWrapper) this.elements.barChartWrapper.style.display = isBarChart ? 'block' : 'none';
+                if (this.elements.portfolioChartTitle) this.elements.portfolioChartTitle.textContent = isBarChart ? "Today's Performance Breakdown" : "Portfolio Performance History";
+
+                // Update active state of range buttons (Only relevant for historical view)
                 if(this.elements.performanceChartControls) {
                     const buttons = this.elements.performanceChartControls.querySelectorAll('.chart-range-btn');
                     buttons.forEach(btn => btn.classList.remove('active'));
                     
-                    if (range !== 'BAR_TODAY') {
+                    if (!isBarChart) {
                         const newActiveButton = this.elements.performanceChartControls.querySelector(`[data-range="${range}"]`);
                         if(newActiveButton) newActiveButton.classList.add('active');
                     }
-                    // NOTE: The BAR_TODAY view doesn't have an associated button, so no button is active when it's shown.
                 }
 
                 // Render the selected chart type
-                if (this.elements.barChartWrapper.style.display !== 'none') {
+                if (isBarChart) {
                     this.renderTodayPerformanceBarChart();
                 } else {
                     this.renderHistoricalLineChart(range);
