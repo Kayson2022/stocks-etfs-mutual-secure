@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1028,27 +1026,32 @@
             #user-name { display: none; }
         }
 
-        /* === PORTFOLIO CHART CONTAINER STYLES === */
+        /* === PORTFOLIO CHART CONTAINER STYLES (MODERN BLOCK) === */
         #portfolio-performance-container { 
             background: var(--bg-secondary) !important; 
             border: 1px solid var(--border-color) !important;
             border-radius: 20px !important; 
             box-shadow: var(--shadow-md);
             padding: 24px;
+            margin-top: 24px; /* Ensure spacing from content above */
         }
         #portfolio-performance-container .chart-header {
-            justify-content: center; 
+            justify-content: space-between; 
             margin-bottom: 24px; 
+            flex-direction: row; /* Ensure controls and title are on one line if space allows */
         }
         #portfolio-performance-container .chart-header h4 {
             font-size: 1.5rem;
             font-weight: 700;
+            order: 2;
+            text-align: right;
         }
         #portfolio-performance-container .chart-controls {
-            order: -1; 
-            width: 100%;
-            justify-content: center;
-            margin-bottom: 10px;
+            order: 1; 
+            width: auto;
+            justify-content: flex-start;
+            margin-bottom: 0;
+            flex-grow: 1;
         }
         .chart-controls .chart-range-btn {
             font-weight: 500;
@@ -1060,9 +1063,6 @@
         .chart-controls .chart-range-btn.active {
             background-color: var(--accent-primary);
             color: white;
-        }
-        #portfolioPerformanceChart {
-            width: 100%;
         }
 
         /* --- Diversification Chart Styling (New Bar Chart Style) --- */
@@ -1287,290 +1287,42 @@
         <div class="stocks-grid" id="stocksGrid"></div>
 
         
-
-
+<!-- MODERNIZED PORTFOLIO CHART CONTAINER -->
 <div id="portfolio-performance-container" class="chart-container">
   <div class="chart-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-    <div id="performance-controls" style="display:flex;gap:8px;flex-wrap:wrap;">
+    <div id="performance-chart-controls" class="chart-controls">
+      <!-- NEW: Button to switch to Today's Bar Chart -->
+      <button class="chart-range-btn btn-range" data-range="BAR_TODAY">Today</button> 
       <button class="chart-range-btn btn-range" data-range="1W">1W</button>
       <button class="chart-range-btn btn-range" data-range="1M">1M</button>
       <button class="chart-range-btn btn-range" data-range="6M">6M</button>
       <button class="chart-range-btn btn-range" data-range="YTD">YTD</button>
-      <button class="chart-range-btn btn-range" data-range="1Y">1Y</button>
+      <button class="chart-range-btn btn-range active" data-range="1Y">1Y</button>
       <button class="chart-range-btn btn-range" data-range="3Y">3Y</button>
       <button class="chart-range-btn btn-range" data-range="5Y">5Y</button>
       <button class="chart-range-btn btn-range" data-range="ALL">ALL</button>
     </div>
-    <div style="text-align:right;">
-      <div style="font-weight:700;">Portfolio Performance</div>
-      <div style="font-size:12px;color:#666;" id="chart-subtitle">X-axis: MM/DD/YYYY</div>
-    </div>
+    <!-- Combined title for the charts -->
+    <h4 id="portfolio-chart-title">Portfolio Performance History</h4> 
   </div>
 
-  <!-- Historical chart -->
-  <div style="height:320px;margin-top:12px;">
-    <canvas id="redesignChartFull"></canvas>
-  </div>
-
-  <!-- Daily intraday chart -->
-  <div style="height:160px;margin-top:14px;">
-    <canvas id="redesignDailyFull"></canvas>
-  </div>
-
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
-    <div style="font-size:13px;color:#334155;">
-      <strong>Total (latest):</strong> <span id="totalLatestMain">—</span>
-      &nbsp;•&nbsp;
-      <strong>Change (range):</strong> <span id="rangeChangeMain">—</span>
-    </div>
-    <div>
-      <button id="downloadCsvMain" class="btn-range" style="padding:6px 10px;">Download CSV</button>
-    </div>
-  </div>
-
-<script>
-/* Integrated redesigned charts for both historical and daily intraday.
-   Alignment fix: x scale uses 'time.round': 'day', ticks.source:'data', and offset:false so
-   each data point aligns under the date tick. Data loaded from Firestore if available,
-   otherwise uses realistic date-based placeholders.
-*/
-(async function(){
-  // Ensure Chart.js exists
-  if (typeof Chart === 'undefined') {
-    console.error('Chart.js not found on page. Ensure Chart.js script is loaded before this block.');
-    return;
-  }
-
-  const ctxFull = document.getElementById('redesignChartFull').getContext('2d');
-  const ctxDaily = document.getElementById('redesignDailyFull').getContext('2d');
-
-  function fmt(n){ return '$' + Number(n).toLocaleString(undefined, {maximumFractionDigits:2}); }
-  function toDate(v){ if(!v) return null; if(typeof v.toDate==='function') return v.toDate(); if(typeof v==='string') return new Date(v); if(typeof v==='number') return new Date(v); if(v.seconds) return new Date(v.seconds*1000); return null; }
-
-  // Historical chart (larger)
-  const histChart = new Chart(ctxFull, {
-    type: 'line',
-    data: { datasets: [{ label: 'Portfolio Value', data: [], borderWidth:2.6, tension:0.25, pointRadius:3, pointHoverRadius:6, borderColor:'#2563eb', backgroundColor: (ctx) => {
-        const area = ctx.chart.chartArea; if(!area) return null;
-        const g = ctx.chart.ctx.createLinearGradient(0,0,0,area.height);
-        g.addColorStop(0,'rgba(37,99,235,0.14)'); g.addColorStop(1,'rgba(37,99,235,0)');
-        return g;
-    }, fill:true }]},
-    options: {
-      maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ title(items){ if(!items||!items.length) return ''; try{ const d = new Date(items[0].parsed.x || items[0].label); return d.toLocaleDateString(); } catch(e){ return items[0].label || ''; } }, label(ctx){ return fmt(ctx.parsed.y); } } } },
-      scales: {
-        x: {
-          type: 'time',
-          time: { unit: 'day', tooltipFormat: 'MM/dd/yyyy', displayFormats: { day: 'MM/dd/yyyy' }, round: 'day' },
-          ticks: { source: 'data', autoSkip: true, maxTicksLimit: 12 },
-          offset: false
-        },
-        y: { title: { display: true, text: 'Value (USD)' }, ticks: { callback: v => fmt(v) } }
-      }
-    }
-  });
-
-  // Daily intraday chart (smaller)
-  const dailyChart = new Chart(ctxDaily, {
-    type: 'line',
-    data: { datasets: [{ label: 'Intraday', data: [], borderWidth:1.8, tension:0.2, pointRadius:0, pointHoverRadius:6, borderColor:'#059669', backgroundColor:(ctx)=>{ const area=ctx.chart.chartArea; if(!area) return null; const g=ctx.chart.ctx.createLinearGradient(0,0,0,area.height); g.addColorStop(0,'rgba(5,150,105,0.12)'); g.addColorStop(1,'rgba(5,150,105,0)'); return g; }, fill:true }]},
-    options: {
-      maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ title(items){ if(!items||!items.length) return ''; try{ const d = new Date(items[0].parsed.x || items[0].label); return d.toLocaleString(); } catch(e){ return items[0].label || ''; } }, label(ctx){ return fmt(ctx.parsed.y); } } } },
-      scales: {
-        x: {
-          type:'time',
-          time: { unit:'hour', tooltipFormat: 'MM/dd/yyyy HH:mm', displayFormats: { hour: 'HH:mm' }, round: 'minute' },
-          ticks: { autoSkip: true, maxTicksLimit: 8 },
-          offset: false
-        },
-        y: { ticks: { callback: v => fmt(v) } }
-      }
-    }
-  });
-
-  // Data containers
-  let history = []; // {x:Date, y:Number}
-  let intraday = []; // {x:Date, y:Number}
-
-  // Helpers to build from Firestore-like docs
-  function buildHistoryFromDocs(arr){
-    history = arr.map(d => ({ x: toDate(d.timestamp) || toDate(d.date) || toDate(d.time) || new Date(d.ts || d.createdAt || Date.now()), y: Number(d.totalValue || d.total || d.value || d.amount || 0) }));
-    history.sort((a,b) => new Date(a.x) - new Date(b.x));
-  }
-  function buildIntradayFromDoc(doc){
-    // doc may contain intraday array
-    if (doc && doc.intraday && Array.isArray(doc.intraday)){
-      intraday = doc.intraday.map(pt => ({ x: toDate(pt.t || pt.timestamp || pt.time || pt.dt) || new Date(), y: Number(pt.v || pt.price || pt.value || 0) }));
-      intraday.sort((a,b) => new Date(a.x) - new Date(b.x));
-    } else {
-      intraday = [];
-    }
-  }
-
-  // Placeholder generators
-  function placeholderHistory(days, latest){
-    const out = []; const now = new Date();
-    for(let i=days;i>=0;i--){ const d=new Date(now); d.setDate(now.getDate()-i); const seasonal = Math.sin(i/14)*latest*0.01; const noise=(Math.random()-0.5)*latest*0.004; out.push({ x: d, y: Math.max(0, Math.round(latest + seasonal + noise)) }); }
-    return out;
-  }
-  function placeholderIntraday(latest){
-    const out=[]; const now=new Date();
-    // simulate minutes between 9:30 and 16:00 (390 minutes)
-    const start = new Date(now); start.setHours(9,30,0,0);
-    for(let m=0;m<=390;m+=10){ const d=new Date(start); d.setMinutes(start.getMinutes()+m); const v = Math.max(0, Math.round(latest*(1 + Math.sin(m/40)*0.002 + (Math.random()-0.5)*0.001))); out.push({ x:d, y:v }); }
-    return out;
-  }
-
-  // Update functions
-  function updateHist(range){
-    const now = new Date(); let start;
-    switch(range){
-      case '1W': start = new Date(now.getFullYear(), now.getMonth(), now.getDate()-7); break;
-      case '1M': start = new Date(now.getFullYear(), now.getMonth()-1, now.getDate()); break;
-      case '6M': start = new Date(now.getFullYear(), now.getMonth()-6, now.getDate()); break;
-      case 'YTD': start = new Date(now.getFullYear(),0,1); break;
-      case '1Y': start = new Date(now.getFullYear()-1, now.getMonth(), now.getDate()); break;
-      case '3Y': start = new Date(now.getFullYear()-3, now.getMonth(), now.getDate()); break;
-      case '5Y': start = new Date(now.getFullYear()-5, now.getMonth(), now.getDate()); break;
-      case 'ALL': start = new Date(0); break;
-      default: start = new Date(now.getFullYear(), now.getMonth()-1, now.getDate());
-    }
-
-    const filtered = history.length ? history.filter(p => new Date(p.x) >= start) : [];
-    let data = filtered.length ? filtered : placeholderHistory((function(){ switch(range){case'1W':return 7;case'1M':return 30;case'6M':return 180;case'1Y':return 365;default:return 90;}})(), history.length?history[history.length-1].y||50000:50000);
-    histChart.data.datasets[0].data = data;
-    histChart.update();
-
-    // update summary
-    const first = data[0]?.y || data[data.length-1]?.y || 0;
-    const last = data[data.length-1]?.y || first || 0;
-    document.getElementById('totalLatestMain').textContent = fmt(last);
-    const change = last - first;
-    const pct = first ? (change/first*100) : 0;
-    document.getElementById('rangeChangeMain').textContent = (change>=0?'+':'') + fmt(change) + ` (${pct>=0?'+':''}${pct.toFixed(2)}%)`;
-  }
-
-  function updateDaily(){
-    const data = intraday.length ? intraday : placeholderIntraday(history.length?history[history.length-1].y||50000:50000);
-    dailyChart.data.datasets[0].data = data;
-    dailyChart.update();
-  }
-
-  // Range button wiring
-  document.querySelectorAll('#performance-controls .chart-range-btn').forEach(btn=>{
-    btn.addEventListener('click', function(e){
-      document.querySelectorAll('#performance-controls .chart-range-btn').forEach(b=>b.classList.remove('active'));
-      this.classList.add('active');
-      const r = this.getAttribute('data-range') || '1W';
-      updateHist(r);
-    });
-  });
-  // set default active
-  const defBtn = document.querySelector('#performance-controls .chart-range-btn[data-range="1W"]');
-  if(defBtn){ defBtn.classList.add('active'); }
-
-  // CSV download
-  document.getElementById('downloadCsvMain').addEventListener('click', function(){
-    const data = histChart.data.datasets[0].data || [];
-    const rows = [['date','value']].concat(data.map(pt=>[ (new Date(pt.x)).toLocaleDateString('en-US'), pt.y ]));
-    const csv = rows.map(r=>r.map(c=>'\"'+String(c).replace(/\"/g,'\"\"')+'\"').join(',')).join('\n');
-    const blob = new Blob([csv], {type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='portfolio_history.csv'; a.click(); URL.revokeObjectURL(url);
-  });
-
-  // Try to load from Firestore or existing page variables
-  async function loadData(){
-    try {
-      let db = null;
-      if (window.__FIRESTORE_DB__) db = window.__FIRESTORE_DB__;
-      if (!db && window.__FIREBASE_CONFIG__) {
-        const cfg = window.__FIREBASE_CONFIG__;
-        const { initializeApp } = await import('https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js');
-        const { getFirestore, collection, query, orderBy, getDocs } = await import('https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js');
-        const app = initializeApp(cfg);
-        db = getFirestore(app);
-      }
-
-      // Try common collection paths
-      const paths = [];
-      const uid = window.currentUserId || (window.auth && window.auth.currentUser && window.auth.currentUser.uid);
-      if(uid){ paths.push(`users/${uid}/portfolioHistory`); paths.push(`portfolio_history/${uid}`); }
-      paths.push('portfolioHistory'); paths.push('portfolio_history'); paths.push('combinedData'); paths.push('Combined Total'); paths.push('combined_total'); paths.push('combineddata');
-
-      if(db){
-        for(const p of paths){
-          try {
-            const { collection, query, orderBy, getDocs } = await import('https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js');
-            const col = collection(db, p);
-            const q = query(col, orderBy('timestamp','asc'));
-            const snap = await getDocs(q);
-            if(snap && !snap.empty){
-              const arr=[];
-              snap.forEach(d=>arr.push(d.data()));
-              buildHistoryFromDocs(arr);
-              // attempt to find intraday in last doc
-              const lastDocRaw = snap.docs[snap.docs.length-1]?.data();
-              buildIntradayFromDoc(lastDocRaw);
-              updateHist('1W'); updateDaily();
-              return true;
-            }
-          } catch(e){
-            // ignore
-          }
-        }
-      }
-
-      // Alternatively, if page exposes combined history variable
-      if(window.__COMBINED_HISTORY__ && Array.isArray(window.__COMBINED_HISTORY__)){
-        buildHistoryFromDocs(window.__COMBINED_HISTORY__);
-        updateHist('1W'); updateDaily();
-        return true;
-      }
-
-      // No real data found; use placeholders
-      history = placeholderHistory(180, 50000);
-      intraday = placeholderIntraday(50000);
-      updateHist('1W'); updateDaily();
-      return false;
-
-    } catch(err){
-      console.error('Failed to load data for charts', err);
-      history = placeholderHistory(90,50000);
-      intraday = placeholderIntraday(50000);
-      updateHist('1W'); updateDaily();
-      return false;
-    }
-  }
-
-  await loadData();
-
-  // Expose API for pushing live
-  window.__PORTFOLIO_CHARTS__ = {
-    setHistory(arr){ buildHistoryFromDocs(arr); updateHist('1W'); },
-    setIntraday(doc){ buildIntradayFromDoc(doc); updateDaily(); },
-    refresh(range){ updateHist(range||'1W'); updateDaily(); }
-  };
-
-})();
-</script>
-
-</div>
-<h4 id="portfolio-chart-title">Today's Performance Breakdown</h4>
-  </div>
-  
-  <div class="canvas-wrapper" id="historical-chart-wrapper" style="display: none; height: 400px;">
+  <!-- Historical Line Chart Wrapper (Default View) -->
+  <div class="canvas-wrapper" id="historical-chart-wrapper" style="height: 400px;">
     <canvas id="portfolioPerformanceChart"></canvas>
   </div>
   
-  <!-- NEW: Canvas for the Bar Chart (Default View) -->
-  <div class="canvas-wrapper" id="bar-chart-wrapper" style="height: 400px;">
+  <!-- Today's Performance Bar Chart Wrapper (Hidden by default) -->
+  <div class="canvas-wrapper" id="bar-chart-wrapper" style="display: none; height: 400px;">
     <canvas id="portfolioPerformanceBarChart"></canvas>
   </div>
+  
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+    <!-- Removed obsolete summary/download buttons from the old block -->
+  </div>
 
-  <script>
+<!-- REMOVED THE OBSOLETE <script> BLOCK THAT CONTAINED REDESIGNCHARTFULL LOGIC -->
+
+<script>
   // ==================================================================
   // == GLOBAL JAVASCRIPT: Fixes the 'getRgbColor is not defined' error
   // ==================================================================
@@ -1726,13 +1478,13 @@
       });
     });
     
-    // Set 1W as active by default (The initial view is the bar chart, so 1W is active if switching back to historical)
-    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1W"]');
+    // Set 1Y as active by default (Since the main view is now historical line chart by default)
+    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1Y"]');
     if (initialRangeButton) {
         initialRangeButton.classList.add('active');
     }
 
-    updateChart('1W');
+    updateChart('1Y');
 
     // Remaining placeholder logic removed to prevent conflicts with module code.
   });
@@ -2821,7 +2573,8 @@
                 }
 
                 this.renderDiversificationChart();
-                this.renderPortfolioPerformanceChart();
+                // FIX: Update to call the render function without arguments to ensure default state (1Y Historical) is maintained
+                this.renderPortfolioPerformanceChart(); 
                 if (sortedItems.length === 0 && type !== 'stock' && type !== 'fund' && grid) {
                      grid.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your ${type} list is empty.</div>`;
                 }
@@ -4201,7 +3954,7 @@
                 });
             }
 
-            renderHistoricalLineChart(range = '1W') {
+            renderHistoricalLineChart(range = '1Y') {
                 const hasHistory = this.portfolioHistory.length > 0;
                 
                 // If no history, show error on the historical canvas
@@ -4327,7 +4080,7 @@
                 });
             }
 
-            renderPortfolioPerformanceChart(range = 'BAR_TODAY') {
+            renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
                 
                 if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && (this.stocks.length > 0 || this.mutualFunds.length > 0) ? 'block' : 'none';
@@ -4338,17 +4091,15 @@
                 // Toggle Visibility of Chart Wrappers and Update Title
                 if (this.elements.historicalChartWrapper) this.elements.historicalChartWrapper.style.display = isBarChart ? 'none' : 'block';
                 if (this.elements.barChartWrapper) this.elements.barChartWrapper.style.display = isBarChart ? 'block' : 'none';
-                if (this.elements.portfolioChartTitle) this.elements.portfolioChartTitle.textContent = isBarChart ? "Today's Performance Breakdown" : "Portfolio Performance History";
+                if (this.elements.portfolioChartTitle) this.elements.portfolioChartTitle.textContent = isBarChart ? "Today's Performance Breakdown (Top Movers)" : "Portfolio Performance History";
 
-                // Update active state of range buttons (Only relevant for historical view)
+                // Update active state of range buttons
                 if(this.elements.performanceChartControls) {
                     const buttons = this.elements.performanceChartControls.querySelectorAll('.chart-range-btn');
                     buttons.forEach(btn => btn.classList.remove('active'));
                     
-                    if (!isBarChart) {
-                        const newActiveButton = this.elements.performanceChartControls.querySelector(`[data-range="${range}"]`);
-                        if(newActiveButton) newActiveButton.classList.add('active');
-                    }
+                    const newActiveButton = this.elements.performanceChartControls.querySelector(`[data-range="${range}"]`);
+                    if(newActiveButton) newActiveButton.classList.add('active');
                 }
 
                 // Render the selected chart type
