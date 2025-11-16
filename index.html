@@ -851,6 +851,12 @@
             backdrop-filter: blur(5px);
             display: none; align-items: center; justify-content: center;
         }
+        
+        /* FIX: Ensure Confirm modal is always on top of other modals */
+        #confirmModal {
+            z-index: 2000; 
+        }
+
         .modal-content {
             background-color: var(--bg-secondary);
             padding: 32px;
@@ -4427,7 +4433,7 @@
                             : `IN RANGE [${this.formatCurrency(a.priceLower)} - ${this.formatCurrency(a.priceUpper)}]`;
                         html += `
                             <div class="info-row" style="padding: 10px 0; border-bottom: 1px dashed var(--border-color);">
-                                <span class="info-label">${a.symbol} (${priceInfo})</span>
+                                <span class="info-label">${a.symbol} (${priceInfo})</span
                                 <button class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;" onclick="window.stockTracker.removeAlert('${a.id}')">Delete</button>
                             </div>
                         `;
