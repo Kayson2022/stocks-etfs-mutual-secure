@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2065,7 +2064,10 @@
                         if(this.elements.userInfo) this.elements.userInfo.style.display = 'flex';
                         if(this.elements.userName) this.elements.userName.textContent = `Welcome, ${user.displayName || 'User'}`;
                         this.loadData();
-                        this.setupSessionListener();
+                        
+                        // FIX: Only set up the session listener AFTER successful sign-in
+                        this.setupSessionListener(user.uid); 
+                        
                         this.startLiveUpdate();
                     } else {
                         this.userId = null;
@@ -2074,7 +2076,9 @@
                         if(this.elements.userInfo) this.elements.userInfo.style.display = 'none';
                         this.stocks = []; this.mutualFunds = []; this.watchlist = [];
                         this.renderContent();
-                        if (this.sessionUnsubscribe) {
+                        
+                        // FIX: Clean up the listener on sign-out
+                        if (this.sessionUnsubscribe) { 
                             this.sessionUnsubscribe();
                             this.sessionUnsubscribe = null;
                         }
@@ -4464,26 +4468,35 @@
             }
 
             // --- Session/Security Logic ---
-            setupSessionListener() {
-                if (!this.userId) return;
-                const sessionDocRef = doc(db, "sessions", this.userId);
+            setupSessionListener(userId) {
+                // Generates a new unique ID only when setting up the listener (after sign-in)
+                this.sessionId = crypto.randomUUID(); 
+                const sessionDocRef = doc(db, "sessions", userId);
                 
-                // Set the current session ID on login (used for multi-device sign-out)
+                // 1. Write the current session ID to Firestore
                 try {
                     setDoc(sessionDocRef, { 
                         lastLogin: serverTimestamp(),
                         activeSession: this.sessionId,
-                        userId: this.userId
-                    }, { merge: true }).catch(err => console.error("Error writing session ID:", err));
+                        userId: userId
+                    }, { merge: true }).catch(err => console.error("Error writing initial session ID:", err));
                 } catch (err) {
                     console.error("Error setting initial session doc (check rules):", err);
                 }
 
-                // Listen for changes to the activeSession field
+                // 2. Listen for changes to the activeSession field
+                // If the activeSession changes on Firestore, it means another device (or the same device reloading)
+                // has claimed active status, or an admin sign-out occurred.
                 try {
+                    // Clean up existing listener before setting a new one
+                    if (this.sessionUnsubscribe) {
+                        this.sessionUnsubscribe();
+                        this.sessionUnsubscribe = null;
+                    }
+                    
                     this.sessionUnsubscribe = onSnapshot(sessionDocRef, (doc) => {
                         if (doc.exists() && doc.data().activeSession !== this.sessionId) {
-                            // A different session has become the 'active' one (i.e., this session was signed out remotely)
+                            // The ID on Firestore doesn't match the ID of this browser tab.
                             this.showError("You have been signed out because a new session was started or an admin action was taken.");
                             this.signOut();
                         }
