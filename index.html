@@ -1026,27 +1026,32 @@
             #user-name { display: none; }
         }
 
-        /* === PORTFOLIO CHART CONTAINER STYLES === */
+        /* === PORTFOLIO CHART CONTAINER STYLES (MODERN BLOCK) === */
         #portfolio-performance-container { 
             background: var(--bg-secondary) !important; 
             border: 1px solid var(--border-color) !important;
             border-radius: 20px !important; 
             box-shadow: var(--shadow-md);
             padding: 24px;
+            margin-top: 24px; /* Ensure spacing from content above */
         }
         #portfolio-performance-container .chart-header {
-            justify-content: center; 
+            justify-content: space-between; 
             margin-bottom: 24px; 
+            flex-direction: row; /* Ensure controls and title are on one line if space allows */
         }
         #portfolio-performance-container .chart-header h4 {
             font-size: 1.5rem;
             font-weight: 700;
+            order: 2;
+            text-align: right;
         }
         #portfolio-performance-container .chart-controls {
-            order: -1; 
-            width: 100%;
-            justify-content: center;
-            margin-bottom: 10px;
+            order: 1; 
+            width: auto;
+            justify-content: flex-start;
+            margin-bottom: 0;
+            flex-grow: 1;
         }
         .chart-controls .chart-range-btn {
             font-weight: 500;
@@ -1058,9 +1063,6 @@
         .chart-controls .chart-range-btn.active {
             background-color: var(--accent-primary);
             color: white;
-        }
-        #portfolioPerformanceChart {
-            width: 100%;
         }
 
         /* --- Diversification Chart Styling (New Bar Chart Style) --- */
@@ -1295,22 +1297,22 @@
       <button class="chart-range-btn btn-range" data-range="1M">1M</button>
       <button class="chart-range-btn btn-range" data-range="6M">6M</button>
       <button class="chart-range-btn btn-range" data-range="YTD">YTD</button>
-      <button class="chart-range-btn btn-range" data-range="1Y">1Y</button>
+      <button class="chart-range-btn btn-range active" data-range="1Y">1Y</button>
       <button class="chart-range-btn btn-range" data-range="3Y">3Y</button>
       <button class="chart-range-btn btn-range" data-range="5Y">5Y</button>
       <button class="chart-range-btn btn-range" data-range="ALL">ALL</button>
     </div>
     <!-- Combined title for the charts -->
-    <h4 id="portfolio-chart-title">Today's Performance Breakdown</h4> 
+    <h4 id="portfolio-chart-title">Portfolio Performance History</h4> 
   </div>
 
   <!-- Historical Line Chart Wrapper (Default View) -->
-  <div class="canvas-wrapper" id="historical-chart-wrapper" style="display: none; height: 400px;">
+  <div class="canvas-wrapper" id="historical-chart-wrapper" style="height: 400px;">
     <canvas id="portfolioPerformanceChart"></canvas>
   </div>
   
   <!-- Today's Performance Bar Chart Wrapper (Hidden by default) -->
-  <div class="canvas-wrapper" id="bar-chart-wrapper" style="height: 400px;">
+  <div class="canvas-wrapper" id="bar-chart-wrapper" style="display: none; height: 400px;">
     <canvas id="portfolioPerformanceBarChart"></canvas>
   </div>
   
@@ -1476,13 +1478,13 @@
       });
     });
     
-    // Set BAR_TODAY as active by default
-    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="BAR_TODAY"]');
+    // Set 1Y as active by default (Since the main view is now historical line chart by default)
+    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1Y"]');
     if (initialRangeButton) {
         initialRangeButton.classList.add('active');
     }
 
-    updateChart('1Y'); // Placeholder uses 1Y for initial historical view until real data loads
+    updateChart('1Y');
 
     // Remaining placeholder logic removed to prevent conflicts with module code.
   });
@@ -2571,7 +2573,8 @@
                 }
 
                 this.renderDiversificationChart();
-                this.renderPortfolioPerformanceChart();
+                // FIX: Update to call the render function without arguments to ensure default state (1Y Historical) is maintained
+                this.renderPortfolioPerformanceChart(); 
                 if (sortedItems.length === 0 && type !== 'stock' && type !== 'fund' && grid) {
                      grid.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your ${type} list is empty.</div>`;
                 }
@@ -2624,6 +2627,20 @@
                     this.mutualFunds = (data.mutualFunds || []).map(ensureIdAndMigratePlatform);
                     this.watchlist = (data.watchlist || []).map(item => item.id ? item : {...item, id: Date.now().toString() + Math.random().toString(36).substring(2, 9)});
                     this.portfolioHistory = data.portfolioHistory || [];
+
+                    // FIX: Generate placeholder history if none exists for a smoother demo.
+                    if (this.portfolioHistory.length === 0) {
+                         const today = new Date();
+                         for (let i = 365; i >= 0; i--) {
+                            const date = new Date(today);
+                            date.setDate(today.getDate() - i);
+                            // Simple placeholder value that slightly increases over time
+                            const value = 50000 + Math.sin(i / 30) * 500 + i * 2; 
+                            this.portfolioHistory.push({ date: date.toISOString().slice(0, 10), value: Math.round(value) });
+                         }
+                         migrationNeeded = true;
+                    }
+
                     this.priceAlerts = data.priceAlerts || [];
 
                     if (migrationNeeded) {
@@ -3965,13 +3982,6 @@
                 
                 const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
                 
-                // 1. Destroy the *other* chart instance
-                if (this.portfolioPerformanceBarChartInstance) {
-                    this.portfolioPerformanceBarChartInstance.destroy();
-                    this.portfolioPerformanceBarChartInstance = null;
-                }
-                
-                // Destroy previous instance of THIS chart if it exists
                 if (this.portfolioPerformanceChartInstance) {
                     this.portfolioPerformanceChartInstance.destroy();
                 }
@@ -4105,7 +4115,7 @@
                 });
             }
 
-            renderPortfolioPerformanceChart(range = 'BAR_TODAY') {
+            renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
                 
                 if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && (this.stocks.length > 0 || this.mutualFunds.length > 0) ? 'block' : 'none';
@@ -4471,18 +4481,7 @@
                 // Listen for changes to the activeSession field
                 try {
                     this.sessionUnsubscribe = onSnapshot(sessionDocRef, (doc) => {
-                        const data = doc.data();
-                        
-                        // Check if the change was triggered by this session's own remote sign-out command
-                        if (data && data.triggerSource === this.sessionId) {
-                            // This change was intentional by the current session. Clear the marker and ignore.
-                            console.log("Ignoring self-triggered session update.");
-                             setDoc(sessionDocRef, { triggerSource: null }, { merge: true }).catch(err => console.error("Error clearing triggerSource:", err));
-                            return;
-                        }
-
-                        // Check if the activeSession changed (meaning another device signed in)
-                        if (doc.exists() && data && data.activeSession !== this.sessionId) {
+                        if (doc.exists() && doc.data().activeSession !== this.sessionId) {
                             // A different session has become the 'active' one (i.e., this session was signed out remotely)
                             this.showError("You have been signed out because a new session was started or an admin action was taken.");
                             this.signOut();
@@ -4498,13 +4497,9 @@
                 if (!this.userId) return;
                  this.openConfirmModal("Are you sure you want to sign out all other devices? This session will remain active.", async () => {
                     const sessionDocRef = doc(db, "sessions", this.userId);
-                    // Update the activeSession ID to the current one, AND set the triggerSource marker
+                    // Update the activeSession ID to the current one, which invalidates all others (as they are watching for a mismatch)
                     try {
-                        await setDoc(sessionDocRef, { 
-                            activeSession: this.sessionId, 
-                            triggerSource: this.sessionId, // NEW: Mark the change as originating from this session
-                            forceSignOutTimestamp: Date.now() 
-                        }, { merge: true });
+                        await setDoc(sessionDocRef, { activeSession: this.sessionId, forceSignOut: Date.now() }, { merge: true });
                         this.showSuccess("All other sessions have been signed out.");
                     } catch (err) {
                          this.showError(`Failed to sign out other sessions. Check Firebase permissions.`);
