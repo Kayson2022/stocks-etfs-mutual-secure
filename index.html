@@ -3965,6 +3965,13 @@
                 
                 const ctx = this.elements.portfolioPerformanceChart.getContext('2d');
                 
+                // 1. Destroy the *other* chart instance
+                if (this.portfolioPerformanceBarChartInstance) {
+                    this.portfolioPerformanceBarChartInstance.destroy();
+                    this.portfolioPerformanceBarChartInstance = null;
+                }
+                
+                // Destroy previous instance of THIS chart if it exists
                 if (this.portfolioPerformanceChartInstance) {
                     this.portfolioPerformanceChartInstance.destroy();
                 }
