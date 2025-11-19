@@ -3853,6 +3853,7 @@
                 
                 if (this.portfolioPerformanceChartInstance) {
                     this.portfolioPerformanceChartInstance.destroy();
+                    this.portfolioPerformanceChartInstance = null; // Ensure null after destroy
                 }
 
                 // If no history, show error on the historical canvas
@@ -3886,11 +3887,12 @@
                 const chartData = allDataPoints.filter(dp => dp.x >= startDate);
 
                 if (chartData.length <= 1) {
+                    // Clear canvas and draw specific message if data is too sparse for the selected range
                     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
                     ctx.textAlign = 'center';
                     ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
                     ctx.font = "16px 'Inter', sans-serif";
-                    ctx.fillText('Not enough history for this range.', ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
+                    ctx.fillText(`Not enough history for the ${range} range.`, ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
                     return;
                 }
                 
@@ -3900,13 +3902,16 @@
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
                 const createGradient = (ctx, area) => {
+                    // FIX 2: Ensure fillRgb is accessible and correctly parsed (it should be since it's global, but double check)
+                    const rgbValues = lineRgb.includes(',') ? fillRgb : '153, 102, 204'; // Fallback if lookup fails
+                    
                     const gradient = ctx.createLinearGradient(0, area.top, 0, area.bottom);
-                    gradient.addColorStop(0, `rgba(${fillRgb}, 0.3)`); 
-                    gradient.addColorStop(1, `rgba(${fillRgb}, 0)`);
+                    gradient.addColorStop(0, `rgba(${rgbValues}, 0.3)`); 
+                    gradient.addColorStop(1, `rgba(${rgbValues}, 0)`);
                     return gradient;
                 };
 
-                // FIX 2: Dynamic X-Axis Unit Logic
+                // FIX 3: Dynamic X-Axis Unit Logic
                 let timeUnit = 'month';
                 let displayFormat = 'MMM yy';
                 
@@ -3970,7 +3975,7 @@
                             },
                             y: {
                                 type: 'linear',
-                                // FIX 3: Y-Axis is already based on `value` from `portfolioHistory`, ensuring it uses Combined Total.
+                                // FIX 4: Ensure Y-Axis title is correct
                                 title: { display: true, text: 'Value (USD)', color: labelColor }, 
                                 ticks: {
                                     color: labelColor,
