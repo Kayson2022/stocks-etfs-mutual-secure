@@ -7,6 +7,8 @@
     <link rel="icon" href="data:,">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!-- NEW: Chart.js Annotation Plugin for the horizontal reference line -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script> 
     <!-- 
     ==================================================================
     ==      REVISED & IMPROVED STYLESHEET                           ==
@@ -46,6 +48,7 @@
             /* NEW CHART COLORS to match image */
             --chart-line-color: #5d259e; /* Dark Purple/Black line */
             --chart-fill-color-rgb: 153, 102, 204; /* Soft Purple for fill (e.g., #9966cc) */
+            --chart-reference-color: #17A589; /* NEW: Green reference line */
         }
 
         body.dark-mode {
@@ -68,6 +71,7 @@
             /* NEW CHART COLORS to match image (Dark Mode) */
             --chart-line-color: #f1f1f1; /* White line for dark mode */
             --chart-fill-color-rgb: 191, 148, 228; /* Lighter Purple for dark fill (e.g., #BF94E4) */
+            --chart-reference-color: #2ECC71; /* NEW: Green reference line for dark mode */
         }
 
         /* --- Privacy Mode --- */
@@ -3899,19 +3903,26 @@
                 // 2. Dynamic Colors/Styles
                 const lineRgb = window.getRgbColor('--chart-line-color');
                 const fillRgb = window.getRgbColor('--chart-fill-color-rgb');
+                const refColor = window.getRgbColor('--chart-reference-color');
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
+                
                 const createGradient = (ctx, area) => {
-                    // FIX 2: Ensure fillRgb is accessible and correctly parsed (it should be since it's global, but double check)
-                    const rgbValues = lineRgb.includes(',') ? fillRgb : '153, 102, 204'; // Fallback if lookup fails
-                    
                     const gradient = ctx.createLinearGradient(0, area.top, 0, area.bottom);
+                    const rgbValues = fillRgb.includes(',') ? fillRgb : (this.isDarkMode ? '191, 148, 228' : '153, 102, 204');
                     gradient.addColorStop(0, `rgba(${rgbValues}, 0.3)`); 
                     gradient.addColorStop(1, `rgba(${rgbValues}, 0)`);
                     return gradient;
                 };
+                
+                // Calculate Start/End Portfolio Value for percentage label and reference line
+                const startValue = chartData[0].y;
+                const endValue = chartData[chartData.length - 1].y;
+                const percentageChange = ((endValue - startValue) / startValue) * 100;
+                const changeClass = percentageChange >= 0 ? 'positive' : 'negative';
+                const textColor = percentageChange >= 0 ? 'var(--color-positive)' : 'var(--color-negative)';
 
-                // FIX 3: Dynamic X-Axis Unit Logic
+                // 3. Dynamic X-Axis Unit Logic
                 let timeUnit = 'month';
                 let displayFormat = 'MMM yy';
                 
@@ -3926,26 +3937,41 @@
                     displayFormat = 'yyyy';
                 }
                 
-                // 3. Initialize the chart
+                // 4. Initialize the chart
                 this.portfolioPerformanceChartInstance = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        datasets: [{
-                            label: "Portfolio Value ($)",
-                            data: chartData,
-                            borderColor: lineRgb, 
-                            borderWidth: 3,
-                            pointRadius: 1.5, 
-                            pointBackgroundColor: lineRgb,
-                            pointHitRadius: 10,
-                            tension: 0.4, 
-                            fill: true,
-                            backgroundColor: (context) => {
-                                const chartArea = context.chart.chartArea;
-                                if (!chartArea) return null;
-                                return createGradient(context.chart.ctx, chartArea);
+                        datasets: [
+                            // Dataset 1: The Main Portfolio Line with Area Fill
+                            {
+                                label: "Portfolio Value ($)",
+                                data: chartData,
+                                borderColor: lineRgb, 
+                                borderWidth: 2, // Slightly thinner line
+                                pointRadius: 0,
+                                pointHitRadius: 10,
+                                tension: 0.2, // Smoother curve
+                                fill: 'origin', // Fill area below the line
+                                backgroundColor: (context) => {
+                                    const chartArea = context.chart.chartArea;
+                                    if (!chartArea) return null;
+                                    return createGradient(context.chart.ctx, chartArea);
+                                },
                             },
-                        }]
+                            // Dataset 2: Simulated Transaction/Event Points (Orange/Yellow dots)
+                            {
+                                label: "Events",
+                                data: chartData.filter((_, i) => i % 10 === 0), // Pick every 10th point for simulation
+                                type: 'scatter',
+                                borderColor: 'transparent',
+                                backgroundColor: '#F39C12', // Orange/Yellow color
+                                pointRadius: 5,
+                                pointBorderColor: 'white',
+                                pointBorderWidth: 1,
+                                showLine: false,
+                                fill: false,
+                            }
+                        ]
                     },
                     options: {
                         responsive: true,
@@ -3954,9 +3980,31 @@
                         plugins: {
                             legend: { display: false },
                             tooltip: {
+                                mode: 'index',
+                                intersect: false,
                                 callbacks: {
-                                    label: (ctx) => 'Value: ' + this.formatCurrency(ctx.parsed.y),
+                                    label: (ctx) => {
+                                        if (ctx.datasetIndex === 1) return `Event: ${this.formatCurrency(ctx.parsed.y)}`;
+                                        return 'Value: ' + this.formatCurrency(ctx.parsed.y);
+                                    },
                                     title: (ctx) => new Date(ctx[0].parsed.x).toLocaleDateString()
+                                }
+                            },
+                            annotation: {
+                                annotations: {
+                                    // Reference Line at Start Value (Dotted Line)
+                                    startLine: {
+                                        type: 'line',
+                                        yMin: startValue,
+                                        yMax: startValue,
+                                        borderColor: refColor,
+                                        borderWidth: 2,
+                                        borderDash: [5, 5],
+                                        label: {
+                                            content: 'Start Value',
+                                            display: false // Hide default label on the line
+                                        },
+                                    }
                                 }
                             }
                         },
@@ -3967,7 +4015,7 @@
                                     unit: timeUnit,
                                     tooltipFormat: 'MM/dd/yyyy',
                                     displayFormats: {
-                                        [timeUnit]: displayFormat // Use dynamic format based on range
+                                        [timeUnit]: displayFormat
                                     }
                                 },
                                 ticks: { color: labelColor, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
@@ -3975,17 +4023,104 @@
                             },
                             y: {
                                 type: 'linear',
-                                // FIX 4: Ensure Y-Axis title is correct
-                                title: { display: true, text: 'Value (USD)', color: labelColor }, 
+                                title: { display: false, text: 'Value (USD)', color: labelColor }, 
                                 ticks: {
                                     color: labelColor,
                                     callback: (val) => this.formatCurrency(val)
                                 },
                                 beginAtZero: false,
                                 grid: { color: gridColor, drawBorder: false }
+                            },
+                            // Custom right-side axis for current price marker
+                            yRight: {
+                                type: 'linear',
+                                position: 'right',
+                                title: { display: false },
+                                min: this.portfolioPerformanceChartInstance ? this.portfolioPerformanceChartInstance.scales.y.min : undefined,
+                                max: this.portfolioPerformanceChartInstance ? this.portfolioPerformanceChartInstance.scales.y.max : undefined,
+                                ticks: {
+                                    stepSize: (endValue > 1000) ? 50 : 10,
+                                    color: labelColor,
+                                    callback: function(val) {
+                                        // Only display the current price marker on the right axis
+                                        const formattedEndValue = window.stockTracker.formatNumber(endValue, 2);
+                                        const isEndValue = Math.abs(val - endValue) < 1; // Check if tick is near the last data point
+                                        
+                                        if (isEndValue) {
+                                            // Draw the green current price box
+                                            const boxColor = window.getRgbColor('--chart-reference-color');
+                                            return {
+                                                label: formattedEndValue,
+                                                padding: 5,
+                                                backgroundColor: boxColor,
+                                                borderColor: 'white',
+                                                borderWidth: 1,
+                                                borderRadius: 4,
+                                                font: {
+                                                    weight: 'bold',
+                                                    size: 12
+                                                },
+                                                color: 'white'
+                                            };
+                                        }
+                                        return null; // Hide all other ticks on this axis
+                                    }
+                                },
+                                grid: { drawOnChartArea: false, drawBorder: false }
                             }
                         }
-                    }
+                    },
+                    plugins: [
+                        { // Custom plugin to draw the percentage change annotation box
+                            id: 'percentageChangeBox',
+                            afterDraw: (chart) => {
+                                // Find the index of the start point (first visible point)
+                                const startPoint = chart.getDatasetMeta(0).data[0];
+                                
+                                if (!startPoint) return;
+                                
+                                const x = startPoint.x;
+                                const y = chart.chartArea.top + 10; // Top of the chart area
+                                const text = `${window.stockTracker.formatNumber(percentageChange, 2)}%`;
+                                const boxWidth = 70;
+                                const boxHeight = 25;
+                                const padding = 5;
+                                
+                                const ctx = chart.ctx;
+                                ctx.save();
+                                
+                                ctx.fillStyle = 'var(--bg-secondary)'; // White background box
+                                ctx.strokeStyle = 'var(--border-color)';
+                                ctx.lineWidth = 1;
+                                
+                                const cornerRadius = 5;
+                                
+                                // Draw the box
+                                ctx.beginPath();
+                                ctx.moveTo(x + cornerRadius, y);
+                                ctx.lineTo(x + boxWidth - cornerRadius, y);
+                                ctx.arcTo(x + boxWidth, y, x + boxWidth, y + cornerRadius, cornerRadius);
+                                ctx.lineTo(x + boxWidth, y + boxHeight - cornerRadius);
+                                ctx.arcTo(x + boxWidth, y + boxHeight, x + boxWidth - cornerRadius, y + boxHeight, cornerRadius);
+                                ctx.lineTo(x + cornerRadius, y + boxHeight);
+                                ctx.arcTo(x, y + boxHeight, x, y + boxHeight - cornerRadius, cornerRadius);
+                                ctx.lineTo(x, y + cornerRadius);
+                                ctx.arcTo(x, y, x + cornerRadius, y, cornerRadius);
+                                ctx.closePath();
+                                ctx.fill();
+                                ctx.stroke();
+                                
+                                // Draw the text
+                                ctx.font = `bold 12px 'Inter', sans-serif`;
+                                ctx.textAlign = 'center';
+                                ctx.fillStyle = textColor;
+                                ctx.fillText(text, x + boxWidth / 2, y + boxHeight / 2 + 4);
+                                
+                                ctx.restore();
+                            }
+                        },
+                        ChartAnnotation,
+                    ]
                 });
             }
 
