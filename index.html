@@ -75,7 +75,8 @@
         body.privacy-mode .stock-change,
         body.privacy-mode .info-value,
         body.privacy-mode .summary-value,
-        body.privacy-mode .total-pl {
+        body.privacy-mode .total-pl,
+        body.privacy-mode .chart-big-value { /* ADDED: Hide new big chart value */
             filter: blur(5px); 
             transition: filter 0.2s ease-in-out;
         }
@@ -593,6 +594,7 @@
             border-radius: 9999px; /* CHANGED */
             cursor: pointer;
             transition: var(--transition);
+            flex-shrink: 0;
         }
         /* Overriding default purple active color for the buttons in the main chart to match the image */
         #portfolio-performance-container .chart-range-btn.active {
@@ -999,17 +1001,34 @@
             position: relative;
             height: 400px;
         }
+        
+        /* New Chart Styling Elements */
+        .chart-title-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            flex-grow: 1;
+            min-width: 150px;
+        }
+        .chart-big-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-top: 4px;
+            color: var(--text-primary);
+        }
+
         .chart-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-end; /* Align controls and title group to the bottom */
             margin-bottom: 16px;
             flex-wrap: wrap;
             gap: 16px;
         }
         .chart-header h4 {
-            font-size: 1.25rem;
-            font-weight: 700;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-secondary);
         }
         
         /* --- Mobile Responsiveness --- */
@@ -1024,34 +1043,49 @@
                 padding-bottom: 20px; 
             }
             #user-name { display: none; }
+            
+            /* Chart Mobile Layout */
+            #portfolio-performance-container .chart-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            #portfolio-performance-container .chart-title-group {
+                order: 1;
+            }
+            #portfolio-performance-container .chart-controls {
+                order: 2;
+                margin-top: 10px;
+                width: 100%;
+                justify-content: space-between;
+                gap: 5px;
+            }
+            .chart-controls .chart-range-btn {
+                padding: 6px 10px;
+            }
         }
 
         /* === PORTFOLIO CHART CONTAINER STYLES (MODERN BLOCK) === */
+        /* Updated this block to align with new header layout */
         #portfolio-performance-container { 
             background: var(--bg-secondary) !important; 
             border: 1px solid var(--border-color) !important;
             border-radius: 20px !important; 
             box-shadow: var(--shadow-md);
             padding: 24px;
-            margin-top: 24px; /* Ensure spacing from content above */
+            margin-top: 24px; 
         }
         #portfolio-performance-container .chart-header {
             justify-content: space-between; 
             margin-bottom: 24px; 
-            flex-direction: row; /* Ensure controls and title are on one line if space allows */
-        }
-        #portfolio-performance-container .chart-header h4 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            order: 2;
-            text-align: right;
+            flex-direction: row; 
+            align-items: flex-end; /* Controls and Title Group align to bottom */
+            gap: 20px;
         }
         #portfolio-performance-container .chart-controls {
-            order: 1; 
+            flex-grow: 0;
             width: auto;
-            justify-content: flex-start;
+            justify-content: flex-end;
             margin-bottom: 0;
-            flex-grow: 1;
         }
         .chart-controls .chart-range-btn {
             font-weight: 500;
@@ -1060,10 +1094,7 @@
         .chart-controls .chart-range-btn[data-range="1Y"] {
             font-weight: 700;
         }
-        .chart-controls .chart-range-btn.active {
-            background-color: var(--accent-primary);
-            color: white;
-        }
+        /* Removed unnecessary overrides here as the general chart-range-btn logic handles it */
 
         /* --- Diversification Chart Styling (New Bar Chart Style) --- */
         #diversification-chart-container {
@@ -1287,217 +1318,45 @@
         <div class="stocks-grid" id="stocksGrid"></div>
 
         
-<!-- MODERNIZED PORTFOLIO CHART CONTAINER -->
+<!-- 
+==================================================================
+==      TOTALLY REDESIGNED PORTFOLIO CHART CONTAINER            ==
+==================================================================
+-->
 <div id="portfolio-performance-container" class="chart-container">
-  <div class="chart-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-    <div id="performance-chart-controls" class="chart-controls">
-      <!-- NEW: Button to switch to Today's Bar Chart -->
-      <button class="chart-range-btn btn-range" data-range="BAR_TODAY">Today</button> 
-      <button class="chart-range-btn btn-range" data-range="1W">1W</button>
-      <button class="chart-range-btn btn-range" data-range="1M">1M</button>
-      <button class="chart-range-btn btn-range" data-range="6M">6M</button>
-      <button class="chart-range-btn btn-range" data-range="YTD">YTD</button>
-      <button class="chart-range-btn btn-range active" data-range="1Y">1Y</button>
-      <button class="chart-range-btn btn-range" data-range="3Y">3Y</button>
-      <button class="chart-range-btn btn-range" data-range="5Y">5Y</button>
-      <button class="chart-range-btn btn-range" data-range="ALL">ALL</button>
-    </div>
-    <!-- Combined title for the charts -->
-    <h4 id="portfolio-chart-title">Portfolio Performance History</h4> 
-  </div>
-
-  <!-- Historical Line Chart Wrapper (Default View) -->
-  <div class="canvas-wrapper" id="historical-chart-wrapper" style="height: 400px;">
-    <canvas id="portfolioPerformanceChart"></canvas>
-  </div>
-  
-  <!-- Today's Performance Bar Chart Wrapper (Hidden by default) -->
-  <div class="canvas-wrapper" id="bar-chart-wrapper" style="display: none; height: 400px;">
-    <canvas id="portfolioPerformanceBarChart"></canvas>
-  </div>
-  
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
-    <!-- Removed obsolete summary/download buttons from the old block -->
-  </div>
-
-<!-- REMOVED THE OBSOLETE <script> BLOCK THAT CONTAINED REDESIGNCHARTFULL LOGIC -->
-
-<script>
-  // ==================================================================
-  // == GLOBAL JAVASCRIPT: Fixes the 'getRgbColor is not defined' error
-  // ==================================================================
-    
-  /**
-   * Helper function to dynamically get the chart color based on theme.
-   * Defined globally on window to be accessible from the module script.
-   */
-  window.getRgbColor = function(name) {
-      const style = getComputedStyle(document.body);
-      // Returns the comma-separated RGB string: "r, g, b"
-      return style.getPropertyValue(name).trim(); 
-  };
-    
-  document.addEventListener("DOMContentLoaded", () => {
-    // --- Historical Chart Placeholder Initialization (Now using the historical wrapper) ---
-    const historicalCanvas = document.getElementById("portfolioPerformanceChart");
-    const ctx = historicalCanvas.getContext("2d");
-
-    
-    // MODIFIED: Inject dynamic RGB values into the gradient creation function
-    function createGradient(ctx, area, isPositive, isBenchmark = false) {
-        let fillRgb;
-        // FIX: Using window.getRgbColor for scope access
-        fillRgb = window.getRgbColor('--chart-fill-color-rgb');
+    <div class="chart-header">
+        <div class="chart-title-group">
+            <h4 id="portfolio-chart-title">Portfolio Performance</h4>
+            <!-- New Dynamic Value Display -->
+            <div class="chart-big-value" id="chart-current-value">$0.00</div>
+        </div>
         
-        const gradient = ctx.createLinearGradient(0, 0, 0, area.height);
-        gradient.addColorStop(0, `rgba(${fillRgb}, 0.2)`); /* Reduced opacity for lighter fill */
-        gradient.addColorStop(1, `rgba(${fillRgb}, 0)`);
-        return gradient;
-    }
+        <div id="performance-chart-controls" class="chart-controls">
+            <button class="chart-range-btn" data-range="BAR_TODAY">Today</button>
+            <button class="chart-range-btn" data-range="1W">1W</button>
+            <button class="chart-range-btn" data-range="1M">1M</button>
+            <button class="chart-range-btn" data-range="6M">6M</button>
+            <button class="chart-range-btn" data-range="YTD">YTD</button>
+            <button class="chart-range-btn active" data-range="1Y">1Y</button>
+            <button class="chart-range-btn" data-range="3Y">3Y</button>
+            <button class="chart-range-btn" data-range="5Y">5Y</button>
+            <button class="chart-range-btn" data-range="ALL">All</button>
+        </div>
+    </div>
 
-    const chart = new Chart(ctx, {
-      type: "line",
-      data: {
-        datasets: [{
-          label: "Portfolio Value ($)",
-          data: [],
-          borderColor: "#10b981",
-          borderWidth: 2.5,
-          pointRadius: 3,
-          pointBackgroundColor: "#10b981",
-          pointHoverRadius: 6,
-          pointHoverBackgroundColor: "#34d399",
-          hoverBorderWidth: 3,
-          pointHoverBorderColor: "rgba(255,255,255,0.9)",
-          tension: 0.35,
-          fill: true,
-          backgroundColor: function(context) {
-            const chartArea = context.chart.chartArea;
-            if (!chartArea) return null;
-            // For portfolio chart, we assume positive for the initial placeholder state
-            return createGradient(context.chart.ctx, chartArea, true); 
-          },
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { intersect: false, mode: 'nearest' },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: function(ctx) {
-                var v = ctx.parsed.y;
-                return '$' + Number(v).toLocaleString();
-              },
-              title: function(ctx) {
-                var d = ctx[0].parsed.x;
-                return new Date(d).toLocaleDateString();
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            type: 'time',
-            time: { tooltipFormat: 'MM-dd-yyyy', unit: 'day', displayFormats: { day: 'MM-dd', month: 'MM-yyyy' } },
-            title: { display: true, text: 'Date' },
-            ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 }
-          },
-          y: {
-            type: 'linear',
-            title: { display: true, text: 'Value (USD)' },
-            ticks: {
-              callback: function(val) { return '$' + Number(val).toLocaleString(); }
-            },
-            beginAtZero: false
-          }
-        }
-      }
-    });
+    <!-- Historical Line Chart Wrapper (Default View) -->
+    <div class="canvas-wrapper" id="historical-chart-wrapper" style="height: 400px;">
+        <canvas id="portfolioPerformanceChart"></canvas>
+    </div>
 
-    function getCombinedTotalFromDOM() {
-      var el = document.getElementById("combined-total-value");
-      if (!el) return null;
-      var text = el.innerText || el.textContent || '';
-      var num = parseFloat(text.replace(/[^0-9.\-]/g, ''));
-      return isNaN(num) ? null : num;
-    }
-
-    function generatePlaceholderData(latestValue, daysBack) {
-      var arr = [];
-      var today = new Date();
-      for (var i = daysBack; i >= 0; i--) {
-        var d = new Date(today);
-        d.setDate(today.getDate() - i);
-        var variation = Math.sin(i/15) * (latestValue * 0.01) + (Math.random() - 0.5) * 500;
-        var value = Math.max(0, Math.round(latestValue + variation - i * 5));
-        arr.push({ x: d, y: value });
-      }
-      return arr;
-    }
-
-    var initialCombined = getCombinedTotalFromDOM() || 50000;
-    var fullData = generatePlaceholderData(initialCombined, 365 * 5);
-
-    function rangeStartDate(range) {
-      var now = new Date();
-      switch(range) {
-        case '1W': return new Date(now.getFullYear(), now.getMonth(), now.getDate()-7);
-        case '1M': return new Date(now.getFullYear(), now.getMonth()-1, now.getDate());
-        case '6M': return new Date(now.getFullYear(), now.getMonth()-6, now.getDate());
-        case 'YTD': return new Date(now.getFullYear(), 0, 1);
-        case '1Y': return new Date(now.getFullYear()-1, now.getMonth(), now.getDate());
-        case '3Y': return new Date(now.getFullYear()-3, now.getMonth(), now.getDate());
-        case '5Y': return new Date(now.getFullYear()-5, now.getMonth(), now.getDate());
-        case 'ALL': default: return new Date(0);
-      }
-    }
-
-    function updateChart(range) {
-      var start = rangeStartDate(range);
-      var filtered = fullData.filter(p => new Date(p.x) >= start);
-      chart.data.datasets[0].data = filtered;
-      chart.update();
-    }
-    
-    // NOTE: We only bind button events here. The initial chart rendering is managed 
-    // entirely by the StockTracker.renderPortfolioPerformanceChart method after data loads.
-    document.querySelectorAll('#performance-chart-controls .chart-range-btn').forEach(btn => {
-      btn.addEventListener('click', e => {
-        document.querySelectorAll('#performance-chart-controls .chart-range-btn').forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-        // Let StockTracker handle the real chart update (fixes chart race condition)
-        if (window.stockTracker) {
-            window.stockTracker.renderPortfolioPerformanceChart(e.target.getAttribute('data-range'));
-        } else {
-            // Fallback for placeholder chart logic (if StockTracker hasn't initialized)
-            updateChart(e.target.getAttribute('data-range'));
-        }
-      });
-    });
-    
-    // Set 1Y as active by default (Since the main view is now historical line chart by default)
-    const initialRangeButton = document.querySelector('#performance-chart-controls .chart-range-btn[data-range="1Y"]');
-    if (initialRangeButton) {
-        initialRangeButton.classList.add('active');
-    }
-
-    updateChart('1Y');
-
-    // Remaining placeholder logic removed to prevent conflicts with module code.
-  });
-  </script>
-
-  <style>
-    #portfolio-performance-container { width: 100%; }
-    #portfolio-performance-container .canvas-wrapper { position: relative; height: 420px; width: 100%; }
-    @media (max-width: 1024px) { #portfolio-performance-container .canvas-wrapper { height: 360px; } }
-    @media (max-width: 768px) { #portfolio-performance-container .canvas-wrapper { height: 300px; } .chart-range-btn { padding: 6px 10px; font-size: 0.78rem; } }
-    #portfolio-performance-container .chart-header { margin-bottom: 10px; }
-  </style>
+    <!-- Today's Performance Bar Chart Wrapper (Hidden by default) -->
+    <div class="canvas-wrapper" id="bar-chart-wrapper" style="display: none; height: 400px;">
+        <canvas id="portfolioPerformanceBarChart"></canvas>
+    </div>
 </div>
+<!-- END REDESIGNED CHART CONTAINER -->
+
+
 <div id="diversification-chart-container" class="chart-container" style="display: none;">
              <div class="canvas-wrapper">
                 <canvas id="diversificationChart"></canvas>
@@ -2064,10 +1923,7 @@
                         if(this.elements.userInfo) this.elements.userInfo.style.display = 'flex';
                         if(this.elements.userName) this.elements.userName.textContent = `Welcome, ${user.displayName || 'User'}`;
                         this.loadData();
-                        
-                        // FIX: Only set up the session listener AFTER successful sign-in
-                        this.setupSessionListener(user.uid); 
-                        
+                        this.setupSessionListener();
                         this.startLiveUpdate();
                     } else {
                         this.userId = null;
@@ -2076,9 +1932,7 @@
                         if(this.elements.userInfo) this.elements.userInfo.style.display = 'none';
                         this.stocks = []; this.mutualFunds = []; this.watchlist = [];
                         this.renderContent();
-                        
-                        // FIX: Clean up the listener on sign-out
-                        if (this.sessionUnsubscribe) { 
+                        if (this.sessionUnsubscribe) {
                             this.sessionUnsubscribe();
                             this.sessionUnsubscribe = null;
                         }
@@ -2162,6 +2016,7 @@
                     historicalChartWrapper: document.getElementById('historical-chart-wrapper'), // NEW
                     barChartWrapper: document.getElementById('bar-chart-wrapper'), // NEW
                     portfolioChartTitle: document.getElementById('portfolio-chart-title'), // NEW
+                    chartCurrentValue: document.getElementById('chart-current-value'), // NEW
                     performanceChartControls: document.getElementById('performance-chart-controls'),
                     resizeObserver: new ResizeObserver(() => {
                         this.renderDiversificationChart();
@@ -2207,7 +2062,7 @@
                     editStockCost: document.getElementById('edit-stock-cost'),
                     editStockDate: document.getElementById('edit-stock-date'),
                     saveStockEditBtn: document.getElementById('save-stock-edit-btn'),
-                    viewAlertsBtn: document.getElementById('viewAlertsBtn'),
+                    viewAlertsBtn: document.getElementById('view-alerts-btn'),
                     alertsSummaryModal: document.getElementById('alertsSummaryModal'),
                     closeAlertsSummaryBtn: document.getElementById('closeAlertsSummaryBtn'),
                     alertsSummaryContent: document.getElementById('alerts-summary-content'),
@@ -2817,6 +2672,15 @@
                 setElement(document.getElementById('total-pl-percent-today'), totalPLPercentToday, true);
                 setElement(document.getElementById('total-pl-unrealized'), combinedMetrics.totalUnrealizedPL);
                 setElement(document.getElementById('total-pl-realized'), combinedMetrics.totalRealizedPL);
+                
+                // Update the big chart value
+                const chartValueEl = document.getElementById('chart-current-value');
+                if (chartValueEl) {
+                    chartValueEl.textContent = this.formatCurrency(combinedMetrics.totalCurrentValue);
+                    // Also update its color based on today's P/L
+                    chartValueEl.classList.remove('positive', 'negative');
+                    chartValueEl.classList.add(totalPLTodayFinal >= 0 ? 'positive' : 'negative');
+                }
             }
 
             isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
@@ -4468,35 +4332,26 @@
             }
 
             // --- Session/Security Logic ---
-            setupSessionListener(userId) {
-                // Generates a new unique ID only when setting up the listener (after sign-in)
-                this.sessionId = crypto.randomUUID(); 
-                const sessionDocRef = doc(db, "sessions", userId);
+            setupSessionListener() {
+                if (!this.userId) return;
+                const sessionDocRef = doc(db, "sessions", this.userId);
                 
-                // 1. Write the current session ID to Firestore
+                // Set the current session ID on login (used for multi-device sign-out)
                 try {
                     setDoc(sessionDocRef, { 
                         lastLogin: serverTimestamp(),
                         activeSession: this.sessionId,
-                        userId: userId
-                    }, { merge: true }).catch(err => console.error("Error writing initial session ID:", err));
+                        userId: this.userId
+                    }, { merge: true }).catch(err => console.error("Error writing session ID:", err));
                 } catch (err) {
                     console.error("Error setting initial session doc (check rules):", err);
                 }
 
-                // 2. Listen for changes to the activeSession field
-                // If the activeSession changes on Firestore, it means another device (or the same device reloading)
-                // has claimed active status, or an admin sign-out occurred.
+                // Listen for changes to the activeSession field
                 try {
-                    // Clean up existing listener before setting a new one
-                    if (this.sessionUnsubscribe) {
-                        this.sessionUnsubscribe();
-                        this.sessionUnsubscribe = null;
-                    }
-                    
                     this.sessionUnsubscribe = onSnapshot(sessionDocRef, (doc) => {
                         if (doc.exists() && doc.data().activeSession !== this.sessionId) {
-                            // The ID on Firestore doesn't match the ID of this browser tab.
+                            // A different session has become the 'active' one (i.e., this session was signed out remotely)
                             this.showError("You have been signed out because a new session was started or an admin action was taken.");
                             this.signOut();
                         }
