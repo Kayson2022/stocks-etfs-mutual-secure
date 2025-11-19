@@ -4017,6 +4017,16 @@
                 } else {
                     this.renderHistoricalLineChart(range);
                 }
+
+                // FIX 5: Force a resize event with a delay, which is necessary for Chart.js in embedded/dynamic layouts
+                setTimeout(() => {
+                    if (this.portfolioPerformanceChartInstance) {
+                        this.portfolioPerformanceChartInstance.resize();
+                    }
+                    if (this.portfolioPerformanceBarChartInstance) {
+                        this.portfolioPerformanceBarChartInstance.resize();
+                    }
+                }, 100);
             }
             openSettingsModal() {
                 if (this.elements.settingsModal) this.elements.settingsModal.style.display = 'flex';
