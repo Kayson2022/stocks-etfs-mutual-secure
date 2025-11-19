@@ -46,9 +46,9 @@
             --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
 
             /* NEW CHART COLORS to match image */
-            --chart-line-color: #5d259e; /* Dark Purple/Black line */
-            --chart-fill-color-rgb: 153, 102, 204; /* Soft Purple for fill (e.g., #9966cc) */
-            --chart-reference-color: #17A589; /* NEW: Green reference line */
+            --chart-line-color: #3498DB; /* Blue line for primary line */
+            --chart-fill-color-rgb: 52, 152, 219; /* Blue RGB for fill */
+            --chart-reference-color: #17A589; /* Green reference line */
         }
 
         body.dark-mode {
@@ -69,9 +69,9 @@
             --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
 
             /* NEW CHART COLORS to match image (Dark Mode) */
-            --chart-line-color: #f1f1f1; /* White line for dark mode */
-            --chart-fill-color-rgb: 191, 148, 228; /* Lighter Purple for dark fill (e.g., #BF94E4) */
-            --chart-reference-color: #2ECC71; /* NEW: Green reference line for dark mode */
+            --chart-line-color: #5DADE2; /* Lighter blue line for dark mode */
+            --chart-fill-color-rgb: 93, 173, 226; /* Lighter Blue RGB for dark fill */
+            --chart-reference-color: #2ECC71; /* Green reference line for dark mode */
         }
 
         /* --- Privacy Mode --- */
@@ -2066,7 +2066,7 @@
                     editStockCost: document.getElementById('edit-stock-cost'),
                     editStockDate: document.getElementById('edit-stock-date'),
                     saveStockEditBtn: document.getElementById('save-stock-edit-btn'),
-                    viewAlertsBtn: document.getElementById('view-alerts-btn'),
+                    viewAlertsBtn: document.getElementById('viewAlertsBtn'),
                     alertsSummaryModal: document.getElementById('alertsSummaryModal'),
                     closeAlertsSummaryBtn: document.getElementById('closeAlertsSummaryBtn'),
                     alertsSummaryContent: document.getElementById('alerts-summary-content'),
@@ -3910,7 +3910,10 @@
                 const createGradient = (ctx, area) => {
                     const gradient = ctx.createLinearGradient(0, area.top, 0, area.bottom);
                     const rgbValues = fillRgb.includes(',') ? fillRgb : (this.isDarkMode ? '191, 148, 228' : '153, 102, 204');
-                    gradient.addColorStop(0, `rgba(${rgbValues}, 0.3)`); 
+                    // Use a slightly darker color at the top of the gradient for better visual depth
+                    const darkRgb = this.isDarkMode ? '150, 120, 180' : '100, 80, 120';
+                    gradient.addColorStop(0, `rgba(${rgbValues}, 0.5)`); // Increased opacity
+                    gradient.addColorStop(0.5, `rgba(${rgbValues}, 0.2)`);
                     gradient.addColorStop(1, `rgba(${rgbValues}, 0)`);
                     return gradient;
                 };
@@ -3947,7 +3950,7 @@
                                 label: "Portfolio Value ($)",
                                 data: chartData,
                                 borderColor: lineRgb, 
-                                borderWidth: 2, // Slightly thinner line
+                                borderWidth: 2, 
                                 pointRadius: 0,
                                 pointHitRadius: 10,
                                 tension: 0.2, // Smoother curve
@@ -3961,7 +3964,17 @@
                             // Dataset 2: Simulated Transaction/Event Points (Orange/Yellow dots)
                             {
                                 label: "Events",
-                                data: chartData.filter((_, i) => i % 10 === 0), // Pick every 10th point for simulation
+                                data: chartData.map((point, i) => {
+                                    // Simulate transactions/events on random points near the line value
+                                    if (i % 10 === 0 && i > 0 && i < chartData.length - 1) {
+                                        return {
+                                            x: point.x, 
+                                            // Slight offset from the line for visibility
+                                            y: point.y + (Math.random() - 0.5) * (point.y * 0.005)
+                                        };
+                                    }
+                                    return null;
+                                }).filter(point => point !== null),
                                 type: 'scatter',
                                 borderColor: 'transparent',
                                 backgroundColor: '#F39C12', // Orange/Yellow color
@@ -3970,6 +3983,11 @@
                                 pointBorderWidth: 1,
                                 showLine: false,
                                 fill: false,
+                                tooltip: {
+                                    callbacks: {
+                                        label: (ctx) => `Transaction/Event near: ${this.formatCurrency(ctx.parsed.y)}`
+                                    }
+                                }
                             }
                         ]
                     },
@@ -4002,7 +4020,7 @@
                                         borderDash: [5, 5],
                                         label: {
                                             content: 'Start Value',
-                                            display: false // Hide default label on the line
+                                            display: false 
                                         },
                                     }
                                 }
@@ -4036,15 +4054,20 @@
                                 type: 'linear',
                                 position: 'right',
                                 title: { display: false },
-                                min: this.portfolioPerformanceChartInstance ? this.portfolioPerformanceChartInstance.scales.y.min : undefined,
-                                max: this.portfolioPerformanceChartInstance ? this.portfolioPerformanceChartInstance.scales.y.max : undefined,
+                                // Ensure the min/max mirrors the main Y axis, but we only calculate after chart draw
+                                min: chartData.reduce((min, p) => Math.min(min, p.y), Infinity) * 0.95,
+                                max: chartData.reduce((max, p) => Math.max(max, p.y), 0) * 1.05,
                                 ticks: {
                                     stepSize: (endValue > 1000) ? 50 : 10,
                                     color: labelColor,
-                                    callback: function(val) {
-                                        // Only display the current price marker on the right axis
+                                    callback: function(val, index, values) {
+                                        // Find the closest tick value to the endValue
                                         const formattedEndValue = window.stockTracker.formatNumber(endValue, 2);
-                                        const isEndValue = Math.abs(val - endValue) < 1; // Check if tick is near the last data point
+                                        // Get the tick values array (excluding the custom end tick)
+                                        const tickValues = values.map(v => v.value);
+
+                                        // Only draw custom tick if this is the closest/exact match to the current value
+                                        const isEndValue = Math.abs(val - endValue) < (values.length > 1 ? Math.abs(values[1].value - values[0].value) / 2 : 1);
                                         
                                         if (isEndValue) {
                                             // Draw the green current price box
@@ -4084,13 +4107,16 @@
                                 const text = `${window.stockTracker.formatNumber(percentageChange, 2)}%`;
                                 const boxWidth = 70;
                                 const boxHeight = 25;
-                                const padding = 5;
                                 
                                 const ctx = chart.ctx;
                                 ctx.save();
                                 
-                                ctx.fillStyle = 'var(--bg-secondary)'; // White background box
-                                ctx.strokeStyle = 'var(--border-color)';
+                                // Get colors from CSS vars
+                                const bgColor = window.getRgbColor('--bg-secondary');
+                                const borderColor = window.getRgbColor('--border-color');
+                                
+                                ctx.fillStyle = `rgb(${bgColor.includes(',') ? bgColor : '255, 255, 255'})`; // Background box
+                                ctx.strokeStyle = `rgb(${borderColor.includes(',') ? borderColor : '222, 226, 230'})`;
                                 ctx.lineWidth = 1;
                                 
                                 const cornerRadius = 5;
