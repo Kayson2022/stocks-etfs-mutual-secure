@@ -1,5 +1,7 @@
 
 
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -185,7 +187,7 @@
             background-color: var(--border-color);
         }
         .btn-danger {
-            background-color: var(--color-negative);
+            background-color: #e74c3c;
             color: white;
         }
         .btn-danger:hover {
@@ -414,12 +416,12 @@
             border-color: color-mix(in srgb, var(--border-color) 80%, black);
         }
         #clearAllBtn, #clearAllFundsBtn, #clearWatchlistBtn {
-            background-color: color-mix(in srgb, var(--color-negative) 15%, transparent);
-            color: var(--color-negative);
-            border: 1px solid color-mix(in srgb, var(--color-negative) 40%, transparent);
+            background-color: color-mix(in srgb, #e74c3c 15%, transparent);
+            color: #e74c3c;
+            border: 1px solid color-mix(in srgb, #e74c3c 40%, transparent);
         }
         #clearAllBtn:hover, #clearAllFundsBtn:hover, #clearWatchlistBtn:hover {
-            background-color: var(--color-negative);
+            background-color: #e74c3c;
             color: white;
         }
         .import-wrapper {
@@ -525,7 +527,7 @@
             justify-content: center;
         }
         .remove-btn:hover {
-            background-color: var(--color-negative);
+            background-color: #e74c3c;
             color: white;
         }
         .stock-price {
@@ -553,8 +555,8 @@
         }
         .info-label { color: var(--text-secondary); }
         .info-value { font-weight: 600; }
-        .positive { color: var(--color-positive) !important; }
-        .negative { color: var(--color-negative) !important; }
+        .positive { color: #28a745 !important; }
+        .negative { color: #e74c3c !important; }
 
         .platform-select {
             width: 50%;
@@ -778,10 +780,10 @@
             opacity: 0.9;
         }
         .transaction-btn.buy-btn {
-            background-color: var(--color-positive);
+            background-color: #28a745;
         }
         .transaction-btn.sell-btn {
-            background-color: var(--color-negative);
+            background-color: #e74c3c;
         }
         /* EDITS: Updated edit button style */
         .add-btn.edit-btn {
@@ -832,8 +834,8 @@
         .transaction-info { font-size: 0.9rem; }
         .transaction-info strong { text-transform: uppercase; }
         .transaction-info span { display: block; margin-bottom: 4px; }
-        .transaction-entry .buy { color: var(--color-positive); }
-        .transaction-entry .sell { color: var(--color-negative); }
+        .transaction-entry .buy { color: #28a745; }
+        .transaction-entry .sell { color: #e74c3c; }
         .transaction-entry-controls { display: flex; gap: 8px; align-items: center; }
         .edit-transaction-btn, .delete-transaction-btn {
             background: var(--bg-secondary);
@@ -848,7 +850,7 @@
             background: transparent; border: none; font-size: 1.2rem;
         }
         .delete-transaction-btn:hover {
-            color: var(--color-negative);
+            color: #e74c3c;
         }
 
         /* --- Modals --- */
@@ -900,8 +902,8 @@
             gap: 16px;
         }
         #alerts-summary-content .triggered-alert {
-            background-color: color-mix(in srgb, var(--color-positive) 10%, transparent);
-            border-left: 4px solid var(--color-positive);
+            background-color: color-mix(in srgb, #28a745 10%, transparent);
+            border-left: 4px solid #28a745;
             margin: 2px -10px;
             padding-left: 6px !important;
         }
@@ -928,8 +930,8 @@
             font-weight: 600;
         }
         .loading { background-color: var(--bg-secondary); color: var(--text-primary); }
-        .error { background-color: var(--color-negative); color: white; }
-        .success { background-color: var(--color-positive); color: white; }
+        .error { background-color: #e74c3c; color: white; }
+        .success { background-color: #28a745; color: white; }
         .refresh-status-popup { background-color: var(--accent-primary); color: white; display: none; }
         .refresh-status-popup.active { display: block; }
         .alert-notification { background-color: var(--accent-primary); color: white; display: none; }
@@ -1473,7 +1475,7 @@
             <p id="confirm-modal-text" style="text-align: center; margin-bottom: 20px;"></p>
             <div class="modal-actions">
                 <button class="add-btn" id="confirm-modal-cancel-btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Cancel</button>
-                <button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: var(--color-negative);">Confirm Delete</button>
+                <button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: #e74c3c;">Confirm Delete</button>
             </div>
         </div>
     </div>
@@ -3329,7 +3331,7 @@
                                 <button class="add-btn edit-btn" data-id="${item.id}" data-type="${type}">Edit Details</button>
                             </div>
                             <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 12px;">
-                                <button class="add-btn transaction-btn" style="background-color: var(--color-positive); opacity: 0.8;" onclick="window.stockTracker.openTransactionModal('${item.id}', '${type}', 'dividend')">Record Dividend</button>
+                                <button class="add-btn transaction-btn" style="background-color: #28a745; opacity: 0.8;" onclick="window.stockTracker.openTransactionModal('${item.id}', '${type}', 'dividend')">Record Dividend</button>
                             </div>
                             <div class="transaction-details">
                                 <div class="transaction-header">
@@ -3344,7 +3346,7 @@
                         // Closed Position (only transactions visible)
                          cardActionsHTML = `
                             <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 10px;">
-                                <button class="add-btn transaction-btn buy-btn" data-id="${item.id}" data-type="${type}" style="background-color: var(--color-positive);">Re-open Position (Buy)</button>
+                                <button class="add-btn transaction-btn buy-btn" data-id="${item.id}" data-type="${type}" style="background-color: #28a745;">Re-open Position (Buy)</button>
                             </div>
                             <div class="transaction-details">
                                 <div class="transaction-header">
@@ -3423,7 +3425,7 @@
                      if (this.cardChartInstances[chartId]) this.cardChartInstances[chartId].destroy();
                      ctx.clearRect(0, 0, canvas.width, canvas.height);
                      ctx.textAlign = 'center';
-                     ctx.fillStyle = 'var(--color-negative)';
+                     ctx.fillStyle = '#e74c3c';
                      ctx.font = "16px 'Inter', sans-serif";
                      ctx.fillText(message, canvas.width / 2, canvas.height / 2);
                 };
@@ -3498,7 +3500,7 @@
 
                     const firstPrice = chartData[0].y;
                     const lastPrice = chartData[chartData.length - 1].y;
-                    const borderColor = lastPrice >= firstPrice ? 'var(--color-positive)' : 'var(--color-negative)';
+                    const borderColor = lastPrice >= firstPrice ? '#28a745' : '#e74c3c';
                     const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                     const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
 
@@ -3795,7 +3797,7 @@
                 
                 // 2. Determine colors
                 const backgroundColors = barValues.map(change => 
-                    change >= 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+                    change >= 0 ? '#28a745' : '#e74c3c'
                 );
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#212529';
@@ -3925,7 +3927,7 @@
                 const endValue = chartData[chartData.length - 1].y;
                 const percentageChange = ((endValue - startValue) / startValue) * 100;
                 const changeClass = percentageChange >= 0 ? 'positive' : 'negative';
-                const textColor = percentageChange >= 0 ? 'var(--color-positive)' : 'var(--color-negative)';
+                const textColor = percentageChange >= 0 ? '#28a745' : '#e74c3c';
 
                 // 3. Dynamic X-Axis Unit Logic
                 let timeUnit = 'month';
@@ -4564,7 +4566,7 @@
                 const hasFmpKey = this.config.fmpApiKey && this.config.fmpApiKey !== 'YOUR_FMP_API_KEY';
                 
                 if (!hasFinnhubKey && !hasFmpKey) {
-                    container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: var(--color-negative);">
+                    container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #e74c3c;">
                         <p style="font-size: 1.1rem; font-weight: 600;">⚠️ API Keys Missing for News</p>
                         <p style="margin-top: 10px; color: var(--text-secondary);">Please enter your <strong>Finnhub</strong> and/or <strong>FMP</strong> API Keys in the <button class="btn-primary" style="display: inline-flex; margin: 0 5px;" onclick="window.stockTracker.openSettingsModal()">Settings</button> panel to enable real-time news updates.</p>
                     </div>`;
