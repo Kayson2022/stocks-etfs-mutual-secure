@@ -183,7 +183,7 @@
             background-color: var(--border-color);
         }
         .btn-danger {
-            background-color: var(--color-negative);
+            background-color: #e74c3c;
             color: white;
         }
         .btn-danger:hover {
@@ -412,12 +412,12 @@
             border-color: color-mix(in srgb, var(--border-color) 80%, black);
         }
         #clearAllBtn, #clearAllFundsBtn, #clearWatchlistBtn {
-            background-color: color-mix(in srgb, var(--color-negative) 15%, transparent);
-            color: var(--color-negative);
-            border: 1px solid color-mix(in srgb, var(--color-negative) 40%, transparent);
+            background-color: color-mix(in srgb, #e74c3c 15%, transparent);
+            color: #e74c3c;
+            border: 1px solid color-mix(in srgb, #e74c3c 40%, transparent);
         }
         #clearAllBtn:hover, #clearAllFundsBtn:hover, #clearWatchlistBtn:hover {
-            background-color: var(--color-negative);
+            background-color: #e74c3c;
             color: white;
         }
         .import-wrapper {
@@ -523,7 +523,7 @@
             justify-content: center;
         }
         .remove-btn:hover {
-            background-color: var(--color-negative);
+            background-color: #e74c3c;
             color: white;
         }
         .stock-price {
@@ -551,8 +551,8 @@
         }
         .info-label { color: var(--text-secondary); }
         .info-value { font-weight: 600; }
-        .positive { color: var(--color-positive) !important; }
-        .negative { color: var(--color-negative) !important; }
+        .positive { color: #28a745 !important; }
+        .negative { color: #e74c3c !important; }
 
         .platform-select {
             width: 50%;
@@ -776,10 +776,10 @@
             opacity: 0.9;
         }
         .transaction-btn.buy-btn {
-            background-color: var(--color-positive);
+            background-color: #28a745;
         }
         .transaction-btn.sell-btn {
-            background-color: var(--color-negative);
+            background-color: #e74c3c;
         }
         /* EDITS: Updated edit button style */
         .add-btn.edit-btn {
@@ -830,8 +830,8 @@
         .transaction-info { font-size: 0.9rem; }
         .transaction-info strong { text-transform: uppercase; }
         .transaction-info span { display: block; margin-bottom: 4px; }
-        .transaction-entry .buy { color: var(--color-positive); }
-        .transaction-entry .sell { color: var(--color-negative); }
+        .transaction-entry .buy { color: #28a745; }
+        .transaction-entry .sell { color: #e74c3c; }
         .transaction-entry-controls { display: flex; gap: 8px; align-items: center; }
         .edit-transaction-btn, .delete-transaction-btn {
             background: var(--bg-secondary);
@@ -846,7 +846,7 @@
             background: transparent; border: none; font-size: 1.2rem;
         }
         .delete-transaction-btn:hover {
-            color: var(--color-negative);
+            color: #e74c3c;
         }
 
         /* --- Modals --- */
@@ -898,8 +898,8 @@
             gap: 16px;
         }
         #alerts-summary-content .triggered-alert {
-            background-color: color-mix(in srgb, var(--color-positive) 10%, transparent);
-            border-left: 4px solid var(--color-positive);
+            background-color: color-mix(in srgb, #28a745 10%, transparent);
+            border-left: 4px solid #28a745;
             margin: 2px -10px;
             padding-left: 6px !important;
         }
@@ -926,8 +926,8 @@
             font-weight: 600;
         }
         .loading { background-color: var(--bg-secondary); color: var(--text-primary); }
-        .error { background-color: var(--color-negative); color: white; }
-        .success { background-color: var(--color-positive); color: white; }
+        .error { background-color: #e74c3c; color: white; }
+        .success { background-color: #28a745; color: white; }
         .refresh-status-popup { background-color: var(--accent-primary); color: white; display: none; }
         .refresh-status-popup.active { display: block; }
         .alert-notification { background-color: var(--accent-primary); color: white; display: none; }
@@ -1471,7 +1471,7 @@
             <p id="confirm-modal-text" style="text-align: center; margin-bottom: 20px;"></p>
             <div class="modal-actions">
                 <button class="add-btn" id="confirm-modal-cancel-btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Cancel</button>
-                <button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: var(--color-negative);">Confirm Delete</button>
+                <button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: #e74c3c;">Confirm Delete</button>
             </div>
         </div>
     </div>
@@ -3327,7 +3327,7 @@
                                 <button class="add-btn edit-btn" data-id="${item.id}" data-type="${type}">Edit Details</button>
                             </div>
                             <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 12px;">
-                                <button class="add-btn transaction-btn" style="background-color: var(--color-positive); opacity: 0.8;" onclick="window.stockTracker.openTransactionModal('${item.id}', '${type}', 'dividend')">Record Dividend</button>
+                                <button class="add-btn transaction-btn" style="background-color: #28a745; opacity: 0.8;" onclick="window.stockTracker.openTransactionModal('${item.id}', '${type}', 'dividend')">Record Dividend</button>
                             </div>
                             <div class="transaction-details">
                                 <div class="transaction-header">
@@ -3342,7 +3342,7 @@
                         // Closed Position (only transactions visible)
                          cardActionsHTML = `
                             <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 10px;">
-                                <button class="add-btn transaction-btn buy-btn" data-id="${item.id}" data-type="${type}" style="background-color: var(--color-positive);">Re-open Position (Buy)</button>
+                                <button class="add-btn transaction-btn buy-btn" data-id="${item.id}" data-type="${type}" style="background-color: #28a745;">Re-open Position (Buy)</button>
                             </div>
                             <div class="transaction-details">
                                 <div class="transaction-header">
@@ -3421,7 +3421,7 @@
                      if (this.cardChartInstances[chartId]) this.cardChartInstances[chartId].destroy();
                      ctx.clearRect(0, 0, canvas.width, canvas.height);
                      ctx.textAlign = 'center';
-                     ctx.fillStyle = 'var(--color-negative)';
+                     ctx.fillStyle = '#e74c3c';
                      ctx.font = "16px 'Inter', sans-serif";
                      ctx.fillText(message, canvas.width / 2, canvas.height / 2);
                 };
@@ -3496,7 +3496,7 @@
 
                     const firstPrice = chartData[0].y;
                     const lastPrice = chartData[chartData.length - 1].y;
-                    const borderColor = lastPrice >= firstPrice ? 'var(--color-positive)' : 'var(--color-negative)';
+                    const borderColor = lastPrice >= firstPrice ? '#28a745' : '#e74c3c';
                     const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                     const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
 
@@ -3793,7 +3793,7 @@
                 
                 // 2. Determine colors
                 const backgroundColors = barValues.map(change => 
-                    change >= 0 ? 'var(--color-positive)' : 'var(--color-negative)'
+                    change >= 0 ? '#28a745' : '#e74c3c'
                 );
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#212529';
@@ -3923,7 +3923,7 @@
                 const endValue = chartData[chartData.length - 1].y;
                 const percentageChange = ((endValue - startValue) / startValue) * 100;
                 const changeClass = percentageChange >= 0 ? 'positive' : 'negative';
-                const textColor = percentageChange >= 0 ? 'var(--color-positive)' : 'var(--color-negative)';
+                const textColor = percentageChange >= 0 ? '#28a745' : '#e74c3c';
 
                 // 3. Dynamic X-Axis Unit Logic
                 let timeUnit = 'month';
@@ -4562,7 +4562,7 @@
                 const hasFmpKey = this.config.fmpApiKey && this.config.fmpApiKey !== 'YOUR_FMP_API_KEY';
                 
                 if (!hasFinnhubKey && !hasFmpKey) {
-                    container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: var(--color-negative);">
+                    container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: #e74c3c;">
                         <p style="font-size: 1.1rem; font-weight: 600;">⚠️ API Keys Missing for News</p>
                         <p style="margin-top: 10px; color: var(--text-secondary);">Please enter your <strong>Finnhub</strong> and/or <strong>FMP</strong> API Keys in the <button class="btn-primary" style="display: inline-flex; margin: 0 5px;" onclick="window.stockTracker.openSettingsModal()">Settings</button> panel to enable real-time news updates.</p>
                     </div>`;
@@ -4917,367 +4917,6 @@
 })();
 </script>
 <!-- END: Injected new portfolioPerformanceChart implementation -->
-
-
-<!-- START: Upgrades - TradingView style candles, improved line, events, summary, smoother switching -->
-<style>
-/* Modern UI tweaks for the chart area */
-#portfolio-performance-container {
-  padding: 20px;
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.01));
-  backdrop-filter: blur(6px);
-  position: relative;
-}
-.chart-big-value { font-size: 2.25rem; font-weight: 800; letter-spacing: -0.5px; }
-#chart-summary-panel{
-  display:flex;
-  gap:12px;
-  align-items:center;
-  position:absolute;
-  right:20px;
-  top:18px;
-  z-index:5;
-}
-.summary-pill{
-  background:var(--bg-tertiary);
-  border:1px solid var(--border-color);
-  padding:8px 12px;
-  border-radius:12px;
-  font-weight:700;
-  min-width:110px;
-  text-align:center;
-}
-#portfolio-performance-container .chart-header { padding-bottom: 8px; }
-.chart-controls .chart-range-btn { transition: background-color 220ms, transform 180ms; }
-.chart-controls .chart-range-btn.active { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
-.canvas-wrapper { height:420px !important; }
-/* Crosshair style */
-.crosshair-line { position:absolute; pointer-events:none; z-index:10; }
-.event-icon { position:absolute; width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;box-shadow:0 4px 8px rgba(0,0,0,0.12);pointer-events:auto; }
-</style>
-
-<div id="chart-summary-panel" aria-hidden="false">
-  <div class="summary-pill" id="summary-daily">Today: $0.00</div>
-  <div class="summary-pill" id="summary-week">1W: 0.00%</div>
-  <div class="summary-pill" id="summary-month">1M: 0.00%</div>
-</div>
-
-<script>
-(function(){
-  // utilities
-  function getIntradayData() {
-    // Try multiple common names for intraday/ticks that the app might expose
-    const possible = [
-      window.stockTracker && window.stockTracker.intradayTicks,
-      window.stockTracker && window.stockTracker.intradayData,
-      window.stockTracker && window.stockTracker.todayTicks,
-      window.stockTracker && window.stockTracker.todayIntraday,
-      window.stockTracker && window.stockTracker.ticks
-    ];
-    for (const p of possible) {
-      if (Array.isArray(p) && p.length) return p;
-    }
-    // Fallback: create sample OHLC (minute) data for today
-    const now = new Date();
-    const start = new Date(); start.setHours(9,30,0,0);
-    const data = [];
-    let price = 100 + Math.random()*5;
-    for (let i=0;i<120;i++){
-      const t = new Date(start.getTime() + i*60*1000);
-      const open = price;
-      const close = open + (Math.random()-0.45)*0.6;
-      const high = Math.max(open, close) + Math.random()*0.6;
-      const low = Math.min(open, close) - Math.random()*0.6;
-      price = close;
-      data.push({t: t, o: open, h: high, l: low, c: close});
-    }
-    return data;
-  }
-
-  function formatCurrency(v) {
-    if (window.stockTracker && window.stockTracker.formatCurrency) return window.stockTracker.formatCurrency(v);
-    return '$' + Number(v).toFixed(2);
-  }
-
-  // Create candlestick renderer plugin (draw wicks and bodies) for Chart.js
-  const candlePlugin = {
-    id: 'candles',
-    afterDatasetDraw(chart, args, options) {
-      const {ctx, chartArea: area, scales: {x, y}} = chart;
-      const meta = chart.getDatasetMeta(0);
-      ctx.save();
-      meta.data.forEach((bar, idx) => {
-        const d = chart.data.datasets[0].data[idx];
-        const xC = bar.x;
-        const openY = y.getPixelForValue(d.o);
-        const closeY = y.getPixelForValue(d.c);
-        const highY = y.getPixelForValue(d.h);
-        const lowY = y.getPixelForValue(d.l);
-        const barWidth = Math.max(4, Math.min(14, bar.width || 8));
-        // wick
-        ctx.beginPath();
-        ctx.strokeStyle = d.c >= d.o ? '#28a745' : '#e74c3c';
-        ctx.lineWidth = 1.5;
-        ctx.moveTo(xC, highY);
-        ctx.lineTo(xC, lowY);
-        ctx.stroke();
-        // body (rectangle)
-        const top = Math.min(openY, closeY);
-        const height = Math.max(1, Math.abs(closeY - openY));
-        ctx.beginPath();
-        if (d.c >= d.o) {
-          // gain: hollow with green border & thin fill
-          ctx.fillStyle = 'rgba(40,167,69,0.08)';
-          ctx.strokeStyle = '#28a745';
-        } else {
-          // loss: filled red
-          ctx.fillStyle = 'rgba(231,76,60,0.18)';
-          ctx.strokeStyle = '#e74c3c';
-        }
-        ctx.lineWidth = 1.2;
-        const left = xC - barWidth/2;
-        ctx.rect(left, top, barWidth, height);
-        ctx.fill();
-        ctx.stroke();
-      });
-      ctx.restore();
-    }
-  };
-
-  // Crosshair plugin
-  const crosshairPlugin = {
-    id: 'crosshair',
-    afterEvent(chart, evt) {
-      const e = evt.event;
-      const canvas = chart.canvas;
-      const rect = canvas.getBoundingClientRect();
-      // remove any existing lines
-      const existX = canvas.parentNode.querySelector('.crosshair-x');
-      const existY = canvas.parentNode.querySelector('.crosshair-y');
-      if (existX) existX.remove();
-      if (existY) existY.remove();
-      if (e && (e.type === 'mousemove' || e.type === 'pointermove')) {
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        // vertical
-        const vx = document.createElement('div');
-        vx.className = 'crosshair-x';
-        vx.style.position='absolute';
-        vx.style.left = (rect.left + x) + 'px';
-        vx.style.top = rect.top + 'px';
-        vx.style.height = rect.height + 'px';
-        vx.style.width = '1px';
-        vx.style.background = 'rgba(100,100,100,0.12)';
-        vx.style.pointerEvents='none';
-        canvas.parentNode.appendChild(vx);
-        // horizontal
-        const hy = document.createElement('div');
-        hy.className = 'crosshair-y';
-        hy.style.position='absolute';
-        hy.style.left = rect.left + 'px';
-        hy.style.top = (rect.top + y) + 'px';
-        hy.style.width = rect.width + 'px';
-        hy.style.height = '1px';
-        hy.style.background = 'rgba(100,100,100,0.08)';
-        hy.style.pointerEvents='none';
-        canvas.parentNode.appendChild(hy);
-      }
-    }
-  };
-
-  // Smooth animations utility
-  function animateChart(chart) {
-    chart.options.animation = {duration: 450, easing: 'easeOutCubic'};
-    chart.update();
-  }
-
-  // Build candlestick chart on the bar canvas
-  function buildCandles() {
-    const canvas = document.getElementById('portfolioPerformanceBarChart');
-    if (!canvas) return;
-    const raw = getIntradayData();
-    // Normalize data to OHLC objects with timestamps
-    const data = raw.map(d => {
-      // support different field names
-      const t = d.t || d.timestamp || d.time || d.date || d.datetime || d.x || new Date();
-      const o = d.o !== undefined ? d.o : d.open !== undefined ? d.open : d[1] || d.openPrice || d.o;
-      const h = d.h !== undefined ? d.h : d.high !== undefined ? d.high : d[2] || d.h;
-      const l = d.l !== undefined ? d.l : d.low !== undefined ? d.low : d[3] || d.l;
-      const c = d.c !== undefined ? d.c : d.close !== undefined ? d.close : d[4] || d.c;
-      return {t: new Date(t), o: Number(o), h: Number(h), l: Number(l), c: Number(c)};
-    });
-    // Chart.js dataset expects labels and numeric scales
-    const ctx = canvas.getContext('2d');
-    if (window.__candleChart) {
-      window.__candleChart.destroy();
-      window.__candleChart = null;
-    }
-    // create a shallow dataset for Chart.js to compute scales (we won't rely on default bars drawing)
-    const labels = data.map(d => d.t);
-    const ds = data.map(d => ({o:d.o, h:d.h, l:d.l, c:d.c}));
-
-    window.__candleChart = new Chart(ctx, {
-      type: 'bar', // use bar to get categorical x layout
-      data: {
-        labels: labels,
-        datasets: [{ label:'Candles', data: ds }]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        parsing: false,
-        scales: {
-          x:{ type: 'time', time: { unit: 'minute', tooltipFormat: 'HH:mm' }, ticks: {maxRotation:0} },
-          y:{ ticks:{ callback: value=>formatCurrency(value) } }
-        },
-        plugins: {
-          legend:{display:false},
-          tooltip:{
-            enabled:true,
-            callbacks:{
-              title: ctx => {
-                const d = ctx[0].label; return new Date(d).toLocaleString();
-              },
-              label: (context) => {
-                const d = data[context.dataIndex];
-                return [`Open: ${formatCurrency(d.o)}`, `High: ${formatCurrency(d.h)}`, `Low: ${formatCurrency(d.l)}`, `Close: ${formatCurrency(d.c)}`];
-              }
-            }
-          }
-        },
-        interaction:{mode:'index', intersect:false},
-        animation:{duration:300},
-      },
-      plugins: [candlePlugin, crosshairPlugin]
-    });
-  }
-
-  // Improve line chart appearance for portfolioPerformanceChart
-  function enhanceLineChart() {
-    const canvas = document.getElementById('portfolioPerformanceChart');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    // If an injected chart instance exists, modify its options, else create overlay plugin
-    const existing = window.__injectedPortfolioChartInstance;
-    if (existing) {
-      existing.options.elements.line.tension = 0.24;
-      existing.options.elements.line.borderWidth = 2.5;
-      existing.options.elements.point.radius = 0;
-      existing.options.plugins.tooltip.mode = 'index';
-      // gradient fill update
-      const grad = ctx.createLinearGradient(0,0,0,canvas.height);
-      grad.addColorStop(0, 'rgba(52,152,219,0.24)');
-      grad.addColorStop(1, 'rgba(52,152,219,0.02)');
-      existing.data.datasets[0].backgroundColor = grad;
-      animateChart(existing);
-    }
-  }
-
-  // Key event icons above chart - uses stockTracker.keyEvents if available
-  function renderEventIcons() {
-    const container = document.getElementById('portfolio-performance-container');
-    if (!container) return;
-    // remove old icons
-    const old = container.querySelectorAll('.event-icon');
-    old.forEach(n=>n.remove());
-    const events = (window.stockTracker && (window.stockTracker.keyEvents || window.stockTracker.events)) || [];
-    events.slice(0,8).forEach(ev => {
-      try {
-        const date = new Date(ev.date || ev.timestamp || ev.time || ev.t);
-        if (isNaN(date)) return;
-        const canvas = document.getElementById('portfolioPerformanceChart');
-        const chart = window.__injectedPortfolioChartInstance;
-        if (!chart) return;
-        const xScale = chart.scales.x;
-        const xPx = xScale.getPixelForValue(date);
-        const rect = canvas.getBoundingClientRect();
-        const icon = document.createElement('div');
-        icon.className = 'event-icon';
-        icon.style.left = (rect.left + xPx - 10) + 'px';
-        icon.style.top = (rect.top + 8) + 'px';
-        icon.style.background = ev.type === 'earnings' ? '#3498DB' : ev.type === 'dividend' ? '#f39c12' : '#9b59b6';
-        icon.title = ev.title || ev.type || 'Event';
-        icon.textContent = ev.type ? ev.type[0].toUpperCase() : 'E';
-        document.body.appendChild(icon);
-        setTimeout(()=>icon.remove(), 7000);
-      } catch(e){}
-    });
-  }
-
-  // Update performance summary numbers from stockTracker if available
-  function updateSummaryPanel() {
-    const tracker = window.stockTracker;
-    if (!tracker) return;
-    const daily = document.getElementById('summary-daily');
-    const week = document.getElementById('summary-week');
-    const month = document.getElementById('summary-month');
-    try {
-      const plToday = tracker.totalPLToday || tracker.total_pl_today || (tracker.getTotalPLToday && tracker.getTotalPLToday());
-      const pct1w = tracker.weekPercent || (tracker.getWeekPercent && tracker.getWeekPercent && tracker.getWeekPercent());
-      const pct1m = tracker.monthPercent || (tracker.getMonthPercent && tracker.getMonthPercent && tracker.getMonthPercent());
-      if (daily) daily.textContent = 'Today: ' + (plToday !== undefined ? formatCurrency(plToday) : '$0.00');
-      if (week) week.textContent = '1W: ' + (pct1w !== undefined ? (pct1w>0?'+':'')+Number(pct1w).toFixed(2)+'%' : '0.00%');
-      if (month) month.textContent = '1M: ' + (pct1m !== undefined ? (pct1m>0?'+':'')+Number(pct1m).toFixed(2)+'%' : '0.00%');
-    } catch(e){}
-  }
-
-  // Smooth range switching: animate fade between charts
-  function setupRangeButtons() {
-    const controls = document.querySelectorAll('#performance-chart-controls .chart-range-btn');
-    controls.forEach(btn => {
-      try { btn.removeEventListener('click', btn._injectedHandler); } catch(e) {}
-      const handler = (e) => {
-        controls.forEach(b => b.classList.remove('active'));
-        e.currentTarget.classList.add('active');
-        const range = e.currentTarget.getAttribute('data-range');
-        const histWrap = document.getElementById('historical-chart-wrapper');
-        const barWrap = document.getElementById('bar-chart-wrapper');
-        // fade out
-        histWrap.style.transition = 'opacity 220ms';
-        barWrap.style.transition = 'opacity 220ms';
-        if (range === 'BAR_TODAY') {
-          histWrap.style.opacity = 0;
-          setTimeout(()=>{ histWrap.style.display='none'; barWrap.style.display='block'; barWrap.style.opacity=0; setTimeout(()=>{ buildCandles(); barWrap.style.opacity=1; renderEventIcons(); updateSummaryPanel(); }, 30); }, 220);
-        } else {
-          barWrap.style.opacity = 0;
-          setTimeout(()=>{ barWrap.style.display='none'; histWrap.style.display='block'; histWrap.style.opacity=0; setTimeout(()=>{ if (window.__injectedPortfolioChartInstance && window.__injectedPortfolioChartInstance.update) { try { window.__injectedPortfolioChartInstance.update(); } catch(e){} } enhanceLineChart(); renderEventIcons(); updateSummaryPanel(); histWrap.style.opacity=1; }, 30); }, 220);
-        }
-      };
-      btn.addEventListener('click', handler);
-      btn._injectedHandler = handler;
-    });
-  }
-
-  // Reposition event icons on resize/scroll
-  function repositionEventIcons() {
-    const icons = document.querySelectorAll('.event-icon');
-    icons.forEach(icon => icon.remove()); // they are ephemeral and will be re-rendered
-    renderEventIcons();
-  }
-
-  // Initialize on ready
-  function whenReady(cb, timeout=12000) {
-    const start = Date.now();
-    (function check(){
-      if (document.readyState === 'complete' && window.stockTracker) return cb();
-      if (Date.now() - start > timeout) return cb();
-      requestAnimationFrame(check);
-    })();
-  }
-
-  whenReady(()=>{
-    enhanceLineChart();
-    setupRangeButtons();
-    const active = document.querySelector('#performance-chart-controls .chart-range-btn.active');
-    if (active && active.getAttribute('data-range') === 'BAR_TODAY') buildCandles();
-    renderEventIcons();
-    updateSummaryPanel();
-    window.addEventListener('resize', () => { setTimeout(repositionEventIcons, 200); });
-    setInterval(()=>{ enhanceLineChart(); updateSummaryPanel(); renderEventIcons(); if (document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range')==='BAR_TODAY') buildCandles(); }, 5000);
-  });
-})();
-</script>
-<!-- END: Upgrades -->
 
 </body>
 </html>
