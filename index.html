@@ -5041,3 +5041,64 @@ window.getRgbColor = window.getRgbColor || function(varName) {
 console.log("Yahoo + Firestore history integration would be here.");
 </script>
 <!-- END INTEGRATION -->
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { 
+        getAuth, 
+        GoogleAuthProvider, 
+        signInWithPopup, 
+        onAuthStateChanged, 
+        signOut 
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { 
+        getFirestore 
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    // Firebase Config
+    const firebaseConfig = {
+        apiKey: "AIzaSyB8wQ0-O2avYjRW7Wjtmiql03q1ikwhX7s",
+        authDomain: "stocks-etfs-mutual.firebaseapp.com",
+        projectId: "stocks-etfs-mutual",
+        storageBucket: "stocks-etfs-mutual.appspot.com",
+        messagingSenderId: "326474465163",
+        appId: "1:326474465163:web:6d140efca04077ba8f1f98e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const provider = new GoogleAuthProvider();
+
+    // Login
+    window.doGoogleLogin = function () {
+        signInWithPopup(auth, provider).catch(err => console.error("Login error:", err));
+    };
+
+    // Bind login button
+    document.addEventListener("DOMContentLoaded", () => {
+        const btn = document.getElementById("google-signin-btn");
+        if (btn) {
+            btn.onclick = () => window.doGoogleLogin();
+        }
+    });
+
+    // Logout
+    window.doLogout = function () {
+        signOut(auth);
+    };
+
+    // Auth Listener
+    onAuthStateChanged(auth, (user) => {
+        const loginScreen = document.getElementById("login-container");
+        const appScreen = document.getElementById("app-container");
+
+        if (user) {
+            loginScreen.style.display = "none";
+            appScreen.style.display = "block";
+        } else {
+            appScreen.style.display = "none";
+            loginScreen.style.display = "block";
+        }
+    });
+</script>
