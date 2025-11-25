@@ -1,6 +1,4 @@
 
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1027,12 +1025,11 @@
 
         .chart-header {
             display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            justify-content: space-between;
+            align-items: flex-end; /* Align controls and title group to the bottom */
             margin-bottom: 16px;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 16px;
         }
         .chart-header h4 {
             font-size: 1.1rem;
@@ -1341,19 +1338,12 @@
         </div>
         
         <div id="performance-chart-controls" class="chart-controls">
-            <button class="chart-range-btn active" data-range="BAR_TODAY">Today</button>
-<select id="top-movers-count" style="margin-left:10px;">
-<option value="5">5</option>
-<option value="10" selected>10</option>
-<option value="15">15</option>
-<option value="20">20</option>
-</select>
-
+            <button class="chart-range-btn" data-range="BAR_TODAY">Today</button>
             <button class="chart-range-btn" data-range="1W">1W</button>
             <button class="chart-range-btn" data-range="1M">1M</button>
             <button class="chart-range-btn" data-range="6M">6M</button>
             <button class="chart-range-btn" data-range="YTD">YTD</button>
-            <button class="chart-range-btn" data-range="1Y">1Y</button>
+            <button class="chart-range-btn active" data-range="1Y">1Y</button>
             <button class="chart-range-btn" data-range="3Y">3Y</button>
             <button class="chart-range-btn" data-range="5Y">5Y</button>
             <button class="chart-range-btn" data-range="ALL">All</button>
@@ -1564,10 +1554,10 @@
             apiKey: "AIzaSyB8wQ0-O2avYjRW7Wjtmiql03q1ikwhX7s",
             authDomain: "stocks-etfs-mutual.firebaseapp.com",
             projectId: "stocks-etfs-mutual",
-            storageBucket: "stocks-etfs-mutual.appspot.com",
+            storageBucket: "stocks-etfs-mutual.firebasestorage.app",
             messagingSenderId: "326474465163",
             appId: "1:326474465163:web:6d140efca04077ba8f1f98e"
-        };;
+        };
         
         let app, auth, db;
         if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
@@ -1943,8 +1933,6 @@
                 this.portfolioPerformanceChartInstance = null;
                 this.portfolioPerformanceBarChartInstance = null; // NEW: Bar chart instance
                 this.cardChartInstances = {}; // To manage individual card charts
-                this.topMoversCount = 10;
-                this.currentPerformanceRange = 'BAR_TODAY';
                 this.chartDataCache = {}; // Cache for historical data (NEW: Persists in session/memory)
                 this.sessionId = crypto.randomUUID(); 
                 this.sessionUnsubscribe = null;
@@ -2015,7 +2003,7 @@
             }
             signIn() {
                 const provider = new GoogleAuthProvider();
-                signInWithPopup(window.auth, provider).catch(error => {
+                signInWithPopup(auth, provider).catch(error => {
                     console.error("Google sign-in error", error);
                     const errorDiv = document.getElementById('firebase-auth-error');
                     if (error.code === 'auth/unauthorized-domain' && errorDiv) {
@@ -2092,7 +2080,6 @@
                     portfolioChartTitle: document.getElementById('portfolio-chart-title'), // NEW
                     chartCurrentValue: document.getElementById('chart-current-value'), // NEW
                     performanceChartControls: document.getElementById('performance-chart-controls'),
-                    topMoversDropdown: document.getElementById('top-movers-count'),
                     resizeObserver: new ResizeObserver(() => {
                         this.renderDiversificationChart();
                         this.renderPortfolioPerformanceChart();
@@ -2199,26 +2186,6 @@
                         if (e.target.classList.contains('chart-range-btn')) {
                             const range = e.target.dataset.range;
                             this.renderPortfolioPerformanceChart(range);
-                        }
-                    });
-                }
-
-                if (this.elements.topMoversDropdown) {
-                    // Initialize from current dropdown value
-                    const initialCount = parseInt(this.elements.topMoversDropdown.value, 10);
-                    if (!Number.isNaN(initialCount)) {
-                        this.topMoversCount = initialCount;
-                    }
-                    this.elements.topMoversDropdown.addEventListener('change', () => {
-                        const selected = parseInt(this.elements.topMoversDropdown.value, 10);
-                        this.topMoversCount = Number.isNaN(selected) ? 10 : selected;
-                        // Re-render the bar chart if Today view is active
-                        const range = this.currentPerformanceRange || 'BAR_TODAY';
-                        if (range === 'BAR_TODAY') {
-                            this.renderPortfolioPerformanceChart('BAR_TODAY');
-                        } else {
-                            // Still keep data fresh even if user is looking at history
-                            this.renderTodayPerformanceBarChart();
                         }
                     });
                 }
@@ -3347,7 +3314,7 @@
                                 <button class="chart-range-btn" data-range="1M">1M</button>
                                 <button class="chart-range-btn" data-range="6M">6M</button>
                                 <button class="chart-range-btn" data-range="YTD">YTD</button>
-                                <button class="chart-range-btn" data-range="1Y">1Y</button>
+                                <button class="chart-range-btn active" data-range="1Y">1Y</button>
                                 <button class="chart-range-btn" data-range="3Y">3Y</button>
                                 <button class="chart-range-btn" data-range="5Y">5Y</button>
                                 <button class="chart-range-btn" data-range="ALL">All</button>
@@ -3949,22 +3916,21 @@
                 }).filter(item => Math.abs(item.change) > 0.001); // Filter out items with negligible change
 
                 // Sort by absolute change (top movers)
-                const topMovers = data.sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
-                                      .slice(0, (this.topMoversCount || 10)); // Respect dropdown count
+                const topMovers = data.sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 10); // Top 10 movers
 
                 const labels = topMovers.map(item => item.symbol);
                 const barValues = topMovers.map(item => item.change);
-
-                // 2. Determine colors using resolved CSS variables instead of raw var() strings
-                const rootStyles = getComputedStyle(document.documentElement);
-                const positiveColor = rootStyles.getPropertyValue('--color-positive').trim() || '#28a745';
-                const negativeColor = rootStyles.getPropertyValue('--color-negative').trim() || '#e74c3c';
+                
+                // 2. Determine colors
                 const backgroundColors = barValues.map(change => 
-                    change >= 0 ? positiveColor : negativeColor
+                    change >= 0 ? 'rgba(46, 204, 113, 1)' : 'rgba(231, 76, 60, 1)'
+                );
+                const borderColors = barValues.map(change => 
+                    change >= 0 ? 'rgba(46, 204, 113, 1)' : 'rgba(231, 76, 60, 1)'
                 );
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#212529';
-
+                
                 // 3. Destroy previous chart
                 if (this.portfolioPerformanceBarChartInstance) {
                     this.portfolioPerformanceBarChartInstance.destroy();
@@ -3980,55 +3946,7 @@
                             label: "P/L Today ($)",
                             data: barValues,
                             backgroundColor: backgroundColors,
-                            borderColor: backgroundColors,
-                            borderWidth: 1,
-                            borderRadius: 5,
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        indexAxis: 'x',
-                        plugins: {
-                            legend: { display: false },
-                            title: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: (context) => {
-                                        const change = context.parsed.y;
-                                        const percent = topMovers[context.dataIndex].percent;
-                                        return `${context.label}: ${this.formatCurrency(change)} (${this.formatNumber(percent, 2)}%)`;
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            y: {
-                                title: { display: true, text: 'P/L Value (USD)', color: labelColor },
-                                ticks: { color: labelColor, callback: (val) => this.formatCurrency(val) },
-                                grid: { color: gridColor, drawBorder: false }
-                            },
-                            x: {
-                                ticks: { color: labelColor, maxRotation: 45, minRotation: 45 },
-                                grid: { display: false }
-                            }
-                        }
-                    }
-                });
-rtInstance.destroy();
-                }
-
-                // 4. Initialize Bar Chart
-                const ctx = this.elements.portfolioPerformanceBarChart.getContext('2d');
-                this.portfolioPerformanceBarChartInstance = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: "P/L Today ($)",
-                            data: barValues,
-                            backgroundColor: backgroundColors,
-                            borderColor: backgroundColors,
+                            borderColor: borderColors,
                             borderWidth: 1,
                             borderRadius: 5,
                         }]
@@ -4251,13 +4169,7 @@ rtInstance.destroy();
                                         [timeUnit]: displayFormat
                                     }
                                 },
-                                ticks: { 
-                                    color: labelColor, 
-                                    maxRotation: 0, 
-                                    autoSkip: true, 
-                                    maxTicksLimit: xMaxTicks,
-                                    callback: xTickCallback
-                                },
+                                ticks: { color: labelColor, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
                                 grid: { color: gridColor, drawBorder: false }
                             },
                             y: {
@@ -4371,13 +4283,7 @@ rtInstance.destroy();
                 });
             }
 
-            renderPortfolioPerformanceChart(range) {
-                // Use last selected range, defaulting to Today's bar chart
-                if (!range) {
-                    range = this.currentPerformanceRange || 'BAR_TODAY';
-                }
-                this.currentPerformanceRange = range;
-
+            renderPortfolioPerformanceChart(range = '1Y') {
                 const container = this.elements.portfolioPerformanceContainer;
                 
                 if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && (this.stocks.length > 0 || this.mutualFunds.length > 0) ? 'block' : 'none';
@@ -4862,6 +4768,287 @@ rtInstance.destroy();
 
     </script>
 
+<!-- START: Injected new portfolioPerformanceChart implementation -->
+<script>
+(function(){
+    // Wait until the stockTracker object exists and DOM is ready
+    function whenReady(callback, timeout = 10000) {
+        const start = Date.now();
+        (function check(){
+            if (document.readyState === 'complete' && window.stockTracker && window.stockTracker.portfolioHistory) {
+                return callback();
+            }
+            if (Date.now() - start > timeout) {
+                console.warn('Timeout waiting for stockTracker or portfolioHistory - injected chart will use sample data.');
+                return callback(); // proceed anyway
+            }
+            requestAnimationFrame(check);
+        })();
+    }
+
+    whenReady(() => {
+        // Basic helpers
+        const ctx = document.getElementById('portfolioPerformanceChart').getContext('2d');
+        let instance = window.__injectedPortfolioChartInstance || null;
+
+        // Utility to parse stockTracker history (fallback to sample)
+        function getChartData() {
+            try {
+                const hist = (window.stockTracker && window.stockTracker.portfolioHistory) ? window.stockTracker.portfolioHistory : null;
+                if (!hist || !Array.isArray(hist) || hist.length === 0) {
+                    // sample data (daily)
+                    const now = new Date();
+                    const sample = [];
+                    for (let i = 0; i < 200; i++) {
+                        const d = new Date(now);
+                        d.setDate(now.getDate() - (200 - i));
+                        sample.push({ date: d.toISOString().slice(0,10), value: 100 + Math.sin(i/10)*20 + i*0.5 });
+                    }
+                    return sample.map(s => ({ x: new Date(s.date), y: s.value }));
+                }
+                return hist.map(e => ({ x: new Date(e.date), y: parseFloat(e.value) }));
+            } catch (e) {
+                console.error('Error building chart data', e);
+                return [];
+            }
+        }
+
+        function formatPercent(n) {
+            return (n>=0?'+':'') + n.toFixed(2) + '%';
+        }
+
+        // Create / render function
+        function render(range = '1Y') {
+            const raw = getChartData();
+            if (!raw || raw.length === 0) return;
+
+            const now = new Date();
+            let startDate = new Date(raw[0].x);
+            switch(range) {
+                case '1W': startDate = new Date(now); startDate.setDate(now.getDate()-7); break;
+                case '1M': startDate = new Date(now); startDate.setMonth(now.getMonth()-1); break;
+                case '6M': startDate = new Date(now); startDate.setMonth(now.getMonth()-6); break;
+                case 'YTD': startDate = new Date(now.getFullYear(), 0, 1); break;
+                case '1Y': startDate = new Date(now); startDate.setFullYear(now.getFullYear()-1); break;
+                case '3Y': startDate = new Date(now); startDate.setFullYear(now.getFullYear()-3); break;
+                case '5Y': startDate = new Date(now); startDate.setFullYear(now.getFullYear()-5); break;
+                case 'ALL': startDate = new Date(raw[0].x); break;
+                case 'BAR_TODAY': startDate = new Date(now); startDate.setHours(0,0,0,0); break;
+            }
+
+            const filtered = raw.filter(p => p.x >= startDate && p.x <= now);
+            // ensure at least last point present
+            if (filtered.length === 0) filtered.push(raw[raw.length-1]);
+
+            // compute percentage change between first and last visible point
+            const startVal = filtered[0].y;
+            const endVal = filtered[filtered.length-1].y;
+            const pct = ((endVal - startVal) / (startVal || endVal)) * 100;
+
+            // update big value
+            const bigValueEl = document.getElementById('chart-current-value');
+            if (bigValueEl) bigValueEl.textContent = (window.stockTracker && window.stockTracker.formatCurrency) ? window.stockTracker.formatCurrency(endVal) : ('$' + endVal.toFixed(2));
+
+            // prepare datasets
+            const labels = filtered.map(p => p.x);
+            const data = filtered.map(p => p.y);
+
+            // create gradient fill
+            const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
+            gradient.addColorStop(0, 'rgba(52,152,219,0.22)');
+            gradient.addColorStop(0.5, 'rgba(52,152,219,0.12)');
+            gradient.addColorStop(1, 'rgba(52,152,219,0.02)');
+
+            // destroy old
+            if (instance) instance.destroy();
+
+            // Create a simple plugin to draw event dots if provided by stockTracker.events
+            const eventPlugin = {
+                id: 'eventDots',
+                afterDatasetsDraw(chart, args, options) {
+                    const events = (window.stockTracker && window.stockTracker.keyEvents) ? window.stockTracker.keyEvents : (window.stockTracker && window.stockTracker.events) ? window.stockTracker.events : [];
+                    if (!events || events.length === 0) return;
+                    const meta = chart.getDatasetMeta(0);
+                    const xScale = chart.scales.x;
+                    const yScale = chart.scales.y;
+                    const ctx = chart.ctx;
+                    ctx.save();
+                    events.forEach(ev => {
+                        const date = new Date(ev.date || ev.timestamp || ev.x);
+                        if (isNaN(date)) return;
+                        if (date < filtered[0].x || date > filtered[filtered.length-1].x) return;
+                        // find x pixel
+                        const xPix = xScale.getPixelForValue(date);
+                        // draw small orange dot
+                        ctx.beginPath();
+                        ctx.fillStyle = 'rgba(243,156,18,0.95)'; // orange
+                        ctx.arc(xPix, yScale.getPixelForValue(yScale.max) - 10, 5, 0, Math.PI*2);
+                        ctx.fill();
+                        ctx.closePath();
+                    });
+                    ctx.restore();
+                }
+            };
+
+            instance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Portfolio Value',
+                        data: data,
+                        fill: true,
+                        backgroundColor: gradient,
+                        borderColor: '#2A9DF4',
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        tension: 0.22,
+                        borderWidth: 2,
+                        pointBackgroundColor: '#F6C85F'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.parsed.y;
+                                    return (window.stockTracker && window.stockTracker.formatCurrency) ? window.stockTracker.formatCurrency(val) : '$' + val.toFixed(2);
+                                }
+                            }
+                        },
+                        annotation: {
+                            annotations: {
+                                refLine: {
+                                    type: 'line',
+                                    scaleID: 'y',
+                                    value: endVal,
+                                    borderColor: '#17A589',
+                                    borderWidth: 2,
+                                    borderDash: [6,4],
+                                    label: {
+                                        enabled: true,
+                                        content: (window.stockTracker && window.stockTracker.formatCurrency) ? window.stockTracker.formatCurrency(endVal) : '$' + endVal.toFixed(2),
+                                        backgroundColor: '#17A589',
+                                        color: 'white',
+                                        position: 'end',
+                                        yAdjust: -8,
+                                        xAdjust: -10
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: { tooltipFormat: 'MMM dd, yyyy' },
+                            ticks: { maxRotation: 0, autoSkip: true }
+                        },
+                        y: {
+                            beginAtZero: false,
+                            ticks: {
+                                callback: function(val) {
+                                    return (window.stockTracker && window.stockTracker.formatCurrency) ? window.stockTracker.formatCurrency(val) : '$' + val;
+                                }
+                            }
+                        }
+                    },
+                    elements: {
+                        point: {
+                            radius: 0
+                        }
+                    },
+                    animation: {
+                        duration: 300
+                    }
+                },
+                plugins: [eventPlugin]
+            });
+
+            // save instance globally for later updates
+            window.__injectedPortfolioChartInstance = instance;
+
+            // update YTD badge if present (there's an element for current percent? we will create a small floating badge)
+            updatePercentBadge(pct);
+        } // end render
+
+        // Percent badge
+        function updatePercentBadge(pct) {
+            // try to find existing badge
+            let badge = document.getElementById('injected-percent-badge');
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.id = 'injected-percent-badge';
+                badge.style.position = 'absolute';
+                badge.style.top = '12px';
+                badge.style.left = '95px';
+                badge.style.padding = '6px 10px';
+                badge.style.background = '#0ea5a4';
+                badge.style.borderRadius = '8px';
+                badge.style.color = 'white';
+                badge.style.fontWeight = '700';
+                badge.style.fontSize = '0.9rem';
+                badge.style.boxShadow = '0 6px 14px rgba(0,0,0,0.12)';
+                // append to the chart container
+                const container = document.getElementById('portfolio-performance-container');
+                if (container) container.appendChild(badge);
+            }
+            badge.textContent = (pct>=0?'+':'') + pct.toFixed(2) + '%';
+        }
+
+        // Wire up range buttons
+        const controls = document.querySelectorAll('#performance-chart-controls .chart-range-btn');
+        controls.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                controls.forEach(b => b.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                const range = e.currentTarget.getAttribute('data-range');
+                if (range === 'BAR_TODAY') {
+                    // if BAR_TODAY, hide line canvas and show bar wrapper if exists
+                    document.getElementById('historical-chart-wrapper').style.display = 'block';
+                    document.getElementById('bar-chart-wrapper').style.display = 'none';
+                    render('1W'); // show 1W as approximate intraday
+                } else {
+                    document.getElementById('historical-chart-wrapper').style.display = 'block';
+                    document.getElementById('bar-chart-wrapper').style.display = 'none';
+                    render(range);
+                }
+            });
+        });
+
+        // initial render using the active button or default 1Y
+        const activeBtn = document.querySelector('#performance-chart-controls .chart-range-btn.active');
+        const initialRange = activeBtn ? activeBtn.getAttribute('data-range') : '1Y';
+        render(initialRange);
+
+        // re-render on window resize/throttle
+        let resizeId;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeId);
+            resizeId = setTimeout(() => {
+                const curRange = document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range') || '1Y';
+                render(curRange);
+            }, 200);
+        });
+
+        // attempt to re-render periodically if portfolioHistory changes (simple polling)
+        let lastLen = (window.stockTracker && window.stockTracker.portfolioHistory) ? window.stockTracker.portfolioHistory.length : 0;
+        setInterval(() => {
+            const currLen = (window.stockTracker && window.stockTracker.portfolioHistory) ? window.stockTracker.portfolioHistory.length : 0;
+            if (currLen !== lastLen) {
+                lastLen = currLen;
+                const curRange = document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range') || '1Y';
+                render(curRange);
+            }
+        }, 2000);
+    }); // whenReady
+})();
+</script>
 <!-- END: Injected new portfolioPerformanceChart implementation -->
 
 
@@ -4881,9 +5068,8 @@ rtInstance.destroy();
   gap:12px;
   align-items:center;
   position:absolute;
+  right:20px;
   top:18px;
-  left:50%;
-  transform:translateX(-50%);
   z-index:5;
 }
 .summary-pill{
@@ -5012,32 +5198,3 @@ function getIntradayData() {
       // remove any existing lines
       const existX = canvas.parentNode.querySelector('.crosshair-x');
       const existY = canvas.parentNode.querySelector('.crosshair-
-
-
-<script>
-// Global helper for reading CSS color variables in JS/Chart.js
-window.getRgbColor = window.getRgbColor || function(varName) {
-  try {
-    var styles = getComputedStyle(document.documentElement);
-    var raw = (styles.getPropertyValue(varName) || "").trim();
-    if (!raw) {
-      return /-rgb$/i.test(varName) ? "0, 0, 0" : "#000000";
-    }
-    // If the variable name ends with -rgb, we want just the numeric triplet (e.g. "52, 152, 219")
-    if (/-rgb$/i.test(varName)) {
-      var m = raw.match(/rgba?\(([^)]+)\)/);
-      return m ? m[1].trim() : raw;
-    }
-    // Otherwise return as-is (e.g. "#3498DB" or "rgb(93, 173, 226)")
-    return raw;
-  } catch (e) {
-    return /-rgb$/i.test(varName) ? "0, 0, 0" : "#000000";
-  }
-};
-</script>
-<!-- BEGIN YAHOO + FIRESTORE HISTORY INTEGRATION -->
-<script>
-// Placeholder for full implementation as discussed.
-console.log("Yahoo + Firestore history integration would be here.");
-</script>
-<!-- END INTEGRATION -->
