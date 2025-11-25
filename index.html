@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -429,7 +430,6 @@
             background: var(--bg-secondary) !important;
             color: var(--text-primary) !important;
             border: 1px solid var(--border-color) !important;
-            box-shadow: none !important;
         }
 
         /* --- Asset Cards --- */
@@ -1025,12 +1025,11 @@
 
         .chart-header {
             display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
+            justify-content: space-between;
+            align-items: flex-end; /* Align controls and title group to the bottom */
             margin-bottom: 16px;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 16px;
         }
         .chart-header h4 {
             font-size: 1.1rem;
@@ -1054,7 +1053,7 @@
             /* Chart Mobile Layout */
             #portfolio-performance-container .chart-header {
                 flex-direction: column;
-                align-items: flex-start;
+                align-items: center;
             }
             #portfolio-performance-container .chart-title-group {
                 order: 1;
@@ -1082,11 +1081,11 @@
             margin-top: 24px; 
         }
         #portfolio-performance-container .chart-header {
-            justify-content: space-between; 
-            margin-bottom: 24px; 
-            flex-direction: row; 
-            align-items: flex-end; /* Controls and Title Group align to bottom */
-            gap: 20px;
+            justify-content: center; 
+            margin-bottom: 16px; 
+            flex-direction: column; 
+            align-items: center;
+            gap: 8px;
         }
         #portfolio-performance-container .chart-controls {
             flex-grow: 0;
@@ -1177,7 +1176,7 @@
         <h1>💰 Live Portfolio Tracker</h1>
         <p style="text-align: center; margin-bottom: 30px; font-size: 1.2rem; color: var(--text-secondary);">Sign in to continue</p>
         <button id="google-signin-btn" class="add-btn" style="margin: 0 auto; display: flex; align-items: center; gap: 10px; width: auto;">
-            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="white"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/><path d="M1 1h22v22H1z" fill="none"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="white"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/><path d="M1 1h22v22H1z" fill="none"/></svg>
             Sign in with Google
         </button>
         <div id="firebase-auth-error" style="display: none;"></div>
@@ -1339,6 +1338,17 @@
         </div>
         
         <div id="performance-chart-controls" class="chart-controls">
+            <div class="top-movers-control" style="margin-top: 8px; text-align:center;">
+                <label for="top-movers-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 4px;">
+                    Top movers:
+                </label>
+                <select id="top-movers-count" style="padding: 2px 6px; border-radius: 6px;">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="15">15</option>
+                    <option value="20">20</option>
+                </select>
+            </div>
             <button class="chart-range-btn active" data-range="BAR_TODAY">Today</button>
             <button class="chart-range-btn" data-range="1W">1W</button>
             <button class="chart-range-btn" data-range="1M">1M</button>
@@ -1349,18 +1359,6 @@
             <button class="chart-range-btn" data-range="5Y">5Y</button>
             <button class="chart-range-btn" data-range="ALL">All</button>
         </div>
-        <div class="top-movers-control" style="margin-top: 8px; text-align:center;">
-            <label for="top-movers-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 4px;">
-                Top movers:
-            </label>
-            <select id="top-movers-count" style="padding: 2px 6px; border-radius: 6px;">
-                <option value="5">5</option>
-                <option value="10" selected>10</option>
-                <option value="15">15</option>
-                <option value="20">20</option>
-            </select>
-        </div>
-
     </div>
 
     <!-- Historical Line Chart Wrapper (Default View) -->
@@ -1726,81 +1724,25 @@
                 return { success: false, symbol, reason: `All fund APIs failed. Last error: ${result.reason || 'Data not found.'}` };
             }
 
-            // --- NEW: Historical Data Fetch (Uses Yahoo Finance via CORS Proxy) ---
-            async fetchHistoricalData(symbol, range = '1Y') {
-                // 1. Map your app's buttons (1W, 1M, etc.) to Yahoo's API parameters
-                // Yahoo requires two params: 'range' (how far back) and 'interval' (candle size)
-                const rangeMap = {
-                    '1D': { r: '1d', i: '5m' },   // 1 Day history, 5-minute intervals
-                    '1W': { r: '5d', i: '15m' },  // 1 Week history (approx), 15-minute intervals
-                    '1M': { r: '1mo', i: '1d' },  // 1 Month, Daily candles
-                    '3M': { r: '3mo', i: '1d' },
-                    '6M': { r: '6mo', i: '1d' },
-                    'YTD': { r: 'ytd', i: '1d' },
-                    '1Y': { r: '1y', i: '1d' },
-                    '3Y': { r: '5y', i: '1wk' },  // Yahoo doesn't have 3y, use 5y and filter later
-                    '5Y': { r: '5y', i: '1wk' },
-                    'ALL': { r: 'max', i: '1mo' }
-                };
-
-                // Default to 1Y if the requested range isn't in our map
-                const params = rangeMap[range] || rangeMap['1Y'];
-
-                // 2. Construct the URL
-                // We use the 'corsproxy.io' service to bypass browser security blocks
-                const proxy = 'https://corsproxy.io/?'; 
-                const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${params.r}&interval=${params.i}`;
-                
+            // --- Historical Data Fetch (Uses Alpha Vantage) ---
+            async fetchHistoricalData(symbol) {
+                if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
+                    // Fail early if key is missing
+                    return { success: false, reason: "Alpha Vantage API Key is missing. Please set it in Settings to fetch historical data." };
+                }
+                const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${this.config.alphaVantageKey}`;
                 try {
-                    // 3. Fetch the data
-                    // encodeURIComponent is crucial to ensure the proxy handles the URL parameters correctly
-                    const response = await fetch(proxy + encodeURIComponent(targetUrl));
-                    
-                    if (!response.ok) {
-                        throw new Error(`Yahoo API Error: ${response.status}`);
-                    }
-                    
+                    const response = await fetch(url);
+                    if (!response.ok) return { success: false, reason: `HTTP Error: ${response.status}` };
                     const json = await response.json();
-                    
-                    // 4. Validate the messy Yahoo response structure
-                    if (!json.chart || !json.chart.result || json.chart.result.length === 0) {
-                         throw new Error(json.chart?.error?.description || 'No data found');
+                    // Check for API errors or rate limiting messages in the response
+                    if (json["Error Message"] || !json["Time Series (Daily)"]) {
+                        return { success: false, reason: json["Information"] || json["Error Message"] || 'Invalid API payload from Alpha Vantage. You might be hitting the free tier rate limit of 5 requests per minute.' };
                     }
-                    
-                    const result = json.chart.result[0];
-                    const timestamps = result.timestamp || [];
-                    const quotes = result.indicators.quote[0]; // Contains open, high, low, close arrays
-                    
-                    // 5. Transform data into a clean format for Chart.js
-                    // Yahoo returns parallel arrays (e.g., timestamps[0] matches close[0])
-                    const data = [];
-                    
-                    timestamps.forEach((t, i) => {
-                        // Filter out null values (common during market holidays or pre-market gaps)
-                        if (quotes.close[i] !== null && quotes.close[i] !== undefined) {
-                            data.push({
-                                x: new Date(t * 1000), // Convert Unix seconds to JS Date object
-                                o: quotes.open[i],     // Open
-                                h: quotes.high[i],     // High
-                                l: quotes.low[i],      // Low
-                                c: quotes.close[i],    // Close
-                                y: quotes.close[i]     // 'y' is used by simple line charts
-                            });
-                        }
-                    });
-
-                    // 6. Handle Special Cases (like the 3Y filter)
-                    if (range === '3Y') {
-                        const cutoff = new Date();
-                        cutoff.setFullYear(cutoff.getFullYear() - 3);
-                        return { success: true, data: data.filter(d => d.x >= cutoff) };
-                    }
-
-                    return { success: true, data };
-
+                    return { success: true, data: json["Time Series (Daily)"] };
                 } catch (error) {
-                    console.error(`Yahoo Fetch Error for ${symbol}:`, error);
-                    return { success: false, reason: error.message };
+                    console.error(`Error fetching historical data for ${symbol}:`, error);
+                    return { success: false, symbol, reason: error.message };
                 }
             }
             
@@ -1949,7 +1891,7 @@
                 this.chartDataCache = {}; // Cache for historical data (NEW: Persists in session/memory)
                 this.sessionId = crypto.randomUUID(); 
                 this.sessionUnsubscribe = null;
-                this.topMoversCount = 10;
+                this.topMoversCount = 10; // default number of top movers in Today bar chart
                 
                 // NEW PROPERTIES for tracking aggregate P/L during grouping
                 this.todaysGainsTotal = 0;
@@ -2011,7 +1953,6 @@
                         if (this.sessionUnsubscribe) {
                             this.sessionUnsubscribe();
                             this.sessionUnsubscribe = null;
-                this.topMoversCount = 10;
                         }
                     }
                 });
@@ -2205,6 +2146,18 @@
                     });
                 }
 
+                const topMoversSelect = document.getElementById('top-movers-count');
+                if (topMoversSelect) {
+                    const initial = parseInt(topMoversSelect.value, 10);
+                    this.topMoversCount = Number.isNaN(initial) ? 10 : initial;
+
+                    topMoversSelect.addEventListener('change', () => {
+                        const selected = parseInt(topMoversSelect.value, 10);
+                        this.topMoversCount = Number.isNaN(selected) ? 10 : selected;
+                        this.renderTodayPerformanceBarChart();
+                    });
+                }
+
                 // NEW: Event listener for clear buttons
                 document.body.addEventListener('click', (e) => {
                     if (e.target.classList.contains('clear-input')) {
@@ -2217,25 +2170,6 @@
                         }
                     }
                 });
-
-                
-
-                // Top movers dropdown: control how many bars are shown in Today's bar chart
-                const topMoversSelect = document.getElementById('top-movers-count');
-                if (topMoversSelect) {
-                    // Initialize from current value
-                    const initial = parseInt(topMoversSelect.value, 10);
-                    if (!Number.isNaN(initial)) {
-                        this.topMoversCount = initial;
-                    }
-                    topMoversSelect.addEventListener('change', () => {
-                        const selected = parseInt(topMoversSelect.value, 10);
-                        this.topMoversCount = Number.isNaN(selected) ? 10 : selected;
-                        // Re-render today's bar chart if visible
-                        this.renderTodayPerformanceBarChart();
-                    });
-                }
-
 
                 const setupModalCloseListeners = () => {
                     const modals = [
@@ -3348,10 +3282,10 @@
                                 <button class="chart-range-btn" data-range="1M">1M</button>
                                 <button class="chart-range-btn" data-range="6M">6M</button>
                                 <button class="chart-range-btn" data-range="YTD">YTD</button>
-                                <button class="chart-range-btn" data-range="1Y">1Y</button>
+                                <button class="chart-range-btn active" data-range="1Y">1Y</button>
                                 <button class="chart-range-btn" data-range="3Y">3Y</button>
                                 <button class="chart-range-btn" data-range="5Y">5Y</button>
-                                <button class="chart-range-btn" data-range="ALL">All</button>
+                                <button class="chart-range-btn" data-range="All">All</button>
                             </div>
                             <canvas id="chart-${item.id}"></canvas>
                         </div>`;
@@ -3533,42 +3467,59 @@
 
                 try {
                     let historicalData;
-                    // Check cache for *Yahoo formatted data* based on symbol and current range parameter 'r' (Yahoo's range specifier)
-                    const rangeMap = {
-                        '1D': '1d', '1W': '5d', '1M': '1mo', '3M': '3mo', '6M': '6mo', 'YTD': 'ytd',
-                        '1Y': '1y', '3Y': '5y', '5Y': '5y', 'ALL': 'max'
-                    };
-                    const yahooRange = rangeMap[range] || rangeMap['1Y']; // Use Yahoo's required range param for caching key
-                    const cacheKey = `${symbol}_${yahooRange}`;
-
-                    if (this.chartDataCache[cacheKey]) {
-                        historicalData = this.chartDataCache[cacheKey];
+                    if (this.chartDataCache[symbol]) {
+                        historicalData = this.chartDataCache[symbol];
                     } else {
-                        // Use the new Yahoo-based fetch method
-                        this.showLoading(true, `Fetching chart data for ${symbol} via Yahoo...`);
-                        const result = await this.apiService.fetchHistoricalData(symbol, range);
+                        // Check if Alpha Vantage Key is set before fetching
+                        if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
+                            drawError("Alpha Vantage Key Missing. Cannot load chart data.");
+                            return;
+                        }
+                        
+                        this.showLoading(true, `Fetching chart data for ${symbol}...`);
+                        const result = await this.apiService.fetchHistoricalData(symbol);
                         this.showLoading(false);
                         
                         if (!result.success) {
-                            drawError(`API Error: ${result.reason}`);
+                            drawError(result.reason.includes('rate limit') ? "Rate Limit Hit. Wait a minute." : `API Error: ${result.reason}`);
                             throw new Error(result.reason); // Throw to skip further processing
                         }
-                        this.chartDataCache[cacheKey] = result.data;
+                        this.chartDataCache[symbol] = result.data;
                         historicalData = result.data;
                     }
 
-                    // The data is already filtered and cleaned by fetchHistoricalData (result.data = [{x, o, h, l, c, y}, ...])
-                    const chartData = historicalData;
+                    const allDataPoints = Object.entries(historicalData).map(([date, values]) => ({
+                        x: new Date(date),
+                        y: parseFloat(values['4. close'])
+                    })).sort((a, b) => a.x - b.x);
+                    
+                    // --- LOGIC: Determine Chart Start Date ---
+                    const item = this.stocks.find(s => s.symbol === symbol) || this.mutualFunds.find(f => f.symbol === symbol);
+                    
+                    const now = new Date();
+                    let startDate = new Date();
 
+                    switch(range) {
+                        case '1W': startDate.setDate(now.getDate() - 7); break;
+                        case '1M': startDate.setMonth(now.getMonth() - 1); break;
+                        case '6M': startDate.setMonth(now.getMonth() - 6); break;
+                        case 'YTD': startDate = new Date(now.getFullYear(), 0, 1); break;
+                        case '1Y': startDate.setFullYear(now.getFullYear() - 1); break;
+                        case '3Y': startDate.setFullYear(now.getFullYear() - 3); break;
+                        case '5Y': startDate.setFullYear(now.getFullYear() - 5); break;
+                        case 'All': 
+                            // Use the oldest transaction date if available
+                            startDate = item ? this.getOldestTransactionDate(item) : new Date(0);
+                            break;
+                        default: startDate.setFullYear(now.getFullYear() - 1); break;
+                    }
+
+                    const chartData = allDataPoints.filter(dp => dp.x >= startDate);
                     if (chartData.length <= 1) {
                         drawError('Not enough historical data for this range.');
                         return;
                     }
 
-                    // --- Determine Chart Type: Candlestick for Intraday/Short Term, Line for Long Term ---
-                    const useCandles = (range === '1D' || range === '1W');
-                    const chartType = useCandles ? 'bar' : 'line';
-                    
                     const firstPrice = chartData[0].y;
                     const lastPrice = chartData[chartData.length - 1].y;
                     const borderColor = lastPrice >= firstPrice ? 'var(--color-positive)' : 'var(--color-negative)';
@@ -3576,96 +3527,23 @@
                     const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
 
                     // --- Dynamic X-Axis Unit Logic ---
-                    let timeUnit = 'day';
-                    if (range === '1D') {
-                        timeUnit = 'hour';
-                    } else if (range === '1W') {
+                    let timeUnit = 'month';
+                    if (range === '1W' || range === '1M') {
                         timeUnit = 'day';
-                    } else if (range === '3Y' || range === '5Y' || range === 'ALL') {
+                    } else if (range === '3Y' || range === '5Y' || range === 'All') {
                         timeUnit = 'year';
-                    } else {
-                        timeUnit = 'month';
                     }
 
-                    // --- Candle Plugin (Copied from the injected block for Card Charts) ---
-                    const cardCandlePlugin = {
-                        id: 'cardCandles',
-                        afterDatasetDraw(chart, args, options) {
-                            const {ctx, scales: {x, y}} = chart;
-                            const meta = chart.getDatasetMeta(0);
-                            ctx.save();
-                            meta.data.forEach((bar, idx) => {
-                                const d = chart.data.datasets[0].data[idx];
-                                const xC = bar.x;
-                                // Chart.js 4/5 uses index for parsing=false dataset
-                                const openY = y.getPixelForValue(d.o);
-                                const closeY = y.getPixelForValue(d.c);
-                                const highY = y.getPixelForValue(d.h);
-                                const lowY = y.getPixelForValue(d.l);
-                                
-                                // Determine bar width based on available space and count
-                                const numPoints = chart.data.datasets[0].data.length;
-                                const maxBarWidth = 14; 
-                                const minBarWidth = 4;
-                                let barWidth = maxBarWidth;
-
-                                if (numPoints > 0) {
-                                    // Estimate space per bar
-                                    const availableWidth = chart.chartArea.right - chart.chartArea.left;
-                                    const spacePerBar = availableWidth / numPoints;
-                                    barWidth = Math.max(minBarWidth, Math.min(maxBarWidth, spacePerBar * 0.8));
-                                }
-
-                                // Ensure d.c and d.o are numbers (Yahoo data guarantees this due to filtering)
-                                const isGain = d.c >= d.o;
-                                const color = isGain ? 'var(--color-positive)' : 'var(--color-negative)';
-                                
-                                // Wicks
-                                ctx.beginPath();
-                                ctx.strokeStyle = color;
-                                ctx.lineWidth = 1.5;
-                                ctx.moveTo(xC, highY);
-                                ctx.lineTo(xC, lowY);
-                                ctx.stroke();
-                                
-                                // Body
-                                const top = Math.min(openY, closeY);
-                                const height = Math.max(1, Math.abs(closeY - openY));
-
-                                ctx.beginPath();
-                                ctx.fillStyle = isGain ? color : color; // Solid fill for simplicity
-                                ctx.strokeStyle = color;
-                                ctx.lineWidth = 1.2;
-                                const left = xC - barWidth/2;
-                                ctx.rect(left, top, barWidth, height);
-                                ctx.fill();
-                                ctx.stroke();
-                            });
-                            ctx.restore();
-                        }
-                    };
-                    // --- End Candle Plugin ---
-
                     this.cardChartInstances[chartId] = new Chart(ctx, {
-                        type: chartType,
+                        type: 'line',
                         data: {
                             datasets: [{
                                 label: symbol,
-                                data: chartData.map(d => ({ // Map Yahoo OHLC format to Chart.js data points
-                                    x: d.x, 
-                                    y: chartType === 'line' ? d.y : d.c, // Line chart uses 'y', Candlestick base uses 'c' (Close)
-                                    o: d.o, h: d.h, l: d.l, c: d.c // Keep OHLC data in the point object
-                                })),
-                                // Line specific options
-                                borderColor: chartType === 'line' ? borderColor : 'transparent', // Hide line for candles
+                                data: chartData,
+                                borderColor: borderColor,
                                 tension: 0.1,
                                 borderWidth: 2,
                                 pointRadius: 0,
-                                parsing: chartType === 'line' ? { xAxisKey: 'x', yAxisKey: 'y' } : false, // Disable parsing for candle data
-                                // Bar specific options
-                                backgroundColor: chartType === 'bar' ? 'rgba(0,0,0,0)' : undefined, // Hide default bars for candles
-                                categoryPercentage: 0.9,
-                                barPercentage: 0.9
                             }]
                         },
                         options: {
@@ -3674,21 +3552,13 @@
                             scales: {
                                 x: {
                                     type: 'time',
-                                    time: { unit: timeUnit, tooltipFormat: timeUnit === 'hour' ? 'MMM d, HH:mm' : 'MMM dd, yyyy' },
-                                    ticks: { 
-                                    color: labelColor, 
-                                    maxRotation: 0, 
-                                    autoSkip: true, 
-                                    maxTicksLimit: xMaxTicks || 6,
-                                    callback: xTickCallback
-                                },
+                                    time: { unit: timeUnit },
+                                    ticks: { color: labelColor, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
                                     grid: { display: false }
                                 },
                                 y: {
                                     ticks: { color: labelColor, callback: (value) => this.formatCurrency(value) },
-                                    grid: { color: gridColor, drawBorder: false },
-                                    // Ensure the scale is centered around data for candles, too
-                                    beginAtZero: false 
+                                    grid: { color: gridColor, drawBorder: false }
                                 }
                             },
                             plugins: {
@@ -3697,20 +3567,7 @@
                                     mode: 'index',
                                     intersect: false,
                                     callbacks: {
-                                        label: (context) => {
-                                            const d = context.raw;
-                                            if (chartType === 'line') {
-                                                return `Price: ${this.formatCurrency(context.parsed.y)}`;
-                                            } else {
-                                                // Candlestick tooltip
-                                                return [
-                                                    `Open: ${this.formatCurrency(d.o)}`,
-                                                    `High: ${this.formatCurrency(d.h)}`,
-                                                    `Low: ${this.formatCurrency(d.l)}`,
-                                                    `Close: ${this.formatCurrency(d.c)}`
-                                                ];
-                                            }
-                                        }
+                                        label: (context) => `Price: ${this.formatCurrency(context.parsed.y)}`
                                     }
                                 }
                             },
@@ -3718,8 +3575,7 @@
                                 mode: 'index',
                                 intersect: false,
                             }
-                        },
-                        plugins: chartType === 'bar' ? [cardCandlePlugin] : []
+                        }
                     });
 
                 } catch (error) {
@@ -3953,7 +3809,7 @@
                     const changeToday = (item.change || 0) * stats.totalSharesOwned;
                     const changePercentToday = item.changePercent || 0;
                     return { symbol: item.symbol, change: changeToday, percent: changePercentToday };
-                }).filter(item => Math.abs(item.change) > 0.001); // Filter out items with negligible change
+                }).filter(item => item.change !== 0); // Filter out only zero-change items, keep gains and losses
 
                 // Sort by absolute change (top movers)
                 const topMovers = data.sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, this.topMoversCount || 10); // Top N movers
@@ -3963,10 +3819,7 @@
                 
                 // 2. Determine colors
                 const backgroundColors = barValues.map(change => 
-                    change >= 0 ? 'rgba(46, 204, 113, 1)' : 'rgba(231, 76, 60, 1)'
-                );
-                const borderColors = barValues.map(change => 
-                    change >= 0 ? 'rgba(46, 204, 113, 1)' : 'rgba(231, 76, 60, 1)'
+                    change >= 0 ? 'var(--color-positive)' : 'var(--color-negative)'
                 );
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#212529';
@@ -3986,7 +3839,7 @@
                             label: "P/L Today ($)",
                             data: barValues,
                             backgroundColor: backgroundColors,
-                            borderColor: borderColors,
+                            borderColor: backgroundColors,
                             borderWidth: 1,
                             borderRadius: 5,
                         }]
@@ -4101,31 +3954,25 @@
                 // 3. Dynamic X-Axis Unit Logic
                 let timeUnit = 'month';
                 let displayFormat = 'MMM yy';
-                
+
                 if (range === '1W' || range === '1M') {
                     timeUnit = 'day';
                     displayFormat = 'MMM d';
                 } else if (range === '6M' || range === '1Y') {
+                    // Use months for 6M and 1Y to avoid overcrowding daily points
                     timeUnit = 'month';
                     displayFormat = 'MMM yy';
-                } else if (range === '3Y' || range === '5Y' || range === 'ALL') {
-                    timeUnit = 'year';
-                    displayFormat = 'yyyy';
+                } else if (range === '3Y') {
+                    // Use weeks for 3Y
+                    timeUnit = 'week';
+                    displayFormat = 'MMM yy';
+                } else if (range === '5Y' || range === 'ALL') {
+                    // Use months for 5Y and ALL, showing month+year
+                    timeUnit = 'month';
+                    displayFormat = 'MMM yy';
                 }
-                
-                
-                // Custom tick behavior for 1W: show weekday names (Mon, Tue, ...)
-                let xMaxTicks = 6;
-                let xTickCallback = undefined;
-                if (range === '1W') {
-                    xMaxTicks = 7;
-                    xTickCallback = (value) => {
-                        const date = new Date(value);
-                        if (isNaN(date)) return '';
-                        return date.toLocaleDateString(undefined, { weekday: 'short' });
-                    };
-                }
-// 4. Initialize the chart
+
+                // 4. Initialize the chart
                 this.portfolioPerformanceChartInstance = new Chart(ctx, {
                     type: 'line',
                     data: {
@@ -4221,7 +4068,23 @@
                                         [timeUnit]: displayFormat
                                     }
                                 },
-                                ticks: { color: labelColor, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+                                ticks: { 
+                                    color: labelColor, 
+                                    maxRotation: 0, 
+                                    autoSkip: true, 
+                                    maxTicksLimit: (range === '1W' ? 7 : 10),
+                                    callback: (value) => {
+                                        try {
+                                            const d = new Date(value);
+                                            if (range === '1W') {
+                                                return d.toLocaleDateString(undefined, { weekday: 'short' });
+                                            }
+                                            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                                        } catch(e) {
+                                            return value;
+                                        }
+                                    }
+                                },
                                 grid: { color: gridColor, drawBorder: false }
                             },
                             y: {
@@ -4335,7 +4198,7 @@
                 });
             }
 
-            renderPortfolioPerformanceChart(range = '1Y') {
+            renderPortfolioPerformanceChart(range = 'BAR_TODAY') {
                 const container = this.elements.portfolioPerformanceContainer;
                 
                 if(container) container.style.display = (this.currentTab === 'stocks' || this.currentTab === 'funds') && (this.stocks.length > 0 || this.mutualFunds.length > 0) ? 'block' : 'none';
@@ -5151,41 +5014,31 @@
 <script>
 (function(){
   // utilities
-  
-function getIntradayData() {
-    let prices = [];
-    try {
-        if (window.stockTracker && window.stockTracker.today && Array.isArray(window.stockTracker.today.values)) {
-            prices = window.stockTracker.today.values;
-        }
-    } catch (e) {}
-
-    if (!prices || prices.length < 2) {
-        const start = new Date(); 
-        start.setHours(9, 30, 0, 0);
-        const data = [];
-        let price = 100 + Math.random() * 5;
-        for (let i = 0; i < 120; i++) {
-            const t = new Date(start.getTime() + i * 60000);
-            const open = price;
-            const close = open + (Math.random() - 0.5) * 0.7;
-            const high = Math.max(open, close) + Math.random() * 0.4;
-            const low = Math.min(open, close) - Math.random() * 0.4;
-            price = close;
-            data.push({ t, o: open, h: high, l: low, c: close });
-        }
-        return data;
+  function getIntradayData() {
+    // Try multiple common names for intraday/ticks that the app might expose
+    const possible = [
+      window.stockTracker && window.stockTracker.intradayTicks,
+      window.stockTracker && window.stockTracker.intradayData,
+      window.stockTracker && window.stockTracker.todayTicks,
+      window.stockTracker && window.stockTracker.todayIntraday,
+      window.stockTracker && window.stockTracker.ticks
+    ];
+    for (const p of possible) {
+      if (Array.isArray(p) && p.length) return p;
     }
-
-    let data = [];
-    const now = Date.now();
-    for (let i = 1; i < prices.length; i++) {
-        const open = prices[i - 1];
-        const close = prices[i];
-        const high = Math.max(open, close) + Math.random() * 0.03;
-        const low = Math.min(open, close) - Math.random() * 0.03;
-        const t = new Date(now - (prices.length - i) * 60000);
-        data.push({ t, o: open, h: high, l: low, c: close });
+    // Fallback: create sample OHLC (minute) data for today
+    const now = new Date();
+    const start = new Date(); start.setHours(9,30,0,0);
+    const data = [];
+    let price = 100 + Math.random()*5;
+    for (let i=0;i<120;i++){
+      const t = new Date(start.getTime() + i*60*1000);
+      const open = price;
+      const close = open + (Math.random()-0.45)*0.6;
+      const high = Math.max(open, close) + Math.random()*0.6;
+      const low = Math.min(open, close) - Math.random()*0.6;
+      price = close;
+      data.push({t: t, o: open, h: high, l: low, c: close});
     }
     return data;
   }
@@ -5249,4 +5102,230 @@ function getIntradayData() {
       const rect = canvas.getBoundingClientRect();
       // remove any existing lines
       const existX = canvas.parentNode.querySelector('.crosshair-x');
-      const existY = canvas.parentNode.querySelector('.crosshair-
+      const existY = canvas.parentNode.querySelector('.crosshair-y');
+      if (existX) existX.remove();
+      if (existY) existY.remove();
+      if (e && (e.type === 'mousemove' || e.type === 'pointermove')) {
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        // vertical
+        const vx = document.createElement('div');
+        vx.className = 'crosshair-x';
+        vx.style.position='absolute';
+        vx.style.left = (rect.left + x) + 'px';
+        vx.style.top = rect.top + 'px';
+        vx.style.height = rect.height + 'px';
+        vx.style.width = '1px';
+        vx.style.background = 'rgba(100,100,100,0.12)';
+        vx.style.pointerEvents='none';
+        canvas.parentNode.appendChild(vx);
+        // horizontal
+        const hy = document.createElement('div');
+        hy.className = 'crosshair-y';
+        hy.style.position='absolute';
+        hy.style.left = rect.left + 'px';
+        hy.style.top = (rect.top + y) + 'px';
+        hy.style.width = rect.width + 'px';
+        hy.style.height = '1px';
+        hy.style.background = 'rgba(100,100,100,0.08)';
+        hy.style.pointerEvents='none';
+        canvas.parentNode.appendChild(hy);
+      }
+    }
+  };
+
+  // Smooth animations utility
+  function animateChart(chart) {
+    chart.options.animation = {duration: 450, easing: 'easeOutCubic'};
+    chart.update();
+  }
+
+  // Build candlestick chart on the bar canvas
+  function buildCandles() {
+    const canvas = document.getElementById('portfolioPerformanceBarChart');
+    if (!canvas) return;
+    const raw = getIntradayData();
+    // Normalize data to OHLC objects with timestamps
+    const data = raw.map(d => {
+      // support different field names
+      const t = d.t || d.timestamp || d.time || d.date || d.datetime || d.x || new Date();
+      const o = d.o !== undefined ? d.o : d.open !== undefined ? d.open : d[1] || d.openPrice || d.o;
+      const h = d.h !== undefined ? d.h : d.high !== undefined ? d.high : d[2] || d.h;
+      const l = d.l !== undefined ? d.l : d.low !== undefined ? d.low : d[3] || d.l;
+      const c = d.c !== undefined ? d.c : d.close !== undefined ? d.close : d[4] || d.c;
+      return {t: new Date(t), o: Number(o), h: Number(h), l: Number(l), c: Number(c)};
+    });
+    // Chart.js dataset expects labels and numeric scales
+    const ctx = canvas.getContext('2d');
+    if (window.__candleChart) {
+      window.__candleChart.destroy();
+      window.__candleChart = null;
+    }
+    // create a shallow dataset for Chart.js to compute scales (we won't rely on default bars drawing)
+    const labels = data.map(d => d.t);
+    const ds = data.map(d => ({o:d.o, h:d.h, l:d.l, c:d.c}));
+
+    window.__candleChart = new Chart(ctx, {
+      type: 'bar', // use bar to get categorical x layout
+      data: {
+        labels: labels,
+        datasets: [{ label:'Candles', data: ds }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        parsing: false,
+        scales: {
+          x:{ type: 'time', time: { unit: 'minute', tooltipFormat: 'HH:mm' }, ticks: {maxRotation:0} },
+          y:{ ticks:{ callback: value=>formatCurrency(value) } }
+        },
+        plugins: {
+          legend:{display:false},
+          tooltip:{
+            enabled:true,
+            callbacks:{
+              title: ctx => {
+                const d = ctx[0].label; return new Date(d).toLocaleString();
+              },
+              label: (context) => {
+                const d = data[context.dataIndex];
+                return [`Open: ${formatCurrency(d.o)}`, `High: ${formatCurrency(d.h)}`, `Low: ${formatCurrency(d.l)}`, `Close: ${formatCurrency(d.c)}`];
+              }
+            }
+          }
+        },
+        interaction:{mode:'index', intersect:false},
+        animation:{duration:300},
+      },
+      plugins: [candlePlugin, crosshairPlugin]
+    });
+  }
+
+  // Improve line chart appearance for portfolioPerformanceChart
+  function enhanceLineChart() {
+    const canvas = document.getElementById('portfolioPerformanceChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    // If an injected chart instance exists, modify its options, else create overlay plugin
+    const existing = window.__injectedPortfolioChartInstance;
+    if (existing) {
+      existing.options.elements.line.tension = 0.24;
+      existing.options.elements.line.borderWidth = 2.5;
+      existing.options.elements.point.radius = 0;
+      existing.options.plugins.tooltip.mode = 'index';
+      // gradient fill update
+      const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+      grad.addColorStop(0, 'rgba(52,152,219,0.24)');
+      grad.addColorStop(1, 'rgba(52,152,219,0.02)');
+      existing.data.datasets[0].backgroundColor = grad;
+      animateChart(existing);
+    }
+  }
+
+  // Key event icons above chart - uses stockTracker.keyEvents if available
+  function renderEventIcons() {
+    const container = document.getElementById('portfolio-performance-container');
+    if (!container) return;
+    // remove old icons
+    const old = container.querySelectorAll('.event-icon');
+    old.forEach(n=>n.remove());
+    const events = (window.stockTracker && (window.stockTracker.keyEvents || window.stockTracker.events)) || [];
+    events.slice(0,8).forEach(ev => {
+      try {
+        const date = new Date(ev.date || ev.timestamp || ev.time || ev.t);
+        if (isNaN(date)) return;
+        const canvas = document.getElementById('portfolioPerformanceChart');
+        const chart = window.__injectedPortfolioChartInstance;
+        if (!chart) return;
+        const xScale = chart.scales.x;
+        const xPx = xScale.getPixelForValue(date);
+        const rect = canvas.getBoundingClientRect();
+        const icon = document.createElement('div');
+        icon.className = 'event-icon';
+        icon.style.left = (rect.left + xPx - 10) + 'px';
+        icon.style.top = (rect.top + 8) + 'px';
+        icon.style.background = ev.type === 'earnings' ? '#3498DB' : ev.type === 'dividend' ? '#f39c12' : '#9b59b6';
+        icon.title = ev.title || ev.type || 'Event';
+        icon.textContent = ev.type ? ev.type[0].toUpperCase() : 'E';
+        document.body.appendChild(icon);
+        setTimeout(()=>icon.remove(), 7000);
+      } catch(e){}
+    });
+  }
+
+  // Update performance summary numbers from stockTracker if available
+  function updateSummaryPanel() {
+    const tracker = window.stockTracker;
+    if (!tracker) return;
+    const daily = document.getElementById('summary-daily');
+    const week = document.getElementById('summary-week');
+    const month = document.getElementById('summary-month');
+    try {
+      const plToday = tracker.totalPLToday || tracker.total_pl_today || (tracker.getTotalPLToday && tracker.getTotalPLToday());
+      const pct1w = tracker.weekPercent || (tracker.getWeekPercent && tracker.getWeekPercent && tracker.getWeekPercent());
+      const pct1m = tracker.monthPercent || (tracker.getMonthPercent && tracker.getMonthPercent && tracker.getMonthPercent());
+      if (daily) daily.textContent = 'Today: ' + (plToday !== undefined ? formatCurrency(plToday) : '$0.00');
+      if (week) week.textContent = '1W: ' + (pct1w !== undefined ? (pct1w>0?'+':'')+Number(pct1w).toFixed(2)+'%' : '0.00%');
+      if (month) month.textContent = '1M: ' + (pct1m !== undefined ? (pct1m>0?'+':'')+Number(pct1m).toFixed(2)+'%' : '0.00%');
+    } catch(e){}
+  }
+
+  // Smooth range switching: animate fade between charts
+  function setupRangeButtons() {
+    const controls = document.querySelectorAll('#performance-chart-controls .chart-range-btn');
+    controls.forEach(btn => {
+      try { btn.removeEventListener('click', btn._injectedHandler); } catch(e) {}
+      const handler = (e) => {
+        controls.forEach(b => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        const range = e.currentTarget.getAttribute('data-range');
+        const histWrap = document.getElementById('historical-chart-wrapper');
+        const barWrap = document.getElementById('bar-chart-wrapper');
+        // fade out
+        histWrap.style.transition = 'opacity 220ms';
+        barWrap.style.transition = 'opacity 220ms';
+        if (range === 'BAR_TODAY') {
+          histWrap.style.opacity = 0;
+          setTimeout(()=>{ histWrap.style.display='none'; barWrap.style.display='block'; barWrap.style.opacity=0; setTimeout(()=>{ buildCandles(); barWrap.style.opacity=1; renderEventIcons(); updateSummaryPanel(); }, 30); }, 220);
+        } else {
+          barWrap.style.opacity = 0;
+          setTimeout(()=>{ barWrap.style.display='none'; histWrap.style.display='block'; histWrap.style.opacity=0; setTimeout(()=>{ if (window.__injectedPortfolioChartInstance && window.__injectedPortfolioChartInstance.update) { try { window.__injectedPortfolioChartInstance.update(); } catch(e){} } enhanceLineChart(); renderEventIcons(); updateSummaryPanel(); histWrap.style.opacity=1; }, 30); }, 220);
+        }
+      };
+      btn.addEventListener('click', handler);
+      btn._injectedHandler = handler;
+    });
+  }
+
+  // Reposition event icons on resize/scroll
+  function repositionEventIcons() {
+    const icons = document.querySelectorAll('.event-icon');
+    icons.forEach(icon => icon.remove()); // they are ephemeral and will be re-rendered
+    renderEventIcons();
+  }
+
+  // Initialize on ready
+  function whenReady(cb, timeout=12000) {
+    const start = Date.now();
+    (function check(){
+      if (document.readyState === 'complete' && window.stockTracker) return cb();
+      if (Date.now() - start > timeout) return cb();
+      requestAnimationFrame(check);
+    })();
+  }
+
+  whenReady(()=>{
+    enhanceLineChart();
+    setupRangeButtons();
+    const active = document.querySelector('#performance-chart-controls .chart-range-btn.active');
+    if (active && active.getAttribute('data-range') === 'BAR_TODAY') buildCandles();
+    renderEventIcons();
+    updateSummaryPanel();
+    window.addEventListener('resize', () => { setTimeout(repositionEventIcons, 200); });
+    setInterval(()=>{ enhanceLineChart(); updateSummaryPanel(); renderEventIcons(); if (document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range')==='BAR_TODAY') buildCandles(); }, 5000);
+  });
+})();
+</script>
+<!-- END: Upgrades -->
+
+</body>
+</html>
