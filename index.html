@@ -1,4 +1,6 @@
 
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1339,6 +1341,13 @@
         
         <div id="performance-chart-controls" class="chart-controls">
             <button class="chart-range-btn" data-range="BAR_TODAY">Today</button>
+<select id="top-movers-count" style="margin-left:10px;">
+<option value="5">5</option>
+<option value="10" selected>10</option>
+<option value="15">15</option>
+<option value="20">20</option>
+</select>
+
             <button class="chart-range-btn" data-range="1W">1W</button>
             <button class="chart-range-btn" data-range="1M">1M</button>
             <button class="chart-range-btn" data-range="6M">6M</button>
@@ -2558,7 +2567,7 @@
                             date.setDate(today.getDate() - i);
                             // Simple placeholder value that slightly increases over time
                             const value = 50000 + Math.sin(i / 30) * 500 + i * 2; 
-                            this.portfolioHistory.push({ date: date.toISOString().slice(0, 10), value: Math.round(value) });
+                            this.portfolioHistory.push({ date: date.toISOString().slice(0, (this.topMoversCount||10)), value: Math.round(value) });
                          }
                          migrationNeeded = true;
                     }
@@ -3882,7 +3891,7 @@
             
             async updatePortfolioHistory() {
                 const allItems = [...this.stocks, ...this.mutualFunds];
-                 const today = new Date().toISOString().slice(0, 10);
+                 const today = new Date().toISOString().slice(0, (this.topMoversCount||10));
                 const lastEntry = this.portfolioHistory.at(-1);
                 let totalValue = allItems.reduce((sum, item) => sum + this.calculateTransactionStats(item.transactions, item.price).currentValue, 0);
                 if (totalValue <= 0) return;
@@ -3916,7 +3925,7 @@
                 }).filter(item => Math.abs(item.change) > 0.001); // Filter out items with negligible change
 
                 // Sort by absolute change (top movers)
-                const topMovers = data.sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 10); // Top 10 movers
+                const topMovers = data.sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, (this.topMoversCount||10)); // Top 10 movers
 
                 const labels = topMovers.map(item => item.symbol);
                 const barValues = topMovers.map(item => item.change);
