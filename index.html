@@ -4482,7 +4482,7 @@
                 if (refreshInterval < 10) { this.showError("Refresh interval must be at least 10 seconds."); return; }
 
                 localStorage.setItem('finnhubApiKey', finnhubKey);
-                localStorage.setItem('alphaVantageApiKey', alphaVantageKey);
+                localStorage.setItem('alphaVantageKey', alphaVantageKey);
                 localStorage.setItem('fmpApiKey', fmpKey);
                 localStorage.setItem('refreshIntervalMs', refreshInterval * 1000);
 
@@ -5096,7 +5096,6 @@
         
     }
   });
-
 })();
 </script>
 <!-- END: Upgrades - Consolidated and Fixed TradingView-style components -->
