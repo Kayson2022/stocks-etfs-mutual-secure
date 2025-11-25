@@ -2534,12 +2534,18 @@
                     this.priceAlerts = data.priceAlerts || [];
 
                     if (migrationNeeded) {
-                        console.log("Data migration performed. Saving updated structure.");
+                        // console.log("Data migration performed. Saving updated structure.");
                         await this.saveData();
                     }
                 }
                 this.updatePortfolioHistory();
                 this.renderContent();
+                // Ensure Today bar chart is drawn after data is loaded
+                try { 
+                    this.renderTodayPerformanceBarChart(); 
+                } catch(e) { 
+                    console.error("Error rendering Today bar chart after loadData:", e); 
+                }
             }
             startLiveUpdate() {
                 this.stopLiveUpdate();
@@ -4982,9 +4988,11 @@
   display:flex;
   gap:12px;
   align-items:center;
+  justify-content:center;
   position:absolute;
-  right:20px;
+  left:50%;
   top:18px;
+  transform:translateX(-50%);
   z-index:5;
 }
 .summary-pill{
