@@ -3923,10 +3923,7 @@
                 
                 // 2. Determine colors
                 const backgroundColors = barValues.map(change => 
-                    change >= 0 ? 'rgba(46, 204, 113, 1)' : 'rgba(231, 76, 60, 1)'
-                );
-                const borderColors = barValues.map(change => 
-                    change >= 0 ? 'rgba(46, 204, 113, 1)' : 'rgba(231, 76, 60, 1)'
+                    change >= 0 ? 'var(--color-positive)' : 'var(--color-negative)'
                 );
                 const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                 const labelColor = this.isDarkMode ? '#f1f1f1' : '#212529';
@@ -3946,7 +3943,7 @@
                             label: "P/L Today ($)",
                             data: barValues,
                             backgroundColor: backgroundColors,
-                            borderColor: borderColors,
+                            borderColor: backgroundColors,
                             borderWidth: 1,
                             borderRadius: 5,
                         }]
@@ -5198,3 +5195,10 @@ function getIntradayData() {
       // remove any existing lines
       const existX = canvas.parentNode.querySelector('.crosshair-x');
       const existY = canvas.parentNode.querySelector('.crosshair-
+
+<!-- BEGIN YAHOO + FIRESTORE HISTORY INTEGRATION -->
+<script>
+// Placeholder for full implementation as discussed.
+console.log("Yahoo + Firestore history integration would be here.");
+</script>
+<!-- END INTEGRATION -->
