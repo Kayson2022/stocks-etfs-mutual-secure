@@ -1454,10 +1454,7 @@
                 <label for="modal-finnhub-key">Finnhub API Key:</label>
                 <input type="text" class="search-input" id="modal-finnhub-key" placeholder="Enter your Finnhub API Key">
             </div>
-            <div class="transaction-input-group">
-                <label for="modal-alpha-vantage-key">Alpha Vantage API Key (Used for Charts & Mutual Funds):</label>
-                <input type="text" class="search-input" id="modal-alpha-vantage-key" placeholder="Enter your Alpha Vantage API Key">
-            </div>
+            
             <div class="transaction-input-group">
                 <label for="modal-fmp-key">FMP API Key (Used for News):</label>
                 <input type="text" class="search-input" id="modal-fmp-key" placeholder="Enter your Financial Modeling Prep API Key">
@@ -1660,34 +1657,7 @@
             }
             
             // --- Alpha Vantage Fetch (Last Resort for Mutual Funds) ---
-            async fetchAlphaVantageFundData(symbol) {
-                const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${this.config.alphaVantageKey}`;
-                if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
-                    return { success: false, symbol, reason: "Alpha Vantage API Key missing." };
-                }
-                try {
-                    const response = await fetch(url);
-                    if (!response.ok) return { success: false, symbol, reason: `Alpha Vantage HTTP Error: ${response.status}` };
-                    const json = await response.json();
-                    const quote = json['Global Quote'];
-                    if (!quote || Object.keys(quote).length === 0) return { success: false, symbol, reason: 'Alpha Vantage: Invalid API payload or rate limit reached.' };
-                    return { success: true, data: { 
-                        symbol: quote['01. symbol'] ?? symbol, 
-                        name: quote['01. symbol'] ?? symbol, 
-                        price: parseFloat(quote['05. price']) || 0, 
-                        change: parseFloat(quote['09. change']) || 0, 
-                        changePercent: parseFloat(quote['10. change percent'].replace('%', '')) || 0, 
-                        open: parseFloat(quote['02. open']) || 0, 
-                        high: parseFloat(quote['03. high']) || 0, 
-                        low: parseFloat(quote['04. low']) || 0, 
-                        previousClose: parseFloat(quote['08. previous close']) || 0, 
-                        industry: 'Mutual Fund' 
-                    } };
-                } catch (error) {
-                    console.error(`Error fetching fund data for ${symbol} (Alpha Vantage):`, error);
-                    return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}` };
-                }
-            }
+            
             
             // --- Fallback Function for Mutual Funds (STRICTLY FMP -> AV) ---
             async fetchMutualFundDataWithFallback(symbol) {
@@ -1990,7 +1960,6 @@
                 this.config = {
                     refreshIntervalMs: parseInt(localStorage.getItem('refreshIntervalMs')) || 90000,
                     finnhubApiKey: userFinnhubKey || "d316lc1r01qnu2r0opjgd316lc1r01qnu2r0opk0",
-                    alphaVantageKey: userAlphaVantageKey || "0ZPH51BZ2N5O9G8Q",
                     fmpApiKey: userFmpKey || "vOqUU3gDIDYWghK8m4ZlsVQwLDnhfYMS"
                 };
             }
@@ -2717,11 +2686,6 @@
                     chartValueEl.classList.remove('positive', 'negative');
                     chartValueEl.classList.add(totalPLTodayFinal >= 0 ? 'positive' : 'negative');
                 }
-
-                // Expose key metrics on the tracker instance for external UI helpers
-                this.totalPLToday = totalPLTodayFinal;
-                this.weekPercent = this._computeChangePercent(7);
-                this.monthPercent = this._computeChangePercent(30);
             }
 
             isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
@@ -3021,7 +2985,7 @@
                         closedPositions.push(item);
                     } else if (item.symbol && sharesOwned < 0.0001 && !hasTransactions) {
                          // Added stock but no transactions logged yet
-                        activeItems.push(item);
+                        dataMismatch.push(item);
                     }
                 });
                 
@@ -3807,67 +3771,6 @@
                 
             }
             
-
-            // Compute percent change over N days using portfolioHistory
-            _computeChangePercent(days) {
-                try {
-                    if (!Array.isArray(this.portfolioHistory) || this.portfolioHistory.length === 0) return 0;
-                    const history = this.portfolioHistory
-                        .map(entry => ({
-                            date: new Date(entry.date || entry.timestamp || entry.x),
-                            value: Number(entry.value !== undefined ? entry.value : entry.y)
-                        }))
-                        .filter(entry => entry.date && !isNaN(entry.date.getTime()) && isFinite(entry.value))
-                        .sort((a, b) => a.date - b.date);
-
-                    if (history.length === 0) return 0;
-
-                    const latest = history[history.length - 1];
-                    const cutoff = new Date(latest.date);
-                    cutoff.setDate(cutoff.getDate() - days);
-
-                    // Find the earliest entry at or before the cutoff
-                    let start = history[0];
-                    for (let i = history.length - 1; i >= 0; i--) {
-                        if (history[i].date <= cutoff) {
-                            start = history[i];
-                            break;
-                        }
-                    }
-
-                    const startVal = start.value;
-                    const endVal = latest.value;
-                    if (!isFinite(startVal) || startVal === 0) return 0;
-                    return ((endVal - startVal) / startVal) * 100;
-                } catch (e) {
-                    console.error('Error computing change percent', days, e);
-                    return 0;
-                }
-            }
-
-            getTotalPLToday() {
-                return typeof this.totalPLToday === 'number' && isFinite(this.totalPLToday)
-                    ? this.totalPLToday
-                    : 0;
-            }
-
-            getWeekPercent() {
-                if (typeof this.weekPercent === 'number' && isFinite(this.weekPercent)) {
-                    return this.weekPercent;
-                }
-                const val = this._computeChangePercent(7);
-                this.weekPercent = val;
-                return val;
-            }
-
-            getMonthPercent() {
-                if (typeof this.monthPercent === 'number' && isFinite(this.monthPercent)) {
-                    return this.monthPercent;
-                }
-                const val = this._computeChangePercent(30);
-                this.monthPercent = val;
-                return val;
-            }
             /**
              * ==================================================================
              * ==      PORTFOLIO PERFORMANCE CHART FUNCTIONS (Bar/Line Switch) ==
