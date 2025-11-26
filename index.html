@@ -1701,6 +1701,100 @@
                 }
             }
 
+            // -----------------------------------------
+            //  UNIFIED DATA LAYER (YAHOO -> FINNHUB, FMP FOR FUNDS)
+            // -----------------------------------------
+            async fetchUnifiedStockQuote(symbol) {
+                // Try Yahoo first, then Finnhub if Yahoo fails
+                try {
+                    const yahooResult = await this.fetchYahooQuote(symbol);
+                    return { success: true, source: yahooResult.source, data: yahooResult };
+                } catch (errYahoo) {
+                    console.warn(`Yahoo quote failed in unified layer for ${symbol}, trying Finnhub...`, errYahoo);
+                    try {
+                        const finnhubResult = await this.fetchFinnhubQuote(symbol);
+                        return { success: true, source: finnhubResult.source, data: finnhubResult };
+                    } catch (errFinnhub) {
+                        console.warn(`Finnhub quote also failed in unified layer for ${symbol}`, errFinnhub);
+                        return { success: false, symbol, reason: errFinnhub.message || 'Unified stock quote failed' };
+                    }
+                }
+            }
+
+            async fetchUnifiedStockHistory(symbol, range) {
+                // Try Yahoo first, then Finnhub if Yahoo fails
+                try {
+                    const yahooHist = await this.fetchYahooHistory(symbol, range);
+                    return { success: true, source: yahooHist.source, history: yahooHist.history };
+                } catch (errYahoo) {
+                    console.warn(`Yahoo history failed in unified layer for ${symbol} (${range}), trying Finnhub...`, errYahoo);
+                    try {
+                        const finnhubHist = await this.fetchFinnhubHistory(symbol, range);
+                        return { success: true, source: finnhubHist.source, history: finnhubHist.history };
+                    } catch (errFinnhub) {
+                        console.warn(`Finnhub history also failed in unified layer for ${symbol} (${range})`, errFinnhub);
+                        return { success: false, symbol, reason: errFinnhub.message || 'Unified stock history failed' };
+                    }
+                }
+            }
+
+            async fetchFmpFundHistory(symbol, range) {
+                // Fetch mutual fund historical data using FMP only
+                try {
+                    if (!this.config.fmpApiKey || this.config.fmpApiKey === 'YOUR_FMP_API_KEY') {
+                        return { success: false, symbol, reason: "FMP API Key missing." };
+                    }
+                    // Use FMP historical-price-full endpoint
+                    const url = `https://financialmodelingprep.com/api/v3/historical-price-full/${symbol}?serietype=line&apikey=${this.config.fmpApiKey}`;
+                    const res = await fetch(url);
+                    if (!res.ok) return { success: false, symbol, reason: `FMP HTTP Error (history): ${res.status}` };
+                    const json = await res.json();
+                    const histArray = json.historical || [];
+                    if (!Array.isArray(histArray) || histArray.length === 0) {
+                        return { success: false, symbol, reason: "FMP: Empty historical data" };
+                    }
+                    // Map to unified history format (most recent last)
+                    const history = histArray.slice().reverse().map(item => ({
+                        date: new Date(item.date),
+                        price: item.close
+                    })).filter(p => p.price != null && !Number.isNaN(p.price));
+
+                    return { success: true, source: "fmp", history };
+                } catch (err) {
+                    console.warn(`FMP fund history failed for ${symbol} (${range})`, err);
+                    return { success: false, symbol, reason: err.message || 'FMP fund history failed' };
+                }
+            }
+
+            async fetchUnifiedFundQuote(symbol) {
+                // Wrapper around fetchFmpFundData to normalize structure
+                try {
+                    const result = await this.fetchFmpFundData(symbol);
+                    if (!result.success) return result;
+                    const d = result.data;
+                    return {
+                        success: true,
+                        source: "fmp",
+                        data: {
+                            price: d.price,
+                            previousClose: d.previousClose,
+                            change: d.change,
+                            percentChange: d.changePercent
+                        }
+                    };
+                } catch (err) {
+                    console.warn(`Unified fund quote failed for ${symbol}`, err);
+                    return { success: false, symbol, reason: err.message || 'Unified fund quote failed' };
+                }
+            }
+
+            async fetchUnifiedFundHistory(symbol, range) {
+                // Mutual funds: only FMP history
+                return await this.fetchFmpFundHistory(symbol, range);
+            }
+
+
+
 
             
             // Utility function to check for mutual fund symbol pattern (unchanged)
