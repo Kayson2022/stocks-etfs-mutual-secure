@@ -1638,6 +1638,70 @@
                     throw err;
                 }
             }
+
+            // -----------------------------------------
+            //  FINNHUB FALLBACK FETCH FUNCTIONS
+            // -----------------------------------------
+            async fetchFinnhubQuote(symbol) {
+                try {
+                    const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${this.config.finnhubKey}`;
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error("Finnhub quote fetch failed");
+                    const q = await res.json();
+                    if (!q || typeof q.c !== "number") throw new Error("Invalid Finnhub quote");
+                    return {
+                        source: "finnhub",
+                        price: q.c,
+                        previousClose: q.pc,
+                        change: q.d,
+                        percentChange: q.dp
+                    };
+                } catch (err) {
+                    console.warn(`Finnhub quote failed for ${symbol}`, err);
+                    throw err;
+                }
+            }
+
+            async fetchFinnhubHistory(symbol, range) {
+                try {
+                    const now = Math.floor(Date.now() / 1000);
+                    const ranges = {
+                        "TODAY": 86400,
+                        "1W":   86400 * 7,
+                        "1M":   86400 * 30,
+                        "6M":   86400 * 180,
+                        "YTD":  86400 * 365,
+                        "1Y":   86400 * 365,
+                        "ALL":  86400 * 365 * 10
+                    };
+                    const windowSize = ranges[range] || ranges["1Y"];
+                    const from = now - windowSize;
+
+                    const url = `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${now}&token=${this.config.finnhubKey}`;
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error("Finnhub history fetch failed");
+
+                    const d = await res.json();
+                    if (!d || d.s !== "ok" || !Array.isArray(d.t) || !Array.isArray(d.c)) {
+                        throw new Error("Invalid Finnhub history");
+                    }
+
+                    const history = d.t.map((t, i) => ({
+                        date: new Date(t * 1000),
+                        price: d.c[i]
+                    })).filter(p => p.price != null && !Number.isNaN(p.price));
+
+                    return {
+                        source: "finnhub",
+                        history
+                    };
+                } catch (err) {
+                    console.warn(`Finnhub history failed for ${symbol} (${range})`, err);
+                    throw err;
+                }
+            }
+
+
             
             // Utility function to check for mutual fund symbol pattern (unchanged)
             isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
