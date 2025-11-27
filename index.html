@@ -5605,5 +5605,236 @@
 })();
 </script>
 
+
+<!-- STEP5B: Top & Bottom $/% toggles + range memory -->
+<script>
+(function() {
+  function initStep5B() {
+    const tracker = window.stockTracker;
+    // 1) TOP SUMMARY TOGGLE (single icon)
+    const summaryPanel = document.getElementById('chart-summary-panel');
+    if (summaryPanel && !document.getElementById('top-summary-toggle')) {
+      window.__topSummaryMode = window.__topSummaryMode || '$';
+      const btn = document.createElement('button');
+      btn.id = 'top-summary-toggle';
+      btn.textContent = window.__topSummaryMode === '%' ? '%' : '$';
+      btn.title = 'Toggle between dollar and percent view';
+      btn.style.marginLeft = '8px';
+      btn.style.minWidth = '22px';
+      btn.style.height = '22px';
+      btn.style.borderRadius = '999px';
+      btn.style.border = 'none';
+      btn.style.fontSize = '11px';
+      btn.style.cursor = 'pointer';
+      btn.style.display = 'inline-flex';
+      btn.style.alignItems = 'center';
+      btn.style.justifyContent = 'center';
+      btn.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
+      btn.style.background = 'linear-gradient(135deg,#2ecc71,#27ae60)';
+      btn.style.color = '#fff';
+      summaryPanel.appendChild(btn);
+
+      function applyTopSummaryMode() {
+        const daily = document.getElementById('summary-daily');
+        const week = document.getElementById('summary-week');
+        const month = document.getElementById('summary-month');
+        if (!daily || !week || !month || !window.stockTracker) return;
+        const t = window.stockTracker;
+        const plToday = t.totalPLToday || t.total_pl_today || (t.getTotalPLToday && t.getTotalPLToday()) || 0;
+        const pct1w = t.weekPercent || (t.getWeekPercent && t.getWeekPercent()) || 0;
+        const pct1m = t.monthPercent || (t.getMonthPercent && t.getMonthPercent()) || 0;
+        const combinedTotal = t.totalPortfolioValue || t.combinedTotal || t.combined_total || t.combinedTotalValue || 0;
+
+        const mode = window.__topSummaryMode || '$';
+
+        function fmtPct(p) {
+          const n = Number(p) || 0;
+          const s = n > 0 ? '+' : (n < 0 ? '' : '');
+          return s + n.toFixed(2) + '%';
+        }
+        function fmtCur(v) {
+          const n = Number(v) || 0;
+          const s = n < 0 ? '-' : '';
+          const abs = Math.abs(n).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+          return s + '$' + abs;
+        }
+
+        if (mode === '$') {
+          // Today in dollars, 1W/1M approximate dollars from percent * combinedTotal
+          const weekDollar = combinedTotal ? (combinedTotal * (pct1w/100)) : 0;
+          const monthDollar = combinedTotal ? (combinedTotal * (pct1m/100)) : 0;
+          if (daily) daily.textContent = 'Today: ' + fmtCur(plToday);
+          if (week) week.textContent = '1W: ' + fmtCur(weekDollar);
+          if (month) month.textContent = '1M: ' + fmtCur(monthDollar);
+        } else {
+          // Percent mode: all three in %
+          const todayPct = combinedTotal ? ((plToday / combinedTotal) * 100) : 0;
+          if (daily) daily.textContent = 'Today: ' + fmtPct(todayPct);
+          if (week) week.textContent = '1W: ' + fmtPct(pct1w);
+          if (month) month.textContent = '1M: ' + fmtPct(pct1m);
+        }
+      }
+
+      window.__applyTopSummaryMode = applyTopSummaryMode;
+
+      btn.addEventListener('click', function() {
+        window.__topSummaryMode = (window.__topSummaryMode === '$') ? '%' : '$';
+        btn.textContent = window.__topSummaryMode;
+        applyTopSummaryMode();
+      });
+
+      // Re-apply our formatting periodically to override older updater
+      setInterval(applyTopSummaryMode, 2000);
+      // Initial
+      setTimeout(applyTopSummaryMode, 500);
+    }
+
+    // 2) BOTTOM CHART $/% TOGGLE (segmented control)
+    const controls = document.getElementById('performance-chart-controls');
+    if (controls && !document.getElementById('bottom-mode-toggle')) {
+      window.__bottomChartMode = window.__bottomChartMode || '$';
+      const wrap = document.createElement('div');
+      wrap.id = 'bottom-mode-toggle';
+      wrap.style.marginTop = '6px';
+      wrap.style.display = 'inline-flex';
+      wrap.style.borderRadius = '999px';
+      wrap.style.overflow = 'hidden';
+      wrap.style.border = '1px solid rgba(148,163,184,0.5)';
+      wrap.style.fontSize = '11px';
+      wrap.style.marginLeft = '12px';
+
+      const btnDollar = document.createElement('button');
+      btnDollar.textContent = '$ Value';
+      btnDollar.style.padding = '4px 10px';
+      btnDollar.style.border = 'none';
+      btnDollar.style.cursor = 'pointer';
+      btnDollar.style.fontSize = '11px';
+      btnDollar.style.background = window.__bottomChartMode === '$'
+        ? 'linear-gradient(135deg,#3498db,#9b59b6)'
+        : 'transparent';
+      btnDollar.style.color = window.__bottomChartMode === '$' ? '#fff' : 'var(--text-secondary, #64748b)';
+
+      const btnPct = document.createElement('button');
+      btnPct.textContent = '% Change';
+      btnPct.style.padding = '4px 10px';
+      btnPct.style.border = 'none';
+      btnPct.style.cursor = 'pointer';
+      btnPct.style.fontSize = '11px';
+      btnPct.style.background = window.__bottomChartMode === '%'
+        ? 'linear-gradient(135deg,#3498db,#9b59b6)'
+        : 'transparent';
+      btnPct.style.color = window.__bottomChartMode === '%' ? '#fff' : 'var(--text-secondary, #64748b)';
+
+      function applyBottomToggleStyles() {
+        btnDollar.style.background = window.__bottomChartMode === '$'
+          ? 'linear-gradient(135deg,#3498db,#9b59b6)'
+          : 'transparent';
+        btnDollar.style.color = window.__bottomChartMode === '$' ? '#fff' : 'var(--text-secondary, #64748b)';
+        btnPct.style.background = window.__bottomChartMode === '%'
+          ? 'linear-gradient(135deg,#3498db,#9b59b6)'
+          : 'transparent';
+        btnPct.style.color = window.__bottomChartMode === '%' ? '#fff' : 'var(--text-secondary, #64748b)';
+      }
+
+      function applyBottomChartMode() {
+        const chart = window.__injectedPortfolioChartInstance;
+        if (!chart || !chart.data || !chart.data.datasets || !chart.data.datasets.length) return;
+        const ds = chart.data.datasets[0];
+        if (!ds._rawValues) {
+          ds._rawValues = (ds.data || []).map(function(v){ return Number(v) || 0; });
+        }
+        const raw = ds._rawValues.slice();
+        if (!raw.length) return;
+        if (window.__bottomChartMode === '$') {
+          ds.data = raw;
+          if (chart.options && chart.options.scales && chart.options.scales.y && chart.options.scales.y.ticks) {
+            chart.options.scales.y.ticks.callback = function(value) {
+              return '$' + Number(value).toLocaleString();
+            };
+          }
+        } else {
+          const base = raw[0] || 1;
+          ds.data = raw.map(function(v){
+            return ((v - base) / base) * 100;
+          });
+          if (chart.options && chart.options.scales && chart.options.scales.y && chart.options.scales.y.ticks) {
+            chart.options.scales.y.ticks.callback = function(value) {
+              const n = Number(value) || 0;
+              const s = n > 0 ? '+' : (n < 0 ? '' : '');
+              return s + n.toFixed(1) + '%';
+            };
+          }
+        }
+        chart.update();
+      }
+
+      window.__applyBottomChartMode = applyBottomChartMode;
+
+      btnDollar.addEventListener('click', function() {
+        window.__bottomChartMode = '$';
+        applyBottomToggleStyles();
+        applyBottomChartMode();
+      });
+      btnPct.addEventListener('click', function() {
+        window.__bottomChartMode = '%';
+        applyBottomToggleStyles();
+        applyBottomChartMode();
+      });
+
+      wrap.appendChild(btnDollar);
+      wrap.appendChild(btnPct);
+      controls.appendChild(wrap);
+
+      // small delay before first application so chart exists
+      setTimeout(applyBottomChartMode, 1200);
+    }
+
+    // 3) Bottom chart range memory: remember last chosen range after first load
+    (function setupRangeMemory(){
+      const buttons = document.querySelectorAll('#performance-chart-controls .chart-range-btn');
+      if (!buttons.length) return;
+      if (!window.__bottomSelectedRange) {
+        window.__bottomSelectedRange = 'BAR_TODAY';
+      }
+      buttons.forEach(function(btn){
+        const old = btn._injectedHandler;
+        try { if (old) btn.removeEventListener('click', old); } catch(e){}
+        const range = btn.getAttribute('data-range');
+        const handler = function(e){
+          window.__bottomSelectedRange = range || 'BAR_TODAY';
+          if (old) old.call(btn, e);
+        };
+        btn.addEventListener('click', handler);
+        btn._injectedHandler = handler;
+      });
+    })();
+
+    // 4) Override renderPortfolioPerformanceChart to honor selected range when none is provided
+    if (tracker && !tracker._step5bWrapped) {
+      const originalRender = tracker.renderPortfolioPerformanceChart ?
+        tracker.renderPortfolioPerformanceChart.bind(tracker) : null;
+      tracker.renderPortfolioPerformanceChart = function(range) {
+        let effectiveRange = range;
+        if (!effectiveRange) {
+          effectiveRange = window.__bottomSelectedRange || 'BAR_TODAY';
+        } else {
+          window.__bottomSelectedRange = effectiveRange;
+        }
+        if (originalRender) {
+          return originalRender(effectiveRange);
+        }
+      };
+      tracker._step5bWrapped = true;
+    }
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(initStep5B, 800);
+  } else {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(initStep5B, 800); });
+  }
+})();
+</script>
+
 </body>
 </html>
