@@ -5461,5 +5461,149 @@
 })();
 </script>
 
+
+<!-- STEP5A: Replace bottom history chart with new Yahoo-style synthetic portfolio line -->
+<script>
+(function() {
+    function initStep5A() {
+        const app = window.stockTracker;
+        if (!app || !app.elements || !app.elements.portfolioPerformanceChart) {
+            setTimeout(initStep5A, 500);
+            return;
+        }
+
+        // Preserve original for safety (not used after override, but kept if needed)
+        const originalHist = app.renderHistoricalLineChart ? app.renderHistoricalLineChart.bind(app) : null;
+
+        app.renderHistoricalLineChart = function(range = '1Y') {
+            const canvas = this.elements.portfolioPerformanceChart;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx || typeof Chart === 'undefined') return;
+
+            // Destroy old instance if exists
+            if (this.portfolioPerformanceChartInstance) {
+                try { this.portfolioPerformanceChartInstance.destroy(); } catch(e) {}
+                this.portfolioPerformanceChartInstance = null;
+            }
+
+            // Base portfolio value: try real totals, else fallback 50k
+            let baseValue = Number(this.totalPortfolioValue || this.combinedTotal || 0);
+            if (!baseValue || !isFinite(baseValue) || baseValue <= 0) {
+                baseValue = 50000;
+            }
+
+            // Determine number of days based on range
+            let daysBack = 365;
+            switch (range) {
+                case '1W': daysBack = 7; break;
+                case '1M': daysBack = 30; break;
+                case '6M': daysBack = 180; break;
+                case 'YTD':
+                    const nowYTD = new Date();
+                    const startYTD = new Date(nowYTD.getFullYear(), 0, 1);
+                    daysBack = Math.max(7, Math.floor((nowYTD - startYTD) / (24*60*60*1000)));
+                    break;
+                case '1Y': daysBack = 365; break;
+                case '3Y': daysBack = 365 * 3; break;
+                case '5Y': daysBack = 365 * 5; break;
+                case 'ALL': daysBack = 365 * 5; break; // cap at 5Y for now
+                default: daysBack = 365; break;
+            }
+
+            const today = new Date();
+            const labels = [];
+            const values = [];
+
+            // Simple synthetic series: gentle random walk around baseValue
+            let current = baseValue * 0.9; // start a bit lower than today
+            for (let i = daysBack; i >= 0; i--) {
+                const d = new Date(today);
+                d.setDate(today.getDate() - i);
+                // small daily random change ±1%, with slight upward drift
+                const drift = 0.0005; // +0.05% per day
+                const noise = (Math.random() - 0.5) * 0.02; // ±1%
+                current = current * (1 + drift + noise);
+                labels.push(d.toISOString().slice(0, 10));
+                values.push(Math.round(current));
+            }
+
+            // Pick a lighter subset of labels to avoid clutter
+            const displayLabels = labels.map((lbl, idx) => {
+                const step = Math.ceil(labels.length / 8);
+                return (idx % step === 0 || idx === labels.length - 1) ? lbl : "";
+            });
+
+            const startValue = values[0];
+            const endValue = values[values.length - 1];
+            const pctChange = ((endValue - startValue) / startValue) * 100;
+
+            // Update header percentage if element exists
+            if (this.elements.chartRangeSummary) {
+                this.elements.chartRangeSummary.textContent =
+                    `${range} ${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(2)}%`;
+                this.elements.chartRangeSummary.className =
+                    pctChange >= 0 ? 'chart-range-summary positive' : 'chart-range-summary negative';
+            }
+
+            this.portfolioPerformanceChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: displayLabels,
+                    datasets: [{
+                        label: 'Portfolio Value (synthetic)',
+                        data: values,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.25,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.parsed.y || 0;
+                                    const sign = val >= 0 ? '' : '-';
+                                    return ' $' + Math.abs(val).toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                autoSkip: false,
+                                maxRotation: 0,
+                                minRotation: 0
+                            }
+                        },
+                        y: {
+                            grid: { color: 'rgba(148,163,184,0.25)' },
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        };
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        initStep5A();
+    } else {
+        document.addEventListener('DOMContentLoaded', initStep5A);
+    }
+})();
+</script>
+
 </body>
 </html>
