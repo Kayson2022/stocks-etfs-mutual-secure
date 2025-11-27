@@ -2874,6 +2874,10 @@
                     ? aggregatedPLToday 
                     : combinedMetrics.totalPLToday;
 
+                // Expose for header summary (Today: $X.XX)
+                this.totalPLToday = totalPLTodayFinal;
+                this.total_pl_today = totalPLTodayFinal;
+
                 const totalOverallPL = combinedMetrics.totalUnrealizedPL + combinedMetrics.totalRealizedPL;
                 const totalOverallPLPercent = combinedMetrics.totalContributions > 0 ? (totalOverallPL / combinedMetrics.totalContributions) * 100 : 0;
                 const totalPLPercentToday = combinedMetrics.totalPreviousDayValue > 0 ? (totalPLTodayFinal / combinedMetrics.totalPreviousDayValue) * 100 : 0;
@@ -4004,7 +4008,7 @@
                     const changeToday = (item.change || 0) * stats.totalSharesOwned;
                     const changePercentToday = item.changePercent || 0;
                     return { symbol: item.symbol, change: changeToday, percent: changePercentToday };
-                }).filter(item => item.change !== 0); // Filter out only zero-change items, keep gains and losses
+                }).filter(item => !isNaN(item.change)); // Keep all valid items (including zero change)
 
                 // Sort by absolute change (top movers)
                 const topMovers = data.sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, this.topMoversCount || 10); // Top N movers
