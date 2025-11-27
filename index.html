@@ -5668,11 +5668,11 @@
 
 
 <script>
-// YAHOO-STYLE BOTTOM PORTFOLIO CHART (safe override)
+// YAHOO-STYLE BOTTOM PORTFOLIO CHART WITH SEGMENTED TODAY (A3+B1)
 (function() {
-  function installYahooBottomChart() {
+  function installYahooSegmentedToday() {
     const tracker = window.stockTracker;
-    if (!tracker || tracker._yahooBottomInstalled) return;
+    if (!tracker || tracker._yahooSegmentedTodayInstalled) return;
     const ctor = tracker.constructor;
     if (!ctor || !ctor.prototype) return;
     const proto = ctor.prototype;
@@ -5686,7 +5686,6 @@
       const els = this.elements || {};
       const container = els.portfolioPerformanceContainer || els.portfolioPerformanceWrapper || null;
 
-      // Ensure container visible when we have holdings
       if (container) {
         const hasHoldings = (this.currentHoldings && this.currentHoldings.length > 0)
           || (this.stocks && this.stocks.length > 0)
@@ -5695,20 +5694,14 @@
         if (!hasHoldings) return;
       }
 
-      // Always use the historical chart area
-      if (els.historicalChartWrapper) {
-        els.historicalChartWrapper.style.display = 'block';
-      }
-      if (els.barChartWrapper) {
-        els.barChartWrapper.style.display = 'none';
-      }
+      if (els.historicalChartWrapper) els.historicalChartWrapper.style.display = 'block';
+      if (els.barChartWrapper) els.barChartWrapper.style.display = 'none';
       if (els.portfolioChartTitle) {
         els.portfolioChartTitle.textContent = isToday
           ? 'Portfolio Today'
           : 'Portfolio Performance History';
       }
 
-      // Highlight active range button
       if (els.performanceChartControls) {
         const buttons = els.performanceChartControls.querySelectorAll('.chart-range-btn');
         buttons.forEach(btn => btn.classList.remove('active'));
@@ -5718,9 +5711,7 @@
 
       const canvas = els.portfolioPerformanceChart;
       if (!canvas) {
-        if (typeof originalRender === 'function') {
-          return originalRender.call(this, range);
-        }
+        if (typeof originalRender === 'function') return originalRender.call(this, range);
         return;
       }
       const ctx = canvas.getContext('2d');
@@ -5735,13 +5726,13 @@
         return;
       }
 
-      const toDate = (d) => (d instanceof Date ? d : new Date(d));
+      const toDate = d => (d instanceof Date ? d : new Date(d));
 
       let points = [];
       let baselineVal = 0;
+      let firstVal, lastVal;
 
       if (isToday) {
-        // TODAY: synthetic intraday-style curve
         const sorted = hist
           .map(e => ({ date: toDate(e.date), value: Number(e.value || e.totalValue || 0) || 0 }))
           .sort((a, b) => a.date - b.date);
@@ -5752,30 +5743,42 @@
         baselineVal = prev.value;
         const currentVal = last.value;
 
-        // 1:00 AM PT to 5:00 PM PT, 15-min steps
-        const start = new Date();
-        start.setHours(1, 0, 0, 0);
-        const end = new Date();
-        end.setHours(17, 0, 0, 0);
+        const today = new Date();
+        const makeTime = (h, m) => new Date(today.getFullYear(), today.getMonth(), today.getDate(), h, m, 0, 0);
+
+        const preStart    = makeTime(1, 0);
+        const marketOpen  = makeTime(6, 30);
+        const marketClose = makeTime(13, 0);
+        const afterEnd    = makeTime(17, 0);
+
         const stepMinutes = 15;
         const msStep = stepMinutes * 60 * 1000;
-        const totalSteps = Math.round((end.getTime() - start.getTime()) / msStep);
 
-        for (let i = 0; i <= totalSteps; i++) {
-          const t = new Date(start.getTime() + i * msStep);
-          let y;
-          if (t <= start) {
-            y = baselineVal;
-          } else if (t >= end) {
-            y = currentVal;
-          } else {
-            const ratio = (t.getTime() - start.getTime()) / (end.getTime() - start.getTime());
-            y = baselineVal + (currentVal - baselineVal) * ratio;
+        const buildSegment = (start, end, yStart, yEnd) => {
+          const pts = [];
+          const totalSteps = Math.round((end.getTime() - start.getTime()) / msStep);
+          for (let i = 0; i <= totalSteps; i++) {
+            const t = new Date(start.getTime() + i * msStep);
+            let y;
+            if (yStart === yEnd) {
+              y = yStart;
+            } else {
+              const ratio = (t.getTime() - start.getTime()) / (end.getTime() - start.getTime());
+              y = yStart + (yEnd - yStart) * ratio;
+            }
+            pts.push({ x: t, y });
           }
-          points.push({ x: t, y });
-        }
+          return pts;
+        };
+
+        const prePts   = buildSegment(preStart, marketOpen, baselineVal, baselineVal);
+        const regPts   = buildSegment(marketOpen, marketClose, baselineVal, currentVal);
+        const afterPts = buildSegment(marketClose, afterEnd, currentVal, currentVal);
+
+        points = [...prePts, ...regPts, ...afterPts];
+        firstVal = baselineVal;
+        lastVal = currentVal;
       } else {
-        // Other ranges: daily history
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         let minDate = null;
@@ -5824,10 +5827,10 @@
 
         points = filtered.map(e => ({ x: e.date, y: e.value }));
         baselineVal = filtered[0].value;
+        firstVal = baselineVal;
+        lastVal = filtered[filtered.length - 1].value;
       }
 
-      const firstVal = points[0].y;
-      const lastVal = points[points.length - 1].y;
       const up = lastVal >= firstVal;
       const lineColor = up ? '#0f766e' : '#b91c1c';
       const fillRgb   = up ? '15, 118, 110' : '185, 28, 28';
@@ -5852,7 +5855,7 @@
           borderWidth: 2,
           pointRadius: 0,
           fill: true,
-          backgroundColor: `rgba(${fillRgb},0.15)`,
+          backgroundColor: `rgba(${fillRgb},0.18)`,
           tension: 0.35
         }
       ];
@@ -5872,42 +5875,83 @@
         });
       }
 
-      this.portfolioPerformanceChartInstance = new Chart(ctx, {
+      const self = this;
+
+      const sessionShading = isToday ? {
+        id: 'sessionShading',
+        beforeDraw(chart) {
+          const { ctx, chartArea, scales } = chart;
+          if (!chartArea) return;
+          const xScale = scales.x;
+          if (!xScale) return;
+
+          const today = new Date();
+          const mkTime = (h, m) => new Date(today.getFullYear(), today.getMonth(), today.getDate(), h, m, 0, 0);
+
+          const preStart = mkTime(1, 0);
+          const mOpen    = mkTime(6, 30);
+          const mClose   = mkTime(13, 0);
+          const afterEnd = mkTime(17, 0);
+
+          const preStartPx = xScale.getPixelForValue(preStart);
+          const mOpenPx    = xScale.getPixelForValue(mOpen);
+          const mClosePx   = xScale.getPixelForValue(mClose);
+          const afterEndPx = xScale.getPixelForValue(afterEnd);
+
+          ctx.save();
+          // Pre-market (full width shading on left segment)
+          ctx.fillStyle = self.isDarkMode ? 'rgba(148,163,184,0.08)' : 'rgba(148,163,184,0.10)';
+          ctx.fillRect(preStartPx, chartArea.top, mOpenPx - preStartPx, chartArea.bottom - chartArea.top);
+
+          // After-hours (full width shading on right segment)
+          const tint = up
+            ? (self.isDarkMode ? 'rgba(15,118,110,0.10)' : 'rgba(16,185,129,0.10)')
+            : (self.isDarkMode ? 'rgba(185,28,28,0.10)' : 'rgba(248,113,113,0.10)');
+          ctx.fillStyle = tint;
+          ctx.fillRect(mClosePx, chartArea.top, afterEndPx - mClosePx, chartArea.bottom - chartArea.top);
+
+          ctx.restore();
+        }
+      } : null;
+
+      const plugins = {
+        legend: { display: false },
+        tooltip: {
+          mode: 'index',
+          intersect: false,
+          callbacks: {
+            label: (ctx2) => {
+              if (ctx2.datasetIndex !== 0) return '';
+              const val = ctx2.parsed.y;
+              const base = isToday ? baselineVal : firstVal;
+              const delta = val - base;
+              const pct = base ? (delta / base) * 100 : 0;
+              const sign = delta > 0 ? '+' : '';
+              const cur = self.formatCurrency ? self.formatCurrency(val) : ('$' + val.toFixed(2));
+              const dStr = sign + delta.toFixed(2);
+              const pStr = sign + pct.toFixed(2) + '%';
+              return ` ${cur} (${dStr}, ${pStr})`;
+            },
+            title: (items) => {
+              if (!items.length) return '';
+              const d = new Date(items[0].parsed.x);
+              if (isToday) {
+                return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+              }
+              return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+            }
+          }
+        }
+      };
+
+      self.portfolioPerformanceChartInstance = new Chart(ctx, {
         type: 'line',
         data: { datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           interaction: { mode: 'index', intersect: false },
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              mode: 'index',
-              intersect: false,
-              callbacks: {
-                label: (ctx2) => {
-                  if (ctx2.datasetIndex !== 0) return '';
-                  const val = ctx2.parsed.y;
-                  const base = isToday ? baselineVal : firstVal;
-                  const delta = val - base;
-                  const pct = base ? (delta / base) * 100 : 0;
-                  const sign = delta > 0 ? '+' : '';
-                  const cur = this.formatCurrency ? this.formatCurrency(val) : ('$' + val.toFixed(2));
-                  const dStr = sign + delta.toFixed(2);
-                  const pStr = sign + pct.toFixed(2) + '%';
-                  return ` ${cur} (${dStr}, ${pStr})`;
-                },
-                title: (items) => {
-                  if (!items.length) return '';
-                  const d = new Date(items[0].parsed.x);
-                  if (isToday) {
-                    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-                  }
-                  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-                }
-              }
-            }
-          },
+          plugins,
           scales: {
             x: {
               type: 'time',
@@ -5922,24 +5966,25 @@
                 color: labelColor,
                 callback: (value) => {
                   const n = Number(value) || 0;
-                  return this.formatCurrency ? this.formatCurrency(n) : ('$' + n.toLocaleString());
+                  return self.formatCurrency ? self.formatCurrency(n) : ('$' + n.toLocaleString());
                 }
               },
               grid: { color: gridColor }
             }
           }
-        }
+        },
+        plugins: sessionShading ? [sessionShading] : []
       });
     };
 
-    tracker._yahooBottomInstalled = true;
+    tracker._yahooSegmentedTodayInstalled = true;
   }
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(installYahooBottomChart, 800);
+    setTimeout(installYahooSegmentedToday, 800);
   } else {
     document.addEventListener('DOMContentLoaded', function() {
-      setTimeout(installYahooBottomChart, 800);
+      setTimeout(installYahooSegmentedToday, 800);
     });
   }
 })();
