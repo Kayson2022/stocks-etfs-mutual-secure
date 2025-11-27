@@ -2874,6 +2874,10 @@
                     ? aggregatedPLToday 
                     : combinedMetrics.totalPLToday;
 
+                // Expose for header summary (Today: $X.XX)
+                this.totalPLToday = totalPLTodayFinal;
+                this.total_pl_today = totalPLTodayFinal;
+
                 const totalOverallPL = combinedMetrics.totalUnrealizedPL + combinedMetrics.totalRealizedPL;
                 const totalOverallPLPercent = combinedMetrics.totalContributions > 0 ? (totalOverallPL / combinedMetrics.totalContributions) * 100 : 0;
                 const totalPLPercentToday = combinedMetrics.totalPreviousDayValue > 0 ? (totalPLTodayFinal / combinedMetrics.totalPreviousDayValue) * 100 : 0;
@@ -4004,7 +4008,7 @@
                     const changeToday = (item.change || 0) * stats.totalSharesOwned;
                     const changePercentToday = item.changePercent || 0;
                     return { symbol: item.symbol, change: changeToday, percent: changePercentToday };
-                }).filter(item => item.change !== 0); // Filter out only zero-change items, keep gains and losses
+                }).filter(item => !isNaN(item.change)); // Keep all valid items (including zero change)
 
                 // Sort by absolute change (top movers)
                 const topMovers = data.sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, this.topMoversCount || 10); // Top N movers
@@ -4081,30 +4085,14 @@
                     this.portfolioPerformanceChartInstance = null; // Ensure null after destroy
                 }
 
-                // If no history, attempt to synthesize simple placeholder history
+                // If no history, show error on the historical canvas
                 if (!hasHistory) {
-                    const baseValue = this.totalPortfolioValue || this.combinedTotal || 0;
-                    if (baseValue && baseValue > 0) {
-                        const today = new Date();
-                        this.portfolioHistory = [];
-                        for (let i = 30; i >= 0; i--) {
-                            const d = new Date(today);
-                            d.setDate(today.getDate() - i);
-                            const drift = (Math.random() - 0.5) * 0.04; // ±4%
-                            const value = Math.round(baseValue * (1 + drift));
-                            this.portfolioHistory.push({
-                                date: d.toISOString().slice(0, 10),
-                                value
-                            });
-                        }
-                    } else {
-                        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-                        ctx.textAlign = 'center';
-                        ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
-                        ctx.font = "16px 'Inter', sans-serif";
-                        ctx.fillText('No portfolio history saved yet.', ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
-                        return;
-                    }
+                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
+                    ctx.font = "16px 'Inter', sans-serif";
+                    ctx.fillText('No portfolio history saved yet.', ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
+                    return;
                 }
                 
                 // 1. Data Filtering
@@ -4125,17 +4113,16 @@
                 }
                 
                 // FIX 1: Filter data based on date range
-                let chartData = allDataPoints.filter(dp => dp.x >= startDate);
+                const chartData = allDataPoints.filter(dp => dp.x >= startDate);
 
-                // If nothing falls into the range, but we have some history, use all points
-                if (chartData.length === 0 && allDataPoints.length > 0) {
-                    chartData = allDataPoints.slice();
-                }
-                // If there is only one point, duplicate it with +1 day so Chart.js can render a visible line
-                if (chartData.length === 1) {
-                    const only = chartData[0];
-                    const dup = { x: new Date(only.x.getTime() + 24*60*60*1000), y: only.y };
-                    chartData = [only, dup];
+                if (chartData.length <= 1) {
+                    // Clear canvas and draw specific message if data is too sparse for the selected range
+                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                    ctx.textAlign = 'center';
+                    ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
+                    ctx.font = "16px 'Inter', sans-serif";
+                    ctx.fillText(`Not enough history for the ${range} range.`, ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
+                    return;
                 }
                 
                 // 2. Dynamic Colors/Styles
@@ -4290,8 +4277,6 @@
                                             const d = new Date(value);
                                             if (range === '1W') {
                                                 return d.toLocaleDateString(undefined, { weekday: 'short' });
-            window.__injectedPortfolioChartInstance = this.portfolioPerformanceChartInstance;
-
                                             }
                                             return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                                         } catch(e) {
@@ -5069,9 +5054,6 @@
     }
   };
 
-  if (typeof Chart !== 'undefined') { Chart.register(crosshairPlugin); }
-
-
   // Smooth animations utility
   function animateChart(chart) {
     chart.options.animation = {duration: 450, easing: 'easeOutCubic'};
@@ -5466,449 +5448,5 @@
 })();
 </script>
 
-
-<!-- STEP5A: Replace bottom history chart with new Yahoo-style synthetic portfolio line -->
-<script>
-(function() {
-    function initStep5A() {
-        const app = window.stockTracker;
-        if (!app || !app.elements || !app.elements.portfolioPerformanceChart) {
-            setTimeout(initStep5A, 500);
-            return;
-        }
-
-        // Preserve original for safety (not used after override, but kept if needed)
-        const originalHist = app.renderHistoricalLineChart ? app.renderHistoricalLineChart.bind(app) : null;
-
-        app.renderHistoricalLineChart = function(range = '1Y') {
-            const canvas = this.elements.portfolioPerformanceChart;
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            if (!ctx || typeof Chart === 'undefined') return;
-
-            // Destroy old instance if exists
-            if (this.portfolioPerformanceChartInstance) {
-                try { this.portfolioPerformanceChartInstance.destroy(); } catch(e) {}
-                this.portfolioPerformanceChartInstance = null;
-            }
-
-            // Base portfolio value: try real totals, else fallback 50k
-            let baseValue = Number(this.totalPortfolioValue || this.combinedTotal || 0);
-            if (!baseValue || !isFinite(baseValue) || baseValue <= 0) {
-                baseValue = 50000;
-            }
-
-            // Determine number of days based on range
-            let daysBack = 365;
-            switch (range) {
-                case '1W': daysBack = 7; break;
-                case '1M': daysBack = 30; break;
-                case '6M': daysBack = 180; break;
-                case 'YTD':
-                    const nowYTD = new Date();
-                    const startYTD = new Date(nowYTD.getFullYear(), 0, 1);
-                    daysBack = Math.max(7, Math.floor((nowYTD - startYTD) / (24*60*60*1000)));
-                    break;
-                case '1Y': daysBack = 365; break;
-                case '3Y': daysBack = 365 * 3; break;
-                case '5Y': daysBack = 365 * 5; break;
-                case 'ALL': daysBack = 365 * 5; break; // cap at 5Y for now
-                default: daysBack = 365; break;
-            }
-
-            const today = new Date();
-            const labels = [];
-            const values = [];
-
-            // Simple synthetic series: gentle random walk around baseValue
-            let current = baseValue * 0.9; // start a bit lower than today
-            for (let i = daysBack; i >= 0; i--) {
-                const d = new Date(today);
-                d.setDate(today.getDate() - i);
-                // small daily random change ±1%, with slight upward drift
-                const drift = 0.0005; // +0.05% per day
-                const noise = (Math.random() - 0.5) * 0.02; // ±1%
-                current = current * (1 + drift + noise);
-                labels.push(d.toISOString().slice(0, 10));
-                values.push(Math.round(current));
-            }
-
-            // Pick a lighter subset of labels to avoid clutter
-            const displayLabels = labels.map((lbl, idx) => {
-                const step = Math.ceil(labels.length / 8);
-                return (idx % step === 0 || idx === labels.length - 1) ? lbl : "";
-            });
-
-            const startValue = values[0];
-            const endValue = values[values.length - 1];
-            const pctChange = ((endValue - startValue) / startValue) * 100;
-
-            // Update header percentage if element exists
-            if (this.elements.chartRangeSummary) {
-                this.elements.chartRangeSummary.textContent =
-                    `${range} ${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(2)}%`;
-                this.elements.chartRangeSummary.className =
-                    pctChange >= 0 ? 'chart-range-summary positive' : 'chart-range-summary negative';
-            }
-
-            this.portfolioPerformanceChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: displayLabels,
-                    datasets: [{
-                        label: 'Portfolio Value (synthetic)',
-                        data: values,
-                        borderWidth: 2,
-                        pointRadius: 0,
-                        tension: 0.25,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const val = context.parsed.y || 0;
-                                    const sign = val >= 0 ? '' : '-';
-                                    return ' $' + Math.abs(val).toLocaleString();
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false },
-                            ticks: {
-                                autoSkip: false,
-                                maxRotation: 0,
-                                minRotation: 0
-                            }
-                        },
-                        y: {
-                            grid: { color: 'rgba(148,163,184,0.25)' },
-                            ticks: {
-                                callback: function(value) {
-                                    return '$' + value.toLocaleString();
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        };
-    }
-
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        initStep5A();
-    } else {
-        document.addEventListener('DOMContentLoaded', initStep5A);
-    }
-})();
-</script>
-
-
-<!-- STEP5B: Top & Bottom $/% toggles + range memory -->
-<script>
-(function() {
-  function initStep5B() {
-    const tracker = window.stockTracker;
-    // 1) TOP SUMMARY TOGGLE (single icon)
-    const summaryPanel = document.getElementById('chart-summary-panel');
-    if (summaryPanel && !document.getElementById('top-summary-toggle')) {
-      window.__topSummaryMode = window.__topSummaryMode || '$';
-      const btn = document.createElement('button');
-      btn.id = 'top-summary-toggle';
-      btn.textContent = window.__topSummaryMode === '%' ? '%' : '$';
-      btn.title = 'Toggle between dollar and percent view';
-      btn.style.marginLeft = '8px';
-      btn.style.minWidth = '22px';
-      btn.style.height = '22px';
-      btn.style.borderRadius = '999px';
-      btn.style.border = 'none';
-      btn.style.fontSize = '11px';
-      btn.style.cursor = 'pointer';
-      btn.style.display = 'inline-flex';
-      btn.style.alignItems = 'center';
-      btn.style.justifyContent = 'center';
-      btn.style.boxShadow = '0 2px 6px rgba(0,0,0,0.15)';
-      btn.style.background = 'linear-gradient(135deg,#2ecc71,#27ae60)';
-      btn.style.color = '#fff';
-      summaryPanel.appendChild(btn);
-
-      function applyTopSummaryMode() {
-        const daily = document.getElementById('summary-daily');
-        const week = document.getElementById('summary-week');
-        const month = document.getElementById('summary-month');
-        if (!daily || !week || !month || !window.stockTracker) return;
-        const t = window.stockTracker;
-        const plToday = t.totalPLToday || t.total_pl_today || (t.getTotalPLToday && t.getTotalPLToday()) || 0;
-        const pct1w = t.weekPercent || (t.getWeekPercent && t.getWeekPercent()) || 0;
-        const pct1m = t.monthPercent || (t.getMonthPercent && t.getMonthPercent()) || 0;
-        const combinedTotal = t.totalPortfolioValue || t.combinedTotal || t.combined_total || t.combinedTotalValue || 0;
-
-        const mode = window.__topSummaryMode || '$';
-
-        function fmtPct(p) {
-          const n = Number(p) || 0;
-          const s = n > 0 ? '+' : (n < 0 ? '' : '');
-          return s + n.toFixed(2) + '%';
-        }
-        function fmtCur(v) {
-          const n = Number(v) || 0;
-          const s = n < 0 ? '-' : '';
-          const abs = Math.abs(n).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-          return s + '$' + abs;
-        }
-
-        if (mode === '$') {
-          // Today in dollars, 1W/1M approximate dollars from percent * combinedTotal
-          const weekDollar = combinedTotal ? (combinedTotal * (pct1w/100)) : 0;
-          const monthDollar = combinedTotal ? (combinedTotal * (pct1m/100)) : 0;
-          if (daily) daily.textContent = 'Today: ' + fmtCur(plToday);
-          if (week) week.textContent = '1W: ' + fmtCur(weekDollar);
-          if (month) month.textContent = '1M: ' + fmtCur(monthDollar);
-        } else {
-          // Percent mode: all three in %
-          const todayPct = combinedTotal ? ((plToday / combinedTotal) * 100) : 0;
-          if (daily) daily.textContent = 'Today: ' + fmtPct(todayPct);
-          if (week) week.textContent = '1W: ' + fmtPct(pct1w);
-          if (month) month.textContent = '1M: ' + fmtPct(pct1m);
-        }
-      }
-
-      window.__applyTopSummaryMode = applyTopSummaryMode;
-
-      btn.addEventListener('click', function() {
-        window.__topSummaryMode = (window.__topSummaryMode === '$') ? '%' : '$';
-        btn.textContent = window.__topSummaryMode;
-        applyTopSummaryMode();
-      });
-
-      // Re-apply our formatting periodically to override older updater
-      setInterval(applyTopSummaryMode, 2000);
-      // Initial
-      setTimeout(applyTopSummaryMode, 500);
-    }
-
-    // 2) BOTTOM CHART $/% TOGGLE (segmented control)
-    const controls = document.getElementById('performance-chart-controls');
-    if (controls && !document.getElementById('bottom-mode-toggle')) {
-      window.__bottomChartMode = window.__bottomChartMode || '$';
-      const wrap = document.createElement('div');
-      wrap.id = 'bottom-mode-toggle';
-      wrap.style.marginTop = '6px';
-      wrap.style.display = 'inline-flex';
-      wrap.style.borderRadius = '999px';
-      wrap.style.overflow = 'hidden';
-      wrap.style.border = '1px solid rgba(148,163,184,0.5)';
-      wrap.style.fontSize = '11px';
-      wrap.style.marginLeft = '12px';
-
-      const btnDollar = document.createElement('button');
-      btnDollar.textContent = '$ Value';
-      btnDollar.style.padding = '4px 10px';
-      btnDollar.style.border = 'none';
-      btnDollar.style.cursor = 'pointer';
-      btnDollar.style.fontSize = '11px';
-      btnDollar.style.background = window.__bottomChartMode === '$'
-        ? 'linear-gradient(135deg,#3498db,#9b59b6)'
-        : 'transparent';
-      btnDollar.style.color = window.__bottomChartMode === '$' ? '#fff' : 'var(--text-secondary, #64748b)';
-
-      const btnPct = document.createElement('button');
-      btnPct.textContent = '% Change';
-      btnPct.style.padding = '4px 10px';
-      btnPct.style.border = 'none';
-      btnPct.style.cursor = 'pointer';
-      btnPct.style.fontSize = '11px';
-      btnPct.style.background = window.__bottomChartMode === '%'
-        ? 'linear-gradient(135deg,#3498db,#9b59b6)'
-        : 'transparent';
-      btnPct.style.color = window.__bottomChartMode === '%' ? '#fff' : 'var(--text-secondary, #64748b)';
-
-      function applyBottomToggleStyles() {
-        btnDollar.style.background = window.__bottomChartMode === '$'
-          ? 'linear-gradient(135deg,#3498db,#9b59b6)'
-          : 'transparent';
-        btnDollar.style.color = window.__bottomChartMode === '$' ? '#fff' : 'var(--text-secondary, #64748b)';
-        btnPct.style.background = window.__bottomChartMode === '%'
-          ? 'linear-gradient(135deg,#3498db,#9b59b6)'
-          : 'transparent';
-        btnPct.style.color = window.__bottomChartMode === '%' ? '#fff' : 'var(--text-secondary, #64748b)';
-      }
-
-      function applyBottomChartMode() {
-        const chart = window.__injectedPortfolioChartInstance;
-        if (!chart || !chart.data || !chart.data.datasets || !chart.data.datasets.length) return;
-        const ds = chart.data.datasets[0];
-        if (!ds._rawValues) {
-          ds._rawValues = (ds.data || []).map(function(v){ return Number(v) || 0; });
-        }
-        const raw = ds._rawValues.slice();
-        if (!raw.length) return;
-        if (window.__bottomChartMode === '$') {
-          ds.data = raw;
-          if (chart.options && chart.options.scales && chart.options.scales.y && chart.options.scales.y.ticks) {
-            chart.options.scales.y.ticks.callback = function(value) {
-              return '$' + Number(value).toLocaleString();
-            };
-          }
-        } else {
-          const base = raw[0] || 1;
-          ds.data = raw.map(function(v){
-            return ((v - base) / base) * 100;
-          });
-          if (chart.options && chart.options.scales && chart.options.scales.y && chart.options.scales.y.ticks) {
-            chart.options.scales.y.ticks.callback = function(value) {
-              const n = Number(value) || 0;
-              const s = n > 0 ? '+' : (n < 0 ? '' : '');
-              return s + n.toFixed(1) + '%';
-            };
-          }
-        }
-        chart.update();
-      }
-
-      window.__applyBottomChartMode = applyBottomChartMode;
-
-      btnDollar.addEventListener('click', function() {
-        window.__bottomChartMode = '$';
-        applyBottomToggleStyles();
-        applyBottomChartMode();
-      });
-      btnPct.addEventListener('click', function() {
-        window.__bottomChartMode = '%';
-        applyBottomToggleStyles();
-        applyBottomChartMode();
-      });
-
-      wrap.appendChild(btnDollar);
-      wrap.appendChild(btnPct);
-      controls.appendChild(wrap);
-
-      // small delay before first application so chart exists
-      setTimeout(applyBottomChartMode, 1200);
-    }
-
-    // 3) Bottom chart range memory: remember last chosen range after first load
-    (function setupRangeMemory(){
-      const buttons = document.querySelectorAll('#performance-chart-controls .chart-range-btn');
-      if (!buttons.length) return;
-      if (!window.__bottomSelectedRange) {
-        window.__bottomSelectedRange = 'BAR_TODAY';
-      }
-      buttons.forEach(function(btn){
-        const old = btn._injectedHandler;
-        try { if (old) btn.removeEventListener('click', old); } catch(e){}
-        const range = btn.getAttribute('data-range');
-        const handler = function(e){
-          window.__bottomSelectedRange = range || 'BAR_TODAY';
-          if (old) old.call(btn, e);
-        };
-        btn.addEventListener('click', handler);
-        btn._injectedHandler = handler;
-      });
-    })();
-
-    // 4) Override renderPortfolioPerformanceChart to honor selected range when none is provided
-    if (tracker && !tracker._step5bWrapped) {
-      const originalRender = tracker.renderPortfolioPerformanceChart ?
-        tracker.renderPortfolioPerformanceChart.bind(tracker) : null;
-      tracker.renderPortfolioPerformanceChart = function(range) {
-        let effectiveRange = range;
-        if (!effectiveRange) {
-          effectiveRange = window.__bottomSelectedRange || 'BAR_TODAY';
-        } else {
-          window.__bottomSelectedRange = effectiveRange;
-        }
-        if (originalRender) {
-          return originalRender(effectiveRange);
-        }
-      };
-      tracker._step5bWrapped = true;
-    }
-  }
-
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(initStep5B, 800);
-  } else {
-    document.addEventListener('DOMContentLoaded', function(){ setTimeout(initStep5B, 800); });
-  }
-})();
-</script>
-
-<script>
-// STEP6: Aggregated portfolio helpers for Today / 1W / 1M
-// These are lightweight wrappers that compute totals using existing history & metrics.
-
-if (typeof StockTracker !== 'undefined') {
-  // Total P/L Today in dollars, using existing calculateSummaryMetrics
-  StockTracker.prototype.getTotalPLToday = function() {
-    try {
-      const stockMetrics = this.calculateSummaryMetrics ? this.calculateSummaryMetrics(this.stocks || []) : { totalPLToday: 0 };
-      const fundMetrics  = this.calculateSummaryMetrics ? this.calculateSummaryMetrics(this.mutualFunds || []) : { totalPLToday: 0 };
-      const total = (stockMetrics.totalPLToday || 0) + (fundMetrics.totalPLToday || 0);
-      this.totalPLToday = total;
-      return total;
-    } catch (e) {
-      console.warn('getTotalPLToday failed:', e);
-      return this.totalPLToday || 0;
-    }
-  };
-
-  // Helper to compute percent change between latest value and a value N days ago from portfolioHistory
-  StockTracker.prototype._computeRangePercent = function(daysBack) {
-    try {
-      const hist = this.portfolioHistory || [];
-      if (!hist.length) return 0;
-
-      // Assume entries are in chronological order with date in YYYY-MM-DD
-      const parseDate = (d) => (d instanceof Date ? d : new Date(d));
-      const now = new Date();
-      const cutoff = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
-
-      let baseEntry = hist[0];
-      for (let i = 0; i < hist.length; i++) {
-        const d = parseDate(hist[i].date);
-        if (d >= cutoff) {
-          baseEntry = hist[i];
-          break;
-        }
-      }
-
-      const latest = hist[hist.length - 1];
-      const baseVal   = Number(baseEntry.value || baseEntry.totalValue || 0);
-      const latestVal = Number(latest.value || latest.totalValue || 0);
-      if (!isFinite(baseVal) || baseVal <= 0 || !isFinite(latestVal)) return 0;
-
-      const pct = ((latestVal - baseVal) / baseVal) * 100;
-      return pct;
-    } catch (e) {
-      console.warn('_computeRangePercent failed:', e);
-      return 0;
-    }
-  };
-
-  // 1W percent based on portfolioHistory
-  StockTracker.prototype.getWeekPercent = function() {
-    const pct = this._computeRangePercent(7);
-    this.weekPercent = pct;
-    return pct;
-  };
-
-  // 1M percent based on portfolioHistory (~30 days)
-  StockTracker.prototype.getMonthPercent = function() {
-    const pct = this._computeRangePercent(30);
-    this.monthPercent = pct;
-    return pct;
-  };
-}
-
-</script>
 </body>
 </html>
-
