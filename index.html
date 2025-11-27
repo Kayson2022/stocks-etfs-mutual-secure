@@ -4113,19 +4113,21 @@
                 }
                 
                 // FIX 1: Filter data based on date range
-                const chartData = allDataPoints.filter(dp => dp.x >= startDate);
+                let chartData = allDataPoints.filter(dp => dp.x >= startDate);
 
-                if (chartData.length <= 1) {
-                    // Clear canvas and draw specific message if data is too sparse for the selected range
-                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-                    ctx.textAlign = 'center';
-                    ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
-                    ctx.font = "16px 'Inter', sans-serif";
-                    ctx.fillText(`Not enough history for the ${range} range.`, ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
-                    return;
+                // STEP3C: Always show something, even with sparse data
+                if (chartData.length === 0 && allDataPoints.length > 0) {
+                    // Fallback: use all available history
+                    chartData = allDataPoints.slice();
                 }
-                
-                // 2. Dynamic Colors/Styles
+                if (chartData.length === 1) {
+                    // Duplicate the single point with a +1 day timestamp so Chart.js can draw a visible line
+                    const only = chartData[0];
+                    const dup = { x: new Date(only.x.getTime() + 24 * 60 * 60 * 1000), y: only.y };
+                    chartData = [only, dup];
+                }
+
+// 2. Dynamic Colors/Styles
                 const lineRgb = window.getRgbColor('--chart-line-color');
                 const fillRgb = window.getRgbColor('--chart-fill-color-rgb');
                 const refColor = window.getRgbColor('--chart-reference-color');
