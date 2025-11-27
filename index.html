@@ -2874,10 +2874,6 @@
                     ? aggregatedPLToday 
                     : combinedMetrics.totalPLToday;
 
-                // Expose for header summary (Today: $X.XX)
-                this.totalPLToday = totalPLTodayFinal;
-                this.total_pl_today = totalPLTodayFinal;
-
                 const totalOverallPL = combinedMetrics.totalUnrealizedPL + combinedMetrics.totalRealizedPL;
                 const totalOverallPLPercent = combinedMetrics.totalContributions > 0 ? (totalOverallPL / combinedMetrics.totalContributions) * 100 : 0;
                 const totalPLPercentToday = combinedMetrics.totalPreviousDayValue > 0 ? (totalPLTodayFinal / combinedMetrics.totalPreviousDayValue) * 100 : 0;
@@ -4008,7 +4004,7 @@
                     const changeToday = (item.change || 0) * stats.totalSharesOwned;
                     const changePercentToday = item.changePercent || 0;
                     return { symbol: item.symbol, change: changeToday, percent: changePercentToday };
-                }).filter(item => !isNaN(item.change)); // Keep all valid items (including zero change)
+                }).filter(item => item.change !== 0); // Filter out only zero-change items, keep gains and losses
 
                 // Sort by absolute change (top movers)
                 const topMovers = data.sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, this.topMoversCount || 10); // Top N movers
@@ -4085,20 +4081,20 @@
                     this.portfolioPerformanceChartInstance = null; // Ensure null after destroy
                 }
 
-                // If no history, synthesize simple placeholder history based on current portfolio value
+                // If no history, attempt to synthesize simple placeholder history
                 if (!hasHistory) {
-                    const baseValue = this.totalPortfolioValue || (this.currentTotals ? this.currentTotals.totalValue : 0) || 0;
-                    if (baseValue > 0) {
+                    const baseValue = this.totalPortfolioValue || this.combinedTotal || 0;
+                    if (baseValue && baseValue > 0) {
                         const today = new Date();
                         this.portfolioHistory = [];
                         for (let i = 30; i >= 0; i--) {
                             const d = new Date(today);
                             d.setDate(today.getDate() - i);
                             const drift = (Math.random() - 0.5) * 0.04; // ±4%
-                            const value = baseValue * (1 + drift);
+                            const value = Math.round(baseValue * (1 + drift));
                             this.portfolioHistory.push({
                                 date: d.toISOString().slice(0, 10),
-                                value: Math.round(value)
+                                value
                             });
                         }
                     } else {
@@ -4106,13 +4102,12 @@
                         ctx.textAlign = 'center';
                         ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
                         ctx.font = "16px 'Inter', sans-serif";
-                        ctx.fillText('No portfolio history available yet.', ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
+                        ctx.fillText('No portfolio history saved yet.', ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
                         return;
                     }
                 }
-
-
-// 1. Data Filtering
+                
+                // 1. Data Filtering
                 const allDataPoints = this.portfolioHistory.map(e => ({ x: new Date(e.date), y: e.value }));
                 const now = new Date();
                 let startDate = new Date();
@@ -4132,19 +4127,18 @@
                 // FIX 1: Filter data based on date range
                 let chartData = allDataPoints.filter(dp => dp.x >= startDate);
 
-                // STEP3C: Always show something, even with sparse data
+                // If nothing falls into the range, but we have some history, use all points
                 if (chartData.length === 0 && allDataPoints.length > 0) {
-                    // Fallback: use all available history
                     chartData = allDataPoints.slice();
                 }
+                // If there is only one point, duplicate it with +1 day so Chart.js can render a visible line
                 if (chartData.length === 1) {
-                    // Duplicate the single point with a +1 day timestamp so Chart.js can draw a visible line
                     const only = chartData[0];
-                    const dup = { x: new Date(only.x.getTime() + 24 * 60 * 60 * 1000), y: only.y };
+                    const dup = { x: new Date(only.x.getTime() + 24*60*60*1000), y: only.y };
                     chartData = [only, dup];
                 }
-
-// 2. Dynamic Colors/Styles
+                
+                // 2. Dynamic Colors/Styles
                 const lineRgb = window.getRgbColor('--chart-line-color');
                 const fillRgb = window.getRgbColor('--chart-fill-color-rgb');
                 const refColor = window.getRgbColor('--chart-reference-color');
@@ -5464,43 +5458,6 @@
     } else {
         document.addEventListener('DOMContentLoaded', initStep3A);
     }
-})();
-</script>
-
-
-
-<!-- STEP3B — Auto-generate synthetic portfolio history if empty -->
-<script>
-(function(){
-    function buildSyntheticHistory(app){
-        if (!app || !app.portfolioHistory) return;
-        if (app.portfolioHistory.length > 0) return;
-
-        // Build 7-day synthetic history using current total portfolio value
-        const now = new Date();
-        const baseValue = app.totalPortfolioValue || 0;
-        if (!baseValue) return;
-
-        const synthetic = [];
-        for (let i=6; i>=0; i--){
-            const d = new Date();
-            d.setDate(now.getDate() - i);
-            const drift = (Math.random()-0.5) * 0.03; // ±3%
-            synthetic.push({
-                date: d.toISOString(),
-                value: baseValue * (1 + drift)
-            });
-        }
-        app.portfolioHistory = synthetic;
-    }
-
-    function wait(){
-        const app = window.stockTracker;
-        if (!app) return setTimeout(wait, 300);
-        if (!app.totalPortfolioValue) return setTimeout(wait, 500);
-        buildSyntheticHistory(app);
-    }
-    wait();
 })();
 </script>
 
