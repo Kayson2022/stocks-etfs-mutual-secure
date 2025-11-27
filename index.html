@@ -5992,196 +5992,86 @@
 
 
 <script>
-// SMART-MODE TODAY DAILY PATCH (A1 curve, B1 shading)
-(function(){
-  function installSmartTodayPatch(){
+// TODAY LIST MODE v4
+(function() {
+  function installTodayListPatch() {
     const t = window.stockTracker;
-    if (!t || t._smartTodayPatchInstalled) return;
+    if (!t || t._todayListPatchInstalled) return;
     const proto = t.constructor && t.constructor.prototype;
     if (!proto) return;
 
     const originalRender = proto.renderPortfolioPerformanceChart;
 
-    proto.renderPortfolioPerformanceChart = function(range){
-      if (range !== 'TODAY' && range !== 'BAR_TODAY') {
-        return typeof originalRender === 'function'
-          ? originalRender.call(this, range)
-          : undefined;
-      }
-
+    proto.renderPortfolioPerformanceChart = function(range) {
       const els = this.elements || {};
+      const container = els.portfolioPerformanceChartContainer || els.portfolioPerformanceChart?.parentElement;
       const canvas = els.portfolioPerformanceChart;
-      if (!canvas) {
-        return typeof originalRender === 'function'
-          ? originalRender.call(this, range)
-          : undefined;
+
+      if (range !== 'TODAY') {
+        const list = document.getElementById('todayList');
+        if (list) list.remove();
+        if (canvas) canvas.style.display = '';
+        return originalRender.call(this, range);
       }
 
-      const ctx = canvas.getContext('2d');
-      const hist = Array.isArray(this.portfolioHistory) ? this.portfolioHistory : [];
-      if (!hist.length) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        return;
-      }
+      if (canvas) canvas.style.display = 'none';
+      const existing = document.getElementById('todayList');
+      if (existing) existing.remove();
 
-      const sorted = hist
-        .map(e => ({
-          date: (e.date instanceof Date) ? e.date : new Date(e.date),
-          value: Number(e.value || e.totalValue || 0) || 0
-        }))
-        .sort((a,b) => a.date - b.date);
+      const listDiv = document.createElement('div');
+      listDiv.id = 'todayList';
+      listDiv.style.padding = '20px';
+      listDiv.style.fontFamily = 'system-ui, sans-serif';
+      listDiv.style.fontSize = '14px';
+      listDiv.style.display = 'flex';
+      listDiv.style.flexDirection = 'column';
+      listDiv.style.gap = '8px';
 
-      const last = sorted[sorted.length - 1];
-      const prev = sorted.length > 1 ? sorted[sorted.length - 2] : last;
+      const rows = [];
+      const holdings = [...(this.stocks || []), ...(this.mutualFunds || [])];
 
-      const now = new Date();
-      const sameDayAsToday =
-        last.date.getFullYear() === now.getFullYear() &&
-        last.date.getMonth() === now.getMonth() &&
-        last.date.getDate() === now.getDate();
+      for (const h of holdings) {
+        const prev = Number(h.previousClose || 0);
+        const curr = Number(h.currentPrice || h.price || 0);
+        const shares = Number(h.shares || 0);
 
-      const baseDate = sameDayAsToday ? now : last.date;
-
-      function mk(h, m) {
-        return new Date(
-          baseDate.getFullYear(),
-          baseDate.getMonth(),
-          baseDate.getDate(),
-          h, m, 0, 0
-        );
-      }
-
-      const prevVal = prev.value;
-      const currVal = last.value;
-
-      const points = [
-        { x: mk(1, 0),   y: prevVal },
-        { x: mk(6, 30),  y: prevVal },
-        { x: mk(13, 0),  y: currVal },
-        { x: mk(17, 0),  y: currVal }
-      ];
-
-      const up = currVal >= prevVal;
-      const lineColor = up ? '#0f766e' : '#b91c1c';
-      const fillRgb   = up ? '15,118,110' : '185,28,28';
-
-      if (this.portfolioPerformanceChartInstance) {
-        this.portfolioPerformanceChartInstance.destroy();
-        this.portfolioPerformanceChartInstance = null;
-      }
-
-      const self = this;
-
-      const shadingPlugin = {
-        id: 'sessionShading',
-        beforeDraw(chart) {
-          const { ctx, chartArea, scales } = chart;
-          if (!chartArea) return;
-          const xScale = scales.x;
-          if (!xScale) return;
-
-          const preStart = mk(1, 0);
-          const mOpen    = mk(6, 30);
-          const mClose   = mk(13, 0);
-          const afterEnd = mk(17, 0);
-
-          const preStartPx = xScale.getPixelForValue(preStart);
-          const mOpenPx    = xScale.getPixelForValue(mOpen);
-          const mClosePx   = xScale.getPixelForValue(mClose);
-          const afterEndPx = xScale.getPixelForValue(afterEnd);
-
-          ctx.save();
-          ctx.fillStyle = self.isDarkMode
-            ? 'rgba(148,163,184,0.08)'
-            : 'rgba(148,163,184,0.10)';
-          ctx.fillRect(
-            preStartPx,
-            chartArea.top,
-            mOpenPx - preStartPx,
-            chartArea.bottom - chartArea.top
-          );
-
-          ctx.fillStyle = up
-            ? (self.isDarkMode ? 'rgba(15,118,110,0.10)' : 'rgba(16,185,129,0.10)')
-            : (self.isDarkMode ? 'rgba(185,28,28,0.10)' : 'rgba(248,113,113,0.10)');
-          ctx.fillRect(
-            mClosePx,
-            chartArea.top,
-            afterEndPx - mClosePx,
-            chartArea.bottom - chartArea.top
-          );
-
-          ctx.restore();
+        if (prev > 0 && curr > 0 && shares > 0) {
+          const prevVal = prev * shares;
+          const currVal = curr * shares;
+          const pl = currVal - prevVal;
+          const pct = prevVal ? (pl / prevVal * 100) : 0;
+          rows.push({ symbol: h.symbol, pl, pct });
         }
-      };
+      }
 
-      this.portfolioPerformanceChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-          datasets: [{
-            label: 'Portfolio Value',
-            data: points,
-            borderColor: lineColor,
-            borderWidth: 2,
-            pointRadius: 0,
-            fill: true,
-            backgroundColor: `rgba(${fillRgb},0.20)`,
-            tension: 0.4
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: 'index', intersect: false },
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: (ctx2) => {
-                  const v = ctx2.parsed.y;
-                  const delta = v - prevVal;
-                  const pct = prevVal ? (delta / prevVal * 100) : 0;
-                  const signDelta = delta >= 0 ? '+' : '';
-                  const signPct = pct >= 0 ? '+' : '';
-                  return `$${v.toFixed(2)}  (${signDelta}${delta.toFixed(2)}, ${signPct}${pct.toFixed(2)}%)`;
-                },
-                title: (items) => {
-                  if (!items.length) return '';
-                  const d = new Date(items[0].parsed.x);
-                  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-                }
-              }
-            }
-          },
-          scales: {
-            x: {
-              type: 'time',
-              time: { unit: 'hour' }
-            },
-            y: {
-              ticks: {
-                callback: (value) => {
-                  const n = Number(value) || 0;
-                  return self.formatCurrency
-                    ? self.formatCurrency(n)
-                    : ('$' + n.toLocaleString());
-                }
-              }
-            }
-          }
-        },
-        plugins: [shadingPlugin]
+      rows.sort((a, b) => b.pl - a.pl);
+
+      const limitSel = document.querySelector('#topMoversSelect');
+      const limit = limitSel ? Number(limitSel.value || 10) : 10;
+      const sliced = rows.slice(0, limit);
+
+      sliced.forEach(r => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.color = r.pl >= 0 ? '#16a34a' : '#dc2626';
+        row.textContent =
+          `${r.symbol}    ${r.pl >= 0 ? '+' : ''}$${r.pl.toFixed(2)}    ` +
+          `${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(2)}%`;
+        listDiv.appendChild(row);
       });
+
+      container.appendChild(listDiv);
     };
 
-    t._smartTodayPatchInstalled = true;
+    t._todayListPatchInstalled = true;
   }
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(installSmartTodayPatch, 500);
+    setTimeout(installTodayListPatch, 700);
   } else {
-    window.addEventListener('DOMContentLoaded', function(){
-      setTimeout(installSmartTodayPatch, 500);
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(installTodayListPatch, 700);
     });
   }
 })();
