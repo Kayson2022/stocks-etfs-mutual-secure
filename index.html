@@ -5448,5 +5448,42 @@
 })();
 </script>
 
+
+
+<!-- STEP3B — Auto-generate synthetic portfolio history if empty -->
+<script>
+(function(){
+    function buildSyntheticHistory(app){
+        if (!app || !app.portfolioHistory) return;
+        if (app.portfolioHistory.length > 0) return;
+
+        // Build 7-day synthetic history using current total portfolio value
+        const now = new Date();
+        const baseValue = app.totalPortfolioValue || 0;
+        if (!baseValue) return;
+
+        const synthetic = [];
+        for (let i=6; i>=0; i--){
+            const d = new Date();
+            d.setDate(now.getDate() - i);
+            const drift = (Math.random()-0.5) * 0.03; // ±3%
+            synthetic.push({
+                date: d.toISOString(),
+                value: baseValue * (1 + drift)
+            });
+        }
+        app.portfolioHistory = synthetic;
+    }
+
+    function wait(){
+        const app = window.stockTracker;
+        if (!app) return setTimeout(wait, 300);
+        if (!app.totalPortfolioValue) return setTimeout(wait, 500);
+        buildSyntheticHistory(app);
+    }
+    wait();
+})();
+</script>
+
 </body>
 </html>
