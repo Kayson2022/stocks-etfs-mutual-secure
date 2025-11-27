@@ -4290,6 +4290,8 @@
                                             const d = new Date(value);
                                             if (range === '1W') {
                                                 return d.toLocaleDateString(undefined, { weekday: 'short' });
+            window.__injectedPortfolioChartInstance = this.portfolioPerformanceChartInstance;
+
                                             }
                                             return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
                                         } catch(e) {
@@ -5066,6 +5068,9 @@
       }
     }
   };
+
+  if (typeof Chart !== 'undefined') { Chart.register(crosshairPlugin); }
+
 
   // Smooth animations utility
   function animateChart(chart) {
