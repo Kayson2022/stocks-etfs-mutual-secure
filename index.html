@@ -5450,226 +5450,217 @@
 
 
 <script>
-// STEP3A-TODAY-PORTFOLIO (PT intraday-style portfolio chart)
+// STEP3A-TODAY-PORTFOLIO-PT-FIXED
 (function() {
-  function buildPortfolioTodaySeries(tracker) {
-    try {
-      const hist = Array.isArray(tracker.portfolioHistory) ? tracker.portfolioHistory : [];
-      if (!hist.length) return null;
+  function attachTodayHelpers() {
+    if (typeof StockTracker === 'undefined') return;
+    if (StockTracker.prototype.buildPortfolioTodaySeries) return; // already attached
 
-      const today = new Date();
-      const todayStr = today.toISOString().slice(0,10);
+    StockTracker.prototype.buildPortfolioTodaySeries = function() {
+      try {
+        const hist = Array.isArray(this.portfolioHistory) ? this.portfolioHistory : [];
+        if (!hist.length) return null;
 
-      // Find latest entry and base (previous day)
-      const last = hist[hist.length - 1];
-      const lastDate = new Date(last.date);
-      const lastDateStr = lastDate.toISOString().slice(0,10);
-      let baseEntry = hist.length > 1 ? hist[hist.length - 2] : last;
+        const today = new Date();
+        const todayStr = today.toISOString().slice(0,10);
 
-      // If latest is not today (e.g. after hours before history save), treat latest as baseline
-      const isToday = (lastDateStr === todayStr);
-      const baseVal = Number(
-        (!isToday && (last.value || last.totalValue)) ||
-        baseEntry.value || baseEntry.totalValue || 0
-      ) || 0;
+        const last = hist[hist.length - 1];
+        const lastDate = new Date(last.date);
+        const lastDateStr = lastDate.toISOString().slice(0,10);
+        let baseEntry = hist.length > 1 ? hist[hist.length - 2] : last;
 
-      const currentVal = Number(
-        (isToday && (last.value || last.totalValue)) ||
-        tracker.totalPortfolioValue ||
-        tracker.combinedTotal ||
-        baseVal
-      ) || baseVal;
+        const isToday = (lastDateStr === todayStr);
+        const baseVal = Number(
+          (!isToday && (last.value || last.totalValue)) ||
+          baseEntry.value || baseEntry.totalValue || 0
+        ) || 0;
 
-      // Build deterministic PT intraday-style path from 1:00 AM PT to 5:00 PM PT
-      const start = new Date();
-      start.setHours(1, 0, 0, 0);   // 1:00 AM PT (pre-market)
-      const end = new Date();
-      end.setHours(17, 0, 0, 0);    // 5:00 PM PT (post-market wrap)
+        const currentVal = Number(
+          (isToday && (last.value || last.totalValue)) ||
+          this.totalPortfolioValue ||
+          this.combinedTotal ||
+          baseVal
+        ) || baseVal;
 
-      const stepMinutes = 15;
-      const msStep = stepMinutes * 60 * 1000;
-      const totalSteps = Math.round((end.getTime() - start.getTime()) / msStep);
+        // 1:00 AM PT to 5:00 PM PT in 15-minute steps
+        const start = new Date();
+        start.setHours(1, 0, 0, 0);
+        const end = new Date();
+        end.setHours(17, 0, 0, 0);
 
-      const points = [];
-      for (let i = 0; i <= totalSteps; i++) {
-        const t = new Date(start.getTime() + i * msStep);
-        let y;
-        if (t <= start) {
-          y = baseVal;
-        } else if (t >= end) {
-          y = currentVal;
-        } else {
-          const ratio = (t.getTime() - start.getTime()) / (end.getTime() - start.getTime());
-          y = baseVal + (currentVal - baseVal) * ratio;
+        const stepMinutes = 15;
+        const msStep = stepMinutes * 60 * 1000;
+        const totalSteps = Math.round((end.getTime() - start.getTime()) / msStep);
+
+        const points = [];
+        for (let i = 0; i <= totalSteps; i++) {
+          const t = new Date(start.getTime() + i * msStep);
+          let y;
+          if (t <= start) {
+            y = baseVal;
+          } else if (t >= end) {
+            y = currentVal;
+          } else {
+            const ratio = (t.getTime() - start.getTime()) / (end.getTime() - start.getTime());
+            y = baseVal + (currentVal - baseVal) * ratio;
+          }
+          points.push({ x: t, y });
         }
-        points.push({ x: t, y });
+
+        return { points, baselineVal: baseVal };
+      } catch (e) {
+        console.warn('buildPortfolioTodaySeries failed:', e);
+        return null;
       }
+    };
 
-      return { points, baselineVal: baseVal };
-    } catch (e) {
-      console.warn('buildPortfolioTodaySeries failed:', e);
-      return null;
-    }
-  }
+    StockTracker.prototype.renderTodayPortfolioLineChart = function() {
+      const wrapper = this.elements && this.elements.historicalChartWrapper;
+      if (!wrapper || !this.elements.portfolioPerformanceChart) return;
+      const canvas = this.elements.portfolioPerformanceChart;
+      const ctx = canvas.getContext('2d');
 
-  function renderTodayPortfolioLineChart(tracker) {
-    const wrapper = tracker.elements && tracker.elements.historicalChartWrapper;
-    if (!wrapper || !tracker.elements.portfolioPerformanceChart) return;
-    const canvas = tracker.elements.portfolioPerformanceChart;
-    const ctx = canvas.getContext('2d');
-
-    const series = buildPortfolioTodaySeries(tracker);
-    if (!series || !series.points || !series.points.length) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.textAlign = 'center';
-      ctx.fillStyle = tracker.isDarkMode ? '#adb5bd' : '#6c757d';
-      ctx.font = "16px 'Inter', sans-serif";
-      ctx.fillText('No intraday portfolio data available.', canvas.width / 2, canvas.height / 2 - 10);
-      return;
-    }
-
-    if (tracker.portfolioPerformanceChartInstance) {
-      tracker.portfolioPerformanceChartInstance.destroy();
-      tracker.portfolioPerformanceChartInstance = null;
-    }
-
-    const lineRgb = window.getRgbColor ? window.getRgbColor('--chart-line-color') : '#1f78ff';
-    const fillRgb = window.getRgbColor ? window.getRgbColor('--chart-fill-color-rgb') : '31, 120, 255';
-    const gridColor = tracker.isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)';
-    const labelColor = tracker.isDarkMode ? '#e2e8f0' : '#475569';
-
-    tracker.portfolioPerformanceChartInstance = new Chart(ctx, {
-      type: 'line',
-      data: {
-        datasets: [
-          {
-            label: "Portfolio Value ($)",
-            data: series.points,
-            borderColor: lineRgb,
-            borderWidth: 2,
-            pointRadius: 0,
-            fill: true,
-            backgroundColor: `rgba(${fillRgb},0.15)`,
-            tension: 0.35
-          },
-          {
-            label: "Prev Close",
-            data: [
-              { x: series.points[0].x, y: series.baselineVal },
-              { x: series.points[series.points.length - 1].x, y: series.baselineVal }
-            ],
-            borderColor: 'rgba(148,163,184,0.9)',
-            borderWidth: 1,
-            borderDash: [4, 4],
-            pointRadius: 0,
-            fill: false
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            mode: 'index',
-            intersect: false,
-            callbacks: {
-              label: (ctx) => {
-                if (ctx.datasetIndex !== 0) return '';
-                const val = ctx.parsed.y;
-                const delta = val - series.baselineVal;
-                const pct = series.baselineVal ? (delta / series.baselineVal) * 100 : 0;
-                const sign = delta > 0 ? '+' : '';
-                const cur = tracker.formatCurrency ? tracker.formatCurrency(val) : ('$' + val.toFixed(2));
-                const dStr = sign + delta.toFixed(2);
-                const pStr = sign + pct.toFixed(2) + '%';
-                return ` ${cur} (${dStr}, ${pStr})`;
-              },
-              title: (items) => {
-                if (!items.length) return '';
-                const d = new Date(items[0].parsed.x);
-                return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            type: 'time',
-            time: {
-              unit: 'hour',
-              displayFormats: { hour: 'ha' }
-            },
-            ticks: {
-              color: labelColor
-            },
-            grid: {
-              color: gridColor
-            }
-          },
-          y: {
-            ticks: {
-              color: labelColor,
-              callback: (value) => {
-                const n = Number(value) || 0;
-                return tracker.formatCurrency ? tracker.formatCurrency(n) : ('$' + n.toLocaleString());
-              }
-            },
-            grid: {
-              color: gridColor
-            }
-          }
-        }
-      }
-    });
-  }
-
-  function installTodayPatch() {
-    const tracker = window.stockTracker;
-    if (!tracker || tracker._todayPortfolioPatched) return;
-    if (typeof tracker.renderPortfolioPerformanceChart !== 'function') return;
-
-    const original = tracker.renderPortfolioPerformanceChart.bind(tracker);
-
-    tracker.renderPortfolioPerformanceChart = function(range) {
-      const r = range || 'BAR_TODAY';
-      const isToday = (r === 'BAR_TODAY' || r === 'TODAY' || r === 'INTRADAY');
-
-      if (isToday) {
-        // Let original handle container visibility, active button state, etc.
-        original(r);
-
-        // Force historical wrapper visible, bar wrapper hidden
-        if (this.elements && this.elements.historicalChartWrapper) {
-          this.elements.historicalChartWrapper.style.display = 'block';
-        }
-        if (this.elements && this.elements.barChartWrapper) {
-          this.elements.barChartWrapper.style.display = 'none';
-        }
-        if (this.elements && this.elements.portfolioChartTitle) {
-          this.elements.portfolioChartTitle.textContent = 'Portfolio Today (PT)';
-        }
-
-        // Draw the intraday-style portfolio line on the historical canvas
-        renderTodayPortfolioLineChart(this);
-
+      const series = this.buildPortfolioTodaySeries();
+      if (!series || !series.points || !series.points.length) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
+        ctx.font = "16px 'Inter', sans-serif";
+        ctx.fillText('No intraday portfolio data available.', canvas.width / 2, canvas.height / 2 - 10);
         return;
       }
 
-      // Non-today ranges: use original behavior
-      return original(r);
+      if (this.portfolioPerformanceChartInstance) {
+        this.portfolioPerformanceChartInstance.destroy();
+        this.portfolioPerformanceChartInstance = null;
+      }
+
+      const lineColor = (window.getComputedStyle && canvas)
+        ? getComputedStyle(document.documentElement).getPropertyValue('--chart-line-color').trim() || '#1f78ff'
+        : '#1f78ff';
+
+      const fillRgb = '31, 120, 255';
+      const gridColor = this.isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)';
+      const labelColor = this.isDarkMode ? '#e2e8f0' : '#475569';
+
+      this.portfolioPerformanceChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [
+            {
+              label: "Portfolio Value ($)",
+              data: series.points,
+              borderColor: lineColor,
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: true,
+              backgroundColor: `rgba(${fillRgb},0.15)`,
+              tension: 0.35
+            },
+            {
+              label: "Prev Close",
+              data: [
+                { x: series.points[0].x, y: series.baselineVal },
+                { x: series.points[series.points.length - 1].x, y: series.baselineVal }
+              ],
+              borderColor: 'rgba(148,163,184,0.9)',
+              borderWidth: 1,
+              borderDash: [4, 4],
+              pointRadius: 0,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              callbacks: {
+                label: (ctx) => {
+                  if (ctx.datasetIndex !== 0) return '';
+                  const val = ctx.parsed.y;
+                  const delta = val - series.baselineVal;
+                  const pct = series.baselineVal ? (delta / series.baselineVal) * 100 : 0;
+                  const sign = delta > 0 ? '+' : '';
+                  const cur = this.formatCurrency ? this.formatCurrency(val) : ('$' + val.toFixed(2));
+                  const dStr = sign + delta.toFixed(2);
+                  const pStr = sign + pct.toFixed(2) + '%';
+                  return ` ${cur} (${dStr}, ${pStr})`;
+                },
+                title: (items) => {
+                  if (!items.length) return '';
+                  const d = new Date(items[0].parsed.x);
+                  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'hour',
+                displayFormats: { hour: 'ha' }
+              },
+              ticks: { color: labelColor },
+              grid: { color: gridColor }
+            },
+            y: {
+              ticks: {
+                color: labelColor,
+                callback: (value) => {
+                  const n = Number(value) || 0;
+                  return this.formatCurrency ? this.formatCurrency(n) : ('$' + n.toLocaleString());
+                }
+              },
+              grid: { color: gridColor }
+            }
+          }
+        }
+      });
     };
 
-    tracker._todayPortfolioPatched = true;
+    // Now override renderPortfolioPerformanceChart to use our TODAY renderer
+    const proto = StockTracker.prototype;
+    if (!proto._todayPortfolioPatchedV2) {
+      const original = proto.renderPortfolioPerformanceChart;
+      proto.renderPortfolioPerformanceChart = function(range) {
+        const r = range || 'BAR_TODAY';
+        const isToday = (r === 'BAR_TODAY' || r === 'TODAY' || r === 'INTRADAY');
+        if (isToday) {
+          // keep existing UI state behavior
+          if (typeof original === 'function') {
+            original.call(this, r);
+          }
+          // enforce historical chart canvas
+          if (this.elements && this.elements.historicalChartWrapper) {
+            this.elements.historicalChartWrapper.style.display = 'block';
+          }
+          if (this.elements && this.elements.barChartWrapper) {
+            this.elements.barChartWrapper.style.display = 'none';
+          }
+          if (this.elements && this.elements.portfolioChartTitle) {
+            this.elements.portfolioChartTitle.textContent = 'Portfolio Today (PT)';
+          }
+          this.renderTodayPortfolioLineChart();
+          return;
+        }
+        return typeof original === 'function' ? original.call(this, r) : undefined;
+      };
+      proto._todayPortfolioPatchedV2 = true;
+    }
   }
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(installTodayPatch, 800);
+    setTimeout(attachTodayHelpers, 800);
   } else {
     document.addEventListener('DOMContentLoaded', function() {
-      setTimeout(installTodayPatch, 800);
+      setTimeout(attachTodayHelpers, 800);
     });
   }
 })();
