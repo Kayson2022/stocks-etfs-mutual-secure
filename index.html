@@ -5841,5 +5841,74 @@
 })();
 </script>
 
+<script>
+// STEP6: Aggregated portfolio helpers for Today / 1W / 1M
+// These are lightweight wrappers that compute totals using existing history & metrics.
+
+if (typeof StockTracker !== 'undefined') {
+  // Total P/L Today in dollars, using existing calculateSummaryMetrics
+  StockTracker.prototype.getTotalPLToday = function() {
+    try {
+      const stockMetrics = this.calculateSummaryMetrics ? this.calculateSummaryMetrics(this.stocks || []) : { totalPLToday: 0 };
+      const fundMetrics  = this.calculateSummaryMetrics ? this.calculateSummaryMetrics(this.mutualFunds || []) : { totalPLToday: 0 };
+      const total = (stockMetrics.totalPLToday || 0) + (fundMetrics.totalPLToday || 0);
+      this.totalPLToday = total;
+      return total;
+    } catch (e) {
+      console.warn('getTotalPLToday failed:', e);
+      return this.totalPLToday || 0;
+    }
+  };
+
+  // Helper to compute percent change between latest value and a value N days ago from portfolioHistory
+  StockTracker.prototype._computeRangePercent = function(daysBack) {
+    try {
+      const hist = this.portfolioHistory || [];
+      if (!hist.length) return 0;
+
+      // Assume entries are in chronological order with date in YYYY-MM-DD
+      const parseDate = (d) => (d instanceof Date ? d : new Date(d));
+      const now = new Date();
+      const cutoff = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
+
+      let baseEntry = hist[0];
+      for (let i = 0; i < hist.length; i++) {
+        const d = parseDate(hist[i].date);
+        if (d >= cutoff) {
+          baseEntry = hist[i];
+          break;
+        }
+      }
+
+      const latest = hist[hist.length - 1];
+      const baseVal   = Number(baseEntry.value || baseEntry.totalValue || 0);
+      const latestVal = Number(latest.value || latest.totalValue || 0);
+      if (!isFinite(baseVal) || baseVal <= 0 || !isFinite(latestVal)) return 0;
+
+      const pct = ((latestVal - baseVal) / baseVal) * 100;
+      return pct;
+    } catch (e) {
+      console.warn('_computeRangePercent failed:', e);
+      return 0;
+    }
+  };
+
+  // 1W percent based on portfolioHistory
+  StockTracker.prototype.getWeekPercent = function() {
+    const pct = this._computeRangePercent(7);
+    this.weekPercent = pct;
+    return pct;
+  };
+
+  // 1M percent based on portfolioHistory (~30 days)
+  StockTracker.prototype.getMonthPercent = function() {
+    const pct = this._computeRangePercent(30);
+    this.monthPercent = pct;
+    return pct;
+  };
+}
+
+</script>
 </body>
 </html>
+
