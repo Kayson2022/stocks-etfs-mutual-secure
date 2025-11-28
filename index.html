@@ -1161,12 +1161,13 @@
         /* === END CHART STYLES === */
     </style>
 
-<!-- Hide TODAY button and bottom Top Movers UI -->
 <style>
-button[data-range="today"],
-.chart-range-item.today,
+button.chart-range-btn[data-range="BAR_TODAY"] {
+    display: none !important;
+}
 #topMoversSelect,
 label[for="topMoversSelect"],
+.top-movers-control,
 .bottom-top-movers,
 .bottom-top-movers-container,
 .top-movers-container {
