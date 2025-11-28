@@ -1175,6 +1175,20 @@ label[for="topMoversSelect"],
 }
 </style>
 
+
+<style>
+button.chart-range-btn[data-range="6M"],
+button.chart-range-btn[data-range="YTD"],
+button.chart-range-btn[data-range="1Y"],
+button.chart-range-btn[data-range="3Y"],
+button.chart-range-btn[data-range="5Y"],
+button.chart-range-btn[data-range="ALL"] {
+    opacity: 0.3 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+</style>
+
 </head>
 <body>
     <!-- 
@@ -6007,26 +6021,31 @@ label[for="topMoversSelect"],
 
 
 <script>
-// Chart Enhancement Patch v10 (A+B1+C+E)
+// Chart Enhancement Patch v11 (A+B1+C+E)
 (function() {
   function enhance() {
     const t = window.stockTracker;
-    if (!t || t._v10Enhanced) return;
+    if (!t || t._v11Enhanced) return;
     const proto = t.constructor && t.constructor.prototype;
     if (!proto) return;
     const orig = proto.renderPortfolioPerformanceChart;
+    if (typeof orig !== 'function') return;
 
     proto.renderPortfolioPerformanceChart = function(range) {
       const els = this.elements || {};
       const canvas = els.portfolioPerformanceChart;
-      if (!canvas) return orig.call(this, range);
-
-      const ctx = canvas.getContext('2d');
+      // Call original first
       const res = orig.call(this, range);
 
+      if (!canvas) return res;
       const inst = this.portfolioPerformanceChartInstance;
       if (inst && inst.config && inst.config.data && inst.config.data.datasets) {
-        inst.options.interaction = { mode: 'index', intersect: false };
+        // Hover behavior (B1)
+        inst.options.interaction = inst.options.interaction || {};
+        inst.options.interaction.mode = 'index';
+        inst.options.interaction.intersect = false;
+
+        // Dots & curve (A + C)
         inst.config.data.datasets.forEach(ds => {
           ds.pointRadius = 3;
           ds.pointHoverRadius = 6;
@@ -6035,23 +6054,30 @@ label[for="topMoversSelect"],
           ds.pointBorderWidth = 1;
           ds.tension = 0.35;
         });
+
+        // X-axis grid (E)
         if (inst.options.scales && inst.options.scales.x) {
-          inst.options.scales.x.grid = {
-            display: true,
-            drawTicks: true,
-            color: 'rgba(255,255,255,0.07)'
-          };
+          const gx = inst.options.scales.x.grid || {};
+          gx.display = true;
+          gx.drawTicks = true;
+          gx.color = 'rgba(255,255,255,0.07)';
+          inst.options.scales.x.grid = gx;
         }
+
         inst.update();
       }
       return res;
     };
-    t._v10Enhanced = true;
+    t._v11Enhanced = true;
   }
-  if (document.readyState === 'complete' || document.readyState === 'interactive')
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
     setTimeout(enhance, 500);
-  else
-    window.addEventListener('DOMContentLoaded', ()=>setTimeout(enhance,500));
+  } else {
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(enhance, 500);
+    });
+  }
 })();
 </script>
 </body>
