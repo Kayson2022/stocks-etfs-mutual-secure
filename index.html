@@ -1160,21 +1160,6 @@
         }
         /* === END CHART STYLES === */
     </style>
-
-<style>
-button.chart-range-btn[data-range="BAR_TODAY"] {
-    display: none !important;
-}
-#topMoversSelect,
-label[for="topMoversSelect"],
-.top-movers-control,
-.bottom-top-movers,
-.bottom-top-movers-container,
-.top-movers-container {
-    display: none !important;
-}
-</style>
-
 </head>
 <body>
     <!-- 
@@ -6005,5 +5990,54 @@ label[for="topMoversSelect"],
 })();
 </script>
 
+
+<script>
+// Chart Enhancement Patch v9 (A+B1+C+E)
+(function() {
+  function enhance() {
+    const t = window.stockTracker;
+    if (!t || t._v9Enhanced) return;
+    const proto = t.constructor && t.constructor.prototype;
+    if (!proto) return;
+    const orig = proto.renderPortfolioPerformanceChart;
+
+    proto.renderPortfolioPerformanceChart = function(range) {
+      const els = this.elements || {};
+      const canvas = els.portfolioPerformanceChart;
+      if (!canvas) return orig.call(this, range);
+
+      const ctx = canvas.getContext('2d');
+      const res = orig.call(this, range);
+
+      const inst = this.portfolioPerformanceChartInstance;
+      if (inst && inst.config && inst.config.data && inst.config.data.datasets) {
+        inst.options.interaction = { mode: 'index', intersect: false };
+        inst.config.data.datasets.forEach(ds => {
+          ds.pointRadius = 3;
+          ds.pointHoverRadius = 6;
+          ds.pointBackgroundColor = '#ffffff';
+          ds.pointBorderColor = '#ffffff';
+          ds.pointBorderWidth = 1;
+          ds.tension = 0.35;
+        });
+        if (inst.options.scales && inst.options.scales.x) {
+          inst.options.scales.x.grid = {
+            display: true,
+            drawTicks: true,
+            color: 'rgba(255,255,255,0.07)'
+          };
+        }
+        inst.update();
+      }
+      return res;
+    };
+    t._v9Enhanced = true;
+  }
+  if (document.readyState === 'complete' || document.readyState === 'interactive')
+    setTimeout(enhance, 500);
+  else
+    window.addEventListener('DOMContentLoaded', ()=>setTimeout(enhance,500));
+})();
+</script>
 </body>
 </html>
