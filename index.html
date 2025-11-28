@@ -6021,61 +6021,111 @@ button.chart-range-btn[data-range="ALL"] {
 
 
 <script>
-// Chart Enhancement Patch v11 (A+B1+C+E)
+// Chart Enhancement Patch v12 (A+B1+C+E + range persistence)
 (function() {
-  function enhance() {
-    const t = window.stockTracker;
-    if (!t || t._v11Enhanced) return;
-    const proto = t.constructor && t.constructor.prototype;
-    if (!proto) return;
-    const orig = proto.renderPortfolioPerformanceChart;
-    if (typeof orig !== 'function') return;
+  function enhanceCharts() {
+    try {
+      const t = window.stockTracker;
+      if (!t || t._v12Enhanced) return;
+      const proto = t.constructor && t.constructor.prototype;
+      if (!proto) return;
+      const originalRender = proto.renderPortfolioPerformanceChart;
+      if (typeof originalRender !== 'function') return;
 
-    proto.renderPortfolioPerformanceChart = function(range) {
-      const els = this.elements || {};
-      const canvas = els.portfolioPerformanceChart;
-      // Call original first
-      const res = orig.call(this, range);
+      // Wrap renderPortfolioPerformanceChart to respect saved range
+      proto.renderPortfolioPerformanceChart = function(range) {
+        let saved = null;
+        try {
+          if (typeof localStorage !== 'undefined') {
+            saved = localStorage.getItem('portfolioChartRange');
+          }
+        } catch (e) {}
+        if (!saved) saved = '1W';
 
-      if (!canvas) return res;
-      const inst = this.portfolioPerformanceChartInstance;
-      if (inst && inst.config && inst.config.data && inst.config.data.datasets) {
-        // Hover behavior (B1)
-        inst.options.interaction = inst.options.interaction || {};
-        inst.options.interaction.mode = 'index';
-        inst.options.interaction.intersect = false;
+        const effectiveRange = (range == null || range === '') ? saved : range;
+        const res = originalRender.call(this, effectiveRange);
 
-        // Dots & curve (A + C)
-        inst.config.data.datasets.forEach(ds => {
-          ds.pointRadius = 3;
-          ds.pointHoverRadius = 6;
-          ds.pointBackgroundColor = '#ffffff';
-          ds.pointBorderColor = '#ffffff';
-          ds.pointBorderWidth = 1;
-          ds.tension = 0.35;
+        const inst = this.portfolioPerformanceChartInstance;
+        if (inst && inst.config && inst.config.data && inst.config.data.datasets) {
+          // Interaction (B1)
+          inst.options.interaction = inst.options.interaction || {};
+          inst.options.interaction.mode = 'index';
+          inst.options.interaction.intersect = false;
+
+          // Points & curve (A + C)
+          inst.config.data.datasets.forEach(ds => {
+            ds.pointRadius = 3;
+            ds.pointHoverRadius = 6;
+            ds.pointBackgroundColor = '#ffffff';
+            ds.pointBorderColor = '#ffffff';
+            ds.pointBorderWidth = 1;
+            ds.tension = 0.35;
+          });
+
+          // X grid (E)
+          if (inst.options.scales && inst.options.scales.x) {
+            const gx = inst.options.scales.x.grid || {};
+            gx.display = true;
+            gx.drawTicks = true;
+            gx.color = 'rgba(255,255,255,0.07)';
+            inst.options.scales.x.grid = gx;
+          }
+
+          inst.update();
+        }
+        return res;
+      };
+
+      // Attach button listeners + default range logic
+      function wireButtons() {
+        const container = document.getElementById('performance-chart-controls') || document;
+        const buttons = container.querySelectorAll('.chart-range-btn');
+        if (!buttons.length) return;
+
+        // Remember selection
+        buttons.forEach(btn => {
+          btn.addEventListener('click', () => {
+            const r = btn.getAttribute('data-range');
+            if (!r) return;
+            try {
+              if (typeof localStorage !== 'undefined') {
+                localStorage.setItem('portfolioChartRange', r);
+              }
+            } catch (e) {}
+          }, false);
         });
 
-        // X-axis grid (E)
-        if (inst.options.scales && inst.options.scales.x) {
-          const gx = inst.options.scales.x.grid || {};
-          gx.display = true;
-          gx.drawTicks = true;
-          gx.color = 'rgba(255,255,255,0.07)';
-          inst.options.scales.x.grid = gx;
-        }
+        // Ensure saved range exists; default to 1W on very first load
+        let savedRange = '1W';
+        try {
+          if (typeof localStorage !== 'undefined') {
+            const existing = localStorage.getItem('portfolioChartRange');
+            if (existing) savedRange = existing;
+            else localStorage.setItem('portfolioChartRange', savedRange);
+          }
+        } catch (e) {}
 
-        inst.update();
+        // Sync UI to saved range (1W on first ever load)
+        const target = Array.from(buttons).find(
+          b => b.getAttribute('data-range') === savedRange
+        );
+        if (target && !target.classList.contains('active')) {
+          target.click();
+        }
       }
-      return res;
-    };
-    t._v11Enhanced = true;
+
+      setTimeout(wireButtons, 800);
+      t._v12Enhanced = true;
+    } catch (e) {
+      console.warn('v12 chart enhancement failed:', e);
+    }
   }
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(enhance, 500);
+    setTimeout(enhanceCharts, 600);
   } else {
     window.addEventListener('DOMContentLoaded', function() {
-      setTimeout(enhance, 500);
+      setTimeout(enhanceCharts, 600);
     });
   }
 })();
