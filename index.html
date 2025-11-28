@@ -1160,6 +1160,20 @@
         }
         /* === END CHART STYLES === */
     </style>
+
+<!-- Hide TODAY button and bottom top-movers dropdown -->
+<style>
+button[data-range="today"],
+.chart-range-buttons button[data-range="today"] {
+    display:none !important;
+}
+#bottomTopMoversSelector,
+.bottom-top-movers,
+.bottom-top-movers-container {
+    display:none !important;
+}
+</style>
+
 </head>
 <body>
     <!-- 
@@ -5990,116 +6004,5 @@
 })();
 </script>
 
-
-<script>
-// TODAY LIST MODE v5 - treat any non-historical range as "Today"
-(function() {
-  function installTodayListPatch() {
-    const t = window.stockTracker;
-    if (!t || t._todayListPatchInstalled_v5) return;
-    const proto = t.constructor && t.constructor.prototype;
-    if (!proto) return;
-
-    const originalRender = proto.renderPortfolioPerformanceChart;
-
-    proto.renderPortfolioPerformanceChart = function(range) {
-      const els = this.elements || {};
-      const container = els.portfolioPerformanceChartContainer || (els.portfolioPerformanceChart && els.portfolioPerformanceChart.parentElement);
-      const canvas = els.portfolioPerformanceChart;
-
-      const norm = (range == null ? '' : String(range)).toUpperCase();
-      const historicalRanges = ['1W','1M','3M','6M','YTD','1Y','3Y','5Y','ALL','MAX','ALL_TIME'];
-
-      const isHistorical = historicalRanges.includes(norm);
-
-      // Historical ranges keep original chart
-      if (isHistorical) {
-        const list = document.getElementById('todayList');
-        if (list) list.remove();
-        if (canvas) canvas.style.display = '';
-        if (typeof originalRender === 'function') {
-          return originalRender.call(this, range);
-        }
-        return;
-      }
-
-      // Any non-historical range -> treat as TODAY list mode
-      if (!container) {
-        if (typeof originalRender === 'function') {
-          return originalRender.call(this, range);
-        }
-        return;
-      }
-
-      // Hide the canvas; show list instead
-      if (canvas) canvas.style.display = 'none';
-      const existing = document.getElementById('todayList');
-      if (existing) existing.remove();
-
-      const listDiv = document.createElement('div');
-      listDiv.id = 'todayList';
-      listDiv.style.padding = '20px';
-      listDiv.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-      listDiv.style.fontSize = '14px';
-      listDiv.style.display = 'flex';
-      listDiv.style.flexDirection = 'column';
-      listDiv.style.gap = '8px';
-
-      const holdings = [...(this.stocks || []), ...(this.mutualFunds || [])];
-      const rows = [];
-
-      for (const h of holdings) {
-        const prev = Number(h.previousClose || 0);
-        const curr = Number(h.currentPrice || h.price || 0);
-        const shares = Number(h.shares || 0);
-
-        if (prev > 0 && curr > 0 && shares > 0) {
-          const prevVal = prev * shares;
-          const currVal = curr * shares;
-          const pl = currVal - prevVal;
-          const pct = prevVal ? (pl / prevVal * 100) : 0;
-          rows.push({ symbol: h.symbol, pl, pct });
-        }
-      }
-
-      rows.sort((a, b) => b.pl - a.pl);
-
-      const limitSel = document.querySelector('#topMoversSelect');
-      const limit = limitSel ? Number(limitSel.value || 10) : 10;
-      const sliced = rows.slice(0, limit);
-
-      if (!sliced.length) {
-        const empty = document.createElement('div');
-        empty.textContent = 'No today performance data available.';
-        empty.style.color = '#9ca3af';
-        listDiv.appendChild(empty);
-      } else {
-        sliced.forEach(r => {
-          const row = document.createElement('div');
-          row.style.display = 'flex';
-          row.style.justifyContent = 'space-between';
-          row.style.color = r.pl >= 0 ? '#16a34a' : '#dc2626';
-          row.textContent =
-            `${r.symbol}    ${r.pl >= 0 ? '+' : ''}$${r.pl.toFixed(2)}    ` +
-            `${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(2)}%`;
-          listDiv.appendChild(row);
-        });
-      }
-
-      container.appendChild(listDiv);
-    };
-
-    t._todayListPatchInstalled_v5 = true;
-  }
-
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(installTodayListPatch, 700);
-  } else {
-    window.addEventListener('DOMContentLoaded', function() {
-      setTimeout(installTodayListPatch, 700);
-    });
-  }
-})();
-</script>
 </body>
 </html>
