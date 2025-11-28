@@ -1160,6 +1160,21 @@
         }
         /* === END CHART STYLES === */
     </style>
+
+<style>
+button.chart-range-btn[data-range="BAR_TODAY"] {
+    display: none !important;
+}
+#topMoversSelect,
+label[for="topMoversSelect"],
+.top-movers-control,
+.bottom-top-movers,
+.bottom-top-movers-container,
+.top-movers-container {
+    display: none !important;
+}
+</style>
+
 </head>
 <body>
     <!-- 
@@ -5992,11 +6007,11 @@
 
 
 <script>
-// Chart Enhancement Patch v9 (A+B1+C+E)
+// Chart Enhancement Patch v10 (A+B1+C+E)
 (function() {
   function enhance() {
     const t = window.stockTracker;
-    if (!t || t._v9Enhanced) return;
+    if (!t || t._v10Enhanced) return;
     const proto = t.constructor && t.constructor.prototype;
     if (!proto) return;
     const orig = proto.renderPortfolioPerformanceChart;
@@ -6031,7 +6046,7 @@
       }
       return res;
     };
-    t._v9Enhanced = true;
+    t._v10Enhanced = true;
   }
   if (document.readyState === 'complete' || document.readyState === 'interactive')
     setTimeout(enhance, 500);
