@@ -6505,5 +6505,118 @@ button.chart-range-btn[data-range="ALL"] {
   }
 })();
 </script>
+
+<script>
+// v17: Extend mutual-fund-only pipeline with MarketStack as final fallback (FMP -> AlphaVantage -> MarketStack)
+(function() {
+  function installV17MarketStack() {
+    try {
+      const t = window.stockTracker;
+      if (!t || !t.apiService || t._v17MarketStackAdded) return;
+      const svc = t.apiService;
+      const proto = svc.constructor && svc.constructor.prototype;
+      if (!proto) return;
+
+      const MS_KEY = '3b3fb7178c2850cf2644b4b50577e052';
+
+      const oldMF = proto.fetchMutualFundDataWithFallback;
+      if (typeof oldMF !== 'function') {
+        console.warn('v17: no existing fetchMutualFundDataWithFallback to wrap');
+        return;
+      }
+
+      proto.fetchMutualFundDataWithFallback = async function(symbol) {
+        // First, use existing FMP -> AlphaVantage pipeline
+        let result;
+        try {
+          result = await oldMF.call(this, symbol);
+        } catch (e) {
+          result = { success: false, symbol: symbol, reason: 'Legacy MF pipeline threw: ' + (e && e.message ? e.message : e) };
+        }
+
+        // If legacy pipeline succeeded, return as-is
+        if (result && result.success) return result;
+
+        // Legacy pipeline failed, try MarketStack as final fallback
+        try {
+          let clean = (symbol || '').toString().trim().replace(/[^A-Za-z0-9.]/g, '').toUpperCase();
+          const msUrl = 'https://api.marketstack.com/v1/eod?access_key=' + encodeURIComponent(MS_KEY) +
+                        '&symbols=' + encodeURIComponent(clean);
+          const r = await fetch(msUrl);
+          if (!r.ok) {
+            return {
+              success: false,
+              symbol: clean,
+              reason: (result && result.reason ? result.reason + '; ' : '') + 'MarketStack HTTP ' + r.status
+            };
+          }
+          const j = await r.json();
+          if (!j || !Array.isArray(j.data) || j.data.length === 0) {
+            return {
+              success: false,
+              symbol: clean,
+              reason: (result && result.reason ? result.reason + '; ' : '') + 'MarketStack empty data'
+            };
+          }
+
+          // MarketStack returns most-recent first, so [0] = latest, [1] = previous
+          const last = j.data[0];
+          const prev = j.data[1] || null;
+          const price = Number(last.close);
+          let change = null;
+          let percent = null;
+
+          if (prev && isFinite(price) && isFinite(Number(prev.close)) && Number(prev.close) > 0) {
+            const prevClose = Number(prev.close);
+            change = price - prevClose;
+            percent = (change / prevClose) * 100;
+          }
+
+          if (!isFinite(price)) {
+            return {
+              success: false,
+              symbol: clean,
+              reason: (result && result.reason ? result.reason + '; ' : '') + 'MarketStack invalid close price'
+            };
+          }
+
+          return {
+            success: true,
+            symbol: clean,
+            data: {
+              price: price,
+              change: change,
+              percent: percent,
+              timestamp: last.date || null,
+              source: 'MarketStack',
+              raw: j
+            }
+          };
+        } catch (e) {
+          return {
+            success: false,
+            symbol: symbol,
+            reason: (result && result.reason ? result.reason + '; ' : '') +
+                    'MarketStack error: ' + (e && e.message ? e.message : String(e))
+          };
+        }
+      };
+
+      t._v17MarketStackAdded = true;
+      console.log('v17: MarketStack fallback added after FMP -> AlphaVantage pipeline');
+    } catch (e) {
+      console.warn('v17 marketstack wrapper failed:', e);
+    }
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(installV17MarketStack, 950);
+  } else {
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(installV17MarketStack, 950);
+    });
+  }
+})();
+</script>
 </body>
 </html>
