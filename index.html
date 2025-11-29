@@ -6220,5 +6220,110 @@ button.chart-range-btn[data-range="ALL"] {
   }
 })();
 </script>
+
+<script>
+// v15: Yahoo mutual funds via AllOrigins proxy (api.allorigins.win/raw) with symbol cleanup
+(function() {
+  function installYahooFundsAllOrigins() {
+    try {
+      const t = window.stockTracker;
+      if (!t || !t.apiService || t._v15YahooFundsInstalled) return;
+      const svc = t.apiService;
+      const proto = svc.constructor && svc.constructor.prototype;
+      if (!proto) return;
+
+      proto.fetchMutualFundDataWithFallback = async function(symbol) {
+        try {
+          let clean = (symbol || '').toString().trim();
+          // Cleanup: remove trailing .X/.x
+          clean = clean.replace(/\.X$/i, '');
+
+          const yahooUrl = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(clean);
+          const allOriginsUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(yahooUrl);
+
+          let res = await fetch(allOriginsUrl);
+          if (!res.ok) {
+            // Try backup AllOrigins JSON endpoint
+            const backupUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(yahooUrl);
+            res = await fetch(backupUrl);
+            if (!res.ok) {
+              return {
+                success: false,
+                symbol: clean,
+                reason: 'Yahoo via AllOrigins HTTP ' + res.status
+              };
+            }
+            const wrapper = await res.json();
+            // wrapper.contents is the original response body as string
+            try {
+              res = { ok: true, json: async () => JSON.parse(wrapper.contents) };
+            } catch (e) {
+              return {
+                success: false,
+                symbol: clean,
+                reason: 'Failed to parse AllOrigins wrapped response'
+              };
+            }
+          }
+
+          const json = await (typeof res.json === 'function' ? res.json() : res);
+          const q = json &&
+                    json.quoteResponse &&
+                    Array.isArray(json.quoteResponse.result) &&
+                    json.quoteResponse.result[0];
+
+          if (!q) {
+            return {
+              success: false,
+              symbol: clean,
+              reason: 'Yahoo via AllOrigins returned no quote result'
+            };
+          }
+
+          const price = (typeof q.regularMarketPrice === 'number') ? q.regularMarketPrice : null;
+          if (price === null) {
+            return {
+              success: false,
+              symbol: clean,
+              reason: 'Yahoo quote missing regularMarketPrice'
+            };
+          }
+
+          return {
+            success: true,
+            symbol: clean,
+            data: {
+              price: price,
+              change: (typeof q.regularMarketChange === 'number') ? q.regularMarketChange : null,
+              percent: (typeof q.regularMarketChangePercent === 'number') ? q.regularMarketChangePercent : null,
+              timestamp: q.regularMarketTime || null,
+              raw: q
+            }
+          };
+        } catch (e) {
+          return {
+            success: false,
+            symbol,
+            reason: (e && e.message) ? e.message : 'Yahoo via AllOrigins fetch failed'
+          };
+        }
+      };
+
+      t._v15YahooFundsInstalled = true;
+      console.log('v15: Yahoo mutual fund fetch via api.allorigins.win installed');
+    } catch (e) {
+      console.warn('v15 Yahoo funds AllOrigins patch failed:', e);
+    }
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(installYahooFundsAllOrigins, 900);
+  } else {
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(installYahooFundsAllOrigins, 900);
+    });
+  }
+})();
+</script>
 </body>
 </html>
