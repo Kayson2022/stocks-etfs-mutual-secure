@@ -6325,5 +6325,185 @@ button.chart-range-btn[data-range="ALL"] {
   }
 })();
 </script>
+
+<script>
+// v16: Mutual-fund-only pipeline using FMP primary + Alpha Vantage fallback
+(function() {
+  function installMutualFundPipeline() {
+    try {
+      const t = window.stockTracker;
+      if (!t || !t.apiService || t._v16MutualFundPipelineInstalled) return;
+      const svc = t.apiService;
+      const proto = svc.constructor && svc.constructor.prototype;
+      if (!proto) return;
+
+      const FMP_KEY = 'vOqUU3gDIDYWghK8m4ZlsVQwLDnhfYMS';
+      const AV_KEY  = '1PR5O339WTNKD4XL';
+
+      // Helper: default mutual-fund detector if none exists
+      function isMutualFundSymbol(sym, ctx) {
+        if (!sym) return false;
+        const clean = sym.toString().trim();
+        try {
+          if (ctx && typeof ctx.isMutualFund === 'function') {
+            return !!ctx.isMutualFund(clean);
+          }
+        } catch (e) {/* ignore */}
+        // Fallback: typical US mutual fund tickers end with X
+        return /^[A-Z]+X$/i.test(clean);
+      }
+
+      proto.fetchMutualFundDataWithFallback = async function(symbol) {
+        let raw = (symbol || '').toString().trim();
+        // Normalize symbol: remove non-ticker junk, uppercase
+        let clean = raw.replace(/[^A-Za-z0-9.]/g, '').toUpperCase();
+
+        const ctx = this;
+
+        // Ensure we ONLY use this path for mutual funds
+        if (!isMutualFundSymbol(clean, ctx)) {
+          // Not a mutual fund: defer to stock/ETF logic if available
+          if (typeof ctx.fetchStockEtfQuote === 'function') {
+            return ctx.fetchStockEtfQuote(clean);
+          }
+          return {
+            success: false,
+            symbol: clean,
+            reason: 'fetchMutualFundDataWithFallback called for non-mutual-fund symbol'
+          };
+        }
+
+        let lastReason = null;
+
+        // 1) Try FMP primary
+        try {
+          const fmpUrl = 'https://financialmodelingprep.com/api/v3/quote/' +
+                         encodeURIComponent(clean) +
+                         '?apikey=' + encodeURIComponent(FMP_KEY);
+          const res = await fetch(fmpUrl);
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json) && json.length > 0) {
+              const q = json[0];
+              const price = (typeof q.price === 'number') ? q.price : null;
+              if (price !== null) {
+                let change = null;
+                let percent = null;
+
+                if (typeof q.change === 'number') {
+                  change = q.change;
+                }
+                if (typeof q.changesPercentage === 'number') {
+                  percent = q.changesPercentage;
+                }
+
+                // If FMP didn't give change/percent but we have previousClose, compute
+                if ((change === null || percent === null) && typeof q.previousClose === 'number') {
+                  const prev = q.previousClose;
+                  if (prev > 0) {
+                    if (change === null) change = price - prev;
+                    if (percent === null) percent = (change / prev) * 100;
+                  }
+                }
+
+                return {
+                  success: true,
+                  symbol: clean,
+                  data: {
+                    price: price,
+                    change: change,
+                    percent: percent,
+                    timestamp: q.timestamp || null,
+                    source: 'FMP',
+                    raw: q
+                  }
+                };
+              } else {
+                lastReason = 'FMP returned quote without price for ' + clean;
+              }
+            } else {
+              lastReason = 'FMP returned empty array for ' + clean;
+            }
+          } else {
+            lastReason = 'FMP HTTP ' + res.status;
+          }
+        } catch (e) {
+          lastReason = 'FMP error: ' + (e && e.message ? e.message : String(e));
+        }
+
+        console.log('FMP failed for mutual fund', clean, '- reason:', lastReason, 'Falling back to Alpha Vantage...');
+
+        // 2) Fallback: Alpha Vantage TIME_SERIES_DAILY
+        try {
+          const avUrl = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=' +
+                        encodeURIComponent(clean) +
+                        '&apikey=' + encodeURIComponent(AV_KEY);
+          const res = await fetch(avUrl);
+          if (res.ok) {
+            const json = await res.json();
+            const ts = json['Time Series (Daily)'];
+            if (ts && typeof ts === 'object') {
+              const dates = Object.keys(ts).sort(); // ascending
+              if (dates.length >= 2) {
+                const lastDate = dates[dates.length - 1];
+                const prevDate = dates[dates.length - 2];
+                const lastBar = ts[lastDate];
+                const prevBar = ts[prevDate];
+                const price = parseFloat(lastBar['4. close']);
+                const prev = parseFloat(prevBar['4. close']);
+                if (isFinite(price) && isFinite(prev) && prev > 0) {
+                  const change = price - prev;
+                  const percent = (change / prev) * 100;
+                  return {
+                    success: true,
+                    symbol: clean,
+                    data: {
+                      price: price,
+                      change: change,
+                      percent: percent,
+                      timestamp: lastDate,
+                      source: 'AlphaVantage',
+                      raw: json
+                    }
+                  };
+                } else {
+                  lastReason = 'AlphaVantage invalid close prices for ' + clean;
+                }
+              } else {
+                lastReason = 'AlphaVantage not enough daily bars for ' + clean;
+              }
+            } else {
+              lastReason = 'AlphaVantage missing Time Series (Daily) for ' + clean;
+            }
+          } else {
+            lastReason = 'AlphaVantage HTTP ' + res.status;
+          }
+        } catch (e) {
+          lastReason = 'AlphaVantage error: ' + (e && e.message ? e.message : String(e));
+        }
+
+        return {
+          success: false,
+          symbol: clean,
+          reason: 'All mutual-fund APIs failed. Last error: ' + (lastReason || 'Unknown')
+        };
+      };
+
+      t._v16MutualFundPipelineInstalled = true;
+      console.log('v16: Mutual-fund-only FMP + AlphaVantage pipeline installed');
+    } catch (e) {
+      console.warn('v16 mutual fund pipeline patch failed:', e);
+    }
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(installMutualFundPipeline, 950);
+  } else {
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(installMutualFundPipeline, 950);
+    });
+  }
+})();
+</script>
 </body>
 </html>
