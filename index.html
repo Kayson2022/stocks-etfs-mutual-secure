@@ -1177,7 +1177,7 @@ label[for="topMoversSelect"],
 
 
 <style>
-/* Disable long ranges (Option 2A) */
+/* Disable long ranges (6M, YTD, 1Y, 3Y, 5Y, ALL) with fade (Option 2A) */
 button.chart-range-btn[data-range="6M"],
 button.chart-range-btn[data-range="YTD"],
 button.chart-range-btn[data-range="1Y"],
@@ -6022,12 +6022,12 @@ button.chart-range-btn[data-range="ALL"] {
 
 
 <script>
-// Chart Enhancement + Range Persistence Patch v13 (A+B1+C+E + default 1W + remember selection)
+// v14: Chart enhancement + range persistence (default 1W, remember selection)
 (function() {
   function enhanceCharts() {
     try {
       const t = window.stockTracker;
-      if (!t || t._v13Enhanced) return;
+      if (!t || t._v14ChartsInstalled) return;
       const proto = t.constructor && t.constructor.prototype;
       if (!proto) return;
       const originalRender = proto.renderPortfolioPerformanceChart;
@@ -6116,9 +6116,9 @@ button.chart-range-btn[data-range="ALL"] {
       }
 
       setTimeout(wireButtons, 800);
-      t._v13Enhanced = true;
+      t._v14ChartsInstalled = true;
     } catch (e) {
-      console.warn('v13 chart enhancement failed:', e);
+      console.warn('v14 chart enhancement failed:', e);
     }
   }
 
@@ -6133,12 +6133,12 @@ button.chart-range-btn[data-range="ALL"] {
 </script>
 
 <script>
-// Yahoo-only mutual fund data patch v13 with symbol cleanup
+// v14: Yahoo mutual funds via corsproxy.io with symbol cleanup
 (function() {
-  function installYahooFunds() {
+  function installYahooFundsProxy() {
     try {
       const t = window.stockTracker;
-      if (!t || !t.apiService || t._v13YahooFundsInstalled) return;
+      if (!t || !t.apiService || t._v14YahooFundsProxyInstalled) return;
       const svc = t.apiService;
       const proto = svc.constructor && svc.constructor.prototype;
       if (!proto) return;
@@ -6146,18 +6146,21 @@ button.chart-range-btn[data-range="ALL"] {
       proto.fetchMutualFundDataWithFallback = async function(symbol) {
         try {
           let clean = (symbol || '').toString().trim();
-          // Basic symbol cleanup: remove trailing .X or .x
+          // Cleanup: remove trailing .X/.x
           clean = clean.replace(/\.X$/i, '');
 
-          const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(clean);
-          const res = await fetch(url);
+          const yahooUrl = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(clean);
+          const proxied = 'https://corsproxy.io/?' + encodeURIComponent(yahooUrl);
+
+          const res = await fetch(proxied);
           if (!res.ok) {
             return {
               success: false,
               symbol: clean,
-              reason: 'Yahoo HTTP ' + res.status
+              reason: 'Yahoo via proxy HTTP ' + res.status
             };
           }
+
           const json = await res.json();
           const q = json &&
                     json.quoteResponse &&
@@ -6168,7 +6171,7 @@ button.chart-range-btn[data-range="ALL"] {
             return {
               success: false,
               symbol: clean,
-              reason: 'Yahoo returned no quote result'
+              reason: 'Yahoo via proxy returned no quote result'
             };
           }
 
@@ -6186,8 +6189,8 @@ button.chart-range-btn[data-range="ALL"] {
             symbol: clean,
             data: {
               price: price,
-              change: typeof q.regularMarketChange === 'number' ? q.regularMarketChange : null,
-              percent: typeof q.regularMarketChangePercent === 'number' ? q.regularMarketChangePercent : null,
+              change: (typeof q.regularMarketChange === 'number') ? q.regularMarketChange : null,
+              percent: (typeof q.regularMarketChangePercent === 'number') ? q.regularMarketChangePercent : null,
               timestamp: q.regularMarketTime || null,
               raw: q
             }
@@ -6196,23 +6199,23 @@ button.chart-range-btn[data-range="ALL"] {
           return {
             success: false,
             symbol,
-            reason: e && e.message ? e.message : 'Yahoo fetch failed'
+            reason: (e && e.message) ? e.message : 'Yahoo via proxy fetch failed'
           };
         }
       };
 
-      t._v13YahooFundsInstalled = true;
-      console.log('Yahoo mutual fund fetch installed (v13)');
+      t._v14YahooFundsProxyInstalled = true;
+      console.log('v14: Yahoo mutual fund fetch via corsproxy.io installed');
     } catch (e) {
-      console.warn('v13 Yahoo funds patch failed:', e);
+      console.warn('v14 Yahoo funds proxy patch failed:', e);
     }
   }
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(installYahooFunds, 700);
+    setTimeout(installYahooFundsProxy, 800);
   } else {
     window.addEventListener('DOMContentLoaded', function() {
-      setTimeout(installYahooFunds, 700);
+      setTimeout(installYahooFundsProxy, 800);
     });
   }
 })();
