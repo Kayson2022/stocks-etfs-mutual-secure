@@ -1190,6 +1190,166 @@ button.chart-range-btn[data-range="ALL"] {
 }
 </style>
 
+
+<style>
+/* v18 Alerts: floating button + panel */
+#alertsFab {
+  position: fixed;
+  bottom: 96px;
+  right: 20px;
+  z-index: 9999;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#alertsFab .badge {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+/* Panel */
+#alertsPanelBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: none;
+  z-index: 9998;
+}
+#alertsPanel {
+  position: fixed;
+  right: 20px;
+  bottom: 140px;
+  width: 340px;
+  max-height: 70vh;
+  background: rgba(15, 23, 42, 0.98);
+  color: #e5e7eb;
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.6);
+  padding: 14px 16px 12px 16px;
+  display: none;
+  z-index: 9999;
+  backdrop-filter: blur(10px);
+}
+#alertsPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+#alertsPanelHeader h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+#alertsCloseBtn {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 16px;
+}
+#alertsList {
+  max-height: 34vh;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+.alert-row {
+  border-radius: 10px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  border: 1px solid rgba(55,65,81,0.8);
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.alert-row-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.alert-row-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.alert-pill {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+.alert-pill.pending {
+  background: rgba(37,99,235,0.18);
+  color: #bfdbfe;
+}
+.alert-pill.triggered {
+  background: rgba(22,163,74,0.18);
+  color: #bbf7d0;
+}
+.alert-pill.disabled {
+  background: rgba(107,114,128,0.28);
+  color: #e5e7eb;
+}
+.alert-delete-btn {
+  border: none;
+  background: transparent;
+  color: #fca5a5;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#alertsForm {
+  border-top: 1px solid rgba(55,65,81,0.9);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+#alertsFormRow {
+  display: grid;
+  grid-template-columns: 0.7fr 1.1fr 1.2fr;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+#alertsFormRow input,
+#alertsFormRow select {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid rgba(75,85,99,0.9);
+  background: rgba(15,23,42,0.9);
+  color: #e5e7eb;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+#alertsAddBtn {
+  width: 100%;
+  border-radius: 999px;
+  border: none;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+#alertsEmptyState {
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
+  padding: 6px 0;
+}
+</style>
+
 </head>
 <body>
     <!-- 
@@ -6618,5 +6778,382 @@ button.chart-range-btn[data-range="ALL"] {
   }
 })();
 </script>
+
+<!-- v18 Alerts floating UI -->
+<div id="alertsPanelBackdrop"></div>
+<div id="alertsPanel" aria-hidden="true">
+  <div id="alertsPanelHeader">
+    <h3>Price Alerts</h3>
+    <button id="alertsCloseBtn" title="Close">&times;</button>
+  </div>
+  <div id="alertsList">
+    <div id="alertsEmptyState">No alerts yet. Add one below.</div>
+  </div>
+  <form id="alertsForm">
+    <div id="alertsFormRow">
+      <input type="text" id="alertsSymbolInput" placeholder="Symbol" autocomplete="off" />
+      <select id="alertsTypeSelect">
+        <option value="above">Above</option>
+        <option value="below">Below</option>
+        <option value="range">Range</option>
+      </select>
+      <input type="text" id="alertsValueInput" placeholder="Price or min-max" autocomplete="off" />
+    </div>
+    <button type="submit" id="alertsAddBtn">Add Alert</button>
+  </form>
+</div>
+<button id="alertsFab">
+  &#9888; Alerts
+  <span class="badge" id="alertsFabBadge">0</span>
+</button>
+
+
+<script>
+// v18 Alerts engine: restored with price range support & floating button UI
+(function() {
+  function installAlerts() {
+    try {
+      const t = window.stockTracker;
+      if (!t || t._v18AlertsInstalled) return;
+      const proto = t.constructor && t.constructor.prototype;
+      if (!proto) return;
+
+      // --- Helpers for storage ---
+      proto._getAlertsStorageKey = function() {
+        const uid = this.userId || 'guest';
+        return 'priceAlerts_' + uid;
+      };
+
+      proto.loadAlertsFromStorage = function() {
+        if (!Array.isArray(this.priceAlerts)) this.priceAlerts = [];
+        try {
+          const key = this._getAlertsStorageKey();
+          const raw = window.localStorage.getItem(key);
+          if (!raw) return;
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            this.priceAlerts = parsed;
+          }
+        } catch (e) {
+          console.warn('Alerts: failed to load from storage', e);
+        }
+      };
+
+      proto.saveAlertsToStorage = function() {
+        try {
+          const key = this._getAlertsStorageKey();
+          window.localStorage.setItem(key, JSON.stringify(this.priceAlerts || []));
+        } catch (e) {
+          console.warn('Alerts: failed to save to storage', e);
+        }
+      };
+
+      proto.ensureAlertsInitialized = function() {
+        if (this._alertsInitialized) return;
+        this._alertsInitialized = true;
+        if (!Array.isArray(this.priceAlerts)) this.priceAlerts = [];
+        this.loadAlertsFromStorage();
+      };
+
+      // --- Core alert operations ---
+      proto.addAlert = function(alert) {
+        this.ensureAlertsInitialized();
+        if (!alert || !alert.symbol) return;
+        alert.id = alert.id || ('a_' + Date.now() + '_' + Math.random().toString(36).slice(2));
+        alert.created = alert.created || Date.now();
+        if (typeof alert.triggered === 'undefined') alert.triggered = false;
+        this.priceAlerts.push(alert);
+        this.saveAlertsToStorage();
+        this.renderAlertsUI();
+      };
+
+      proto.removeAlert = function(id) {
+        this.ensureAlertsInitialized();
+        this.priceAlerts = (this.priceAlerts || []).filter(a => a.id !== id);
+        this.saveAlertsToStorage();
+        this.renderAlertsUI();
+      };
+
+      proto._getSymbolPriceMap = function() {
+        const map = {};
+        const all = []
+          .concat(this.stocks || [])
+          .concat(this.mutualFunds || [])
+          .concat(this.watchlist || []);
+        for (const item of all) {
+          if (!item || !item.symbol) continue;
+          const sym = (item.symbol || '').toString().trim().toUpperCase();
+          const price = typeof item.price === 'number'
+            ? item.price
+            : (typeof item.regularMarketPrice === 'number' ? item.regularMarketPrice : null);
+          if (sym && price != null && isFinite(price)) {
+            map[sym] = price;
+          }
+        }
+        return map;
+      };
+
+      proto.checkAlerts = function() {
+        this.ensureAlertsInitialized();
+        const map = this._getSymbolPriceMap();
+        let changed = false;
+        for (const alert of this.priceAlerts) {
+          if (!alert || alert.disabled) continue;
+          const sym = (alert.symbol || '').toString().trim().toUpperCase();
+          const price = map[sym];
+          if (!isFinite(price)) continue;
+
+          let shouldTrigger = false;
+          if (alert.type === 'above' && typeof alert.value === 'number') {
+            if (price >= alert.value) shouldTrigger = true;
+          } else if (alert.type === 'below' && typeof alert.value === 'number') {
+            if (price <= alert.value) shouldTrigger = true;
+          } else if (alert.type === 'range') {
+            const min = typeof alert.min === 'number' ? alert.min : null;
+            const max = typeof alert.max === 'number' ? alert.max : null;
+            if (min != null && max != null && min <= max) {
+              if (price >= min && price <= max) shouldTrigger = true;
+            }
+          }
+
+          if (shouldTrigger && !alert.triggered) {
+            alert.triggered = true;
+            alert.triggeredAt = Date.now();
+            changed = true;
+            showAlertToast(sym, alert, price);
+          }
+        }
+        if (changed) {
+          this.saveAlertsToStorage();
+          this.renderAlertsUI();
+        }
+      };
+
+      // --- Toast UI ---
+      const toastId = 'alertsToast';
+      function showAlertToast(symbol, alert, price) {
+        let el = document.getElementById(toastId);
+        if (!el) {
+          el = document.createElement('div');
+          el.id = toastId;
+          el.style.position = 'fixed';
+          el.style.bottom = '20px';
+          el.style.left = '50%';
+          el.style.transform = 'translateX(-50%)';
+          el.style.background = 'rgba(15,23,42,0.98)';
+          el.style.color = '#e5e7eb';
+          el.style.padding = '8px 12px';
+          el.style.borderRadius = '999px';
+          el.style.fontSize = '12px';
+          el.style.boxShadow = '0 10px 25px rgba(0,0,0,0.6)';
+          el.style.zIndex = '10000';
+          document.body.appendChild(el);
+        }
+        let desc;
+        if (alert.type === 'above') {
+          desc = `crossed above ${alert.value.toFixed(2)}`;
+        } else if (alert.type === 'below') {
+          desc = `fell below ${alert.value.toFixed(2)}`;
+        } else {
+          desc = `entered range ${alert.min.toFixed(2)} - ${alert.max.toFixed(2)}`;
+        }
+        el.textContent = `ALERT: ${symbol} ${desc} (now ${price.toFixed(2)})`;
+        el.style.opacity = '1';
+        el.style.pointerEvents = 'auto';
+        setTimeout(() => {
+          if (el) el.style.opacity = '0';
+        }, 4000);
+      }
+
+      // --- UI rendering ---
+      proto.renderAlertsUI = function() {
+        this.ensureAlertsInitialized();
+        const listEl = document.getElementById('alertsList');
+        const emptyEl = document.getElementById('alertsEmptyState');
+        const badgeEl = document.getElementById('alertsFabBadge');
+        if (!listEl || !badgeEl) return;
+
+        const alerts = this.priceAlerts || [];
+        const activeCount = alerts.filter(a => a && !a.disabled && !a.triggered).length;
+        badgeEl.textContent = activeCount;
+
+        listEl.innerHTML = '';
+        if (!alerts.length) {
+          if (emptyEl) emptyEl.style.display = 'block';
+          return;
+        }
+        if (emptyEl) emptyEl.style.display = 'none';
+
+        alerts
+          .slice()
+          .sort((a,b) => (b.created || 0) - (a.created || 0))
+          .forEach(alert => {
+            const row = document.createElement('div');
+            row.className = 'alert-row';
+            row.dataset.id = alert.id;
+
+            const meta = document.createElement('div');
+            meta.className = 'alert-row-meta';
+
+            const line1 = document.createElement('div');
+            line1.textContent = (alert.symbol || '').toString().trim().toUpperCase();
+
+            const line2 = document.createElement('div');
+            line2.style.fontSize = '11px';
+            line2.style.color = '#9ca3af';
+            if (alert.type === 'above') {
+              line2.textContent = `Alert when ≥ ${alert.value}`;
+            } else if (alert.type === 'below') {
+              line2.textContent = `Alert when ≤ ${alert.value}`;
+            } else {
+              line2.textContent = `Range: ${alert.min} - ${alert.max}`;
+            }
+
+            meta.appendChild(line1);
+            meta.appendChild(line2);
+
+            const actions = document.createElement('div');
+            actions.className = 'alert-row-actions';
+
+            const pill = document.createElement('div');
+            pill.className = 'alert-pill ' + (alert.disabled ? 'disabled' : (alert.triggered ? 'triggered' : 'pending'));
+            pill.textContent = alert.disabled ? 'Disabled' : (alert.triggered ? 'Triggered' : 'Pending');
+
+            const delBtn = document.createElement('button');
+            delBtn.className = 'alert-delete-btn';
+            delBtn.textContent = 'Delete';
+            delBtn.addEventListener('click', () => {
+              this.removeAlert(alert.id);
+            });
+
+            actions.appendChild(pill);
+            actions.appendChild(delBtn);
+
+            row.appendChild(meta);
+            row.appendChild(actions);
+
+            listEl.appendChild(row);
+          });
+      };
+
+      // --- Hook into refreshItems to auto-check alerts after price refresh ---
+      const origRefreshItems = proto.refreshItems;
+      if (typeof origRefreshItems === 'function' && !proto._alertsRefreshWrapped) {
+        proto.refreshItems = async function(items, type) {
+          const res = await origRefreshItems.call(this, items, type);
+          try {
+            this.ensureAlertsInitialized();
+            this.checkAlerts();
+          } catch (e) {
+            console.warn('Alerts: check failed after refreshItems', e);
+          }
+          return res;
+        };
+        proto._alertsRefreshWrapped = true;
+      }
+
+      // --- Wire floating button + form ---
+      function wireUI() {
+        const fab = document.getElementById('alertsFab');
+        const panel = document.getElementById('alertsPanel');
+        const backdrop = document.getElementById('alertsPanelBackdrop');
+        const closeBtn = document.getElementById('alertsCloseBtn');
+        const form = document.getElementById('alertsForm');
+        const symbolInput = document.getElementById('alertsSymbolInput');
+        const typeSelect = document.getElementById('alertsTypeSelect');
+        const valueInput = document.getElementById('alertsValueInput');
+
+        if (!fab || !panel || !backdrop || !closeBtn || !form || !symbolInput || !typeSelect || !valueInput) return;
+
+        function openPanel() {
+          panel.style.display = 'block';
+          backdrop.style.display = 'block';
+          t.ensureAlertsInitialized();
+          t.renderAlertsUI();
+          symbolInput.focus();
+        }
+        function closePanel() {
+          panel.style.display = 'none';
+          backdrop.style.display = 'none';
+        }
+
+        fab.addEventListener('click', openPanel);
+        closeBtn.addEventListener('click', closePanel);
+        backdrop.addEventListener('click', closePanel);
+
+        typeSelect.addEventListener('change', () => {
+          const type = typeSelect.value;
+          if (type === 'range') {
+            valueInput.placeholder = 'min-max (e.g. 430-450)';
+          } else {
+            valueInput.placeholder = 'Target price (e.g. 500)';
+          }
+        });
+
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const symRaw = symbolInput.value.trim().toUpperCase();
+          const type = typeSelect.value;
+          const valRaw = valueInput.value.trim();
+
+          if (!symRaw) {
+            alert('Please enter a symbol');
+            return;
+          }
+          if (!valRaw) {
+            alert('Please enter a price or range');
+            return;
+          }
+
+          let alertObj = { symbol: symRaw, type: type };
+
+          if (type === 'range') {
+            const parts = valRaw.split(/[-~]/).map(p => p.trim()).filter(Boolean);
+            if (parts.length !== 2) {
+              alert('Please enter a valid min-max range, e.g. 430-450');
+              return;
+            }
+            const min = parseFloat(parts[0]);
+            const max = parseFloat(parts[1]);
+            if (!isFinite(min) || !isFinite(max) || min > max) {
+              alert('Please enter a valid numeric range (min <= max)');
+              return;
+            }
+            alertObj.min = min;
+            alertObj.max = max;
+          } else {
+            const v = parseFloat(valRaw);
+            if (!isFinite(v)) {
+              alert('Please enter a valid numeric price');
+              return;
+            }
+            alertObj.value = v;
+          }
+
+          t.addAlert(alertObj);
+          symbolInput.value = '';
+          valueInput.value = '';
+        });
+      }
+
+      setTimeout(wireUI, 500);
+
+      t._v18AlertsInstalled = true;
+      console.log('v18 Alerts with price range installed');
+    } catch (e) {
+      console.warn('v18 alerts install failed:', e);
+    }
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(installAlerts, 800);
+  } else {
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(installAlerts, 800);
+    });
+  }
+})();
+</script>
+
 </body>
 </html>
