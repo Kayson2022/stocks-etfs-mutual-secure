@@ -1177,6 +1177,7 @@ label[for="topMoversSelect"],
 
 
 <style>
+/* Disable long ranges (Option 2A) */
 button.chart-range-btn[data-range="6M"],
 button.chart-range-btn[data-range="YTD"],
 button.chart-range-btn[data-range="1Y"],
@@ -6021,12 +6022,12 @@ button.chart-range-btn[data-range="ALL"] {
 
 
 <script>
-// Chart Enhancement Patch v12 (A+B1+C+E + range persistence)
+// Chart Enhancement + Range Persistence Patch v13 (A+B1+C+E + default 1W + remember selection)
 (function() {
   function enhanceCharts() {
     try {
       const t = window.stockTracker;
-      if (!t || t._v12Enhanced) return;
+      if (!t || t._v13Enhanced) return;
       const proto = t.constructor && t.constructor.prototype;
       if (!proto) return;
       const originalRender = proto.renderPortfolioPerformanceChart;
@@ -6115,9 +6116,9 @@ button.chart-range-btn[data-range="ALL"] {
       }
 
       setTimeout(wireButtons, 800);
-      t._v12Enhanced = true;
+      t._v13Enhanced = true;
     } catch (e) {
-      console.warn('v12 chart enhancement failed:', e);
+      console.warn('v13 chart enhancement failed:', e);
     }
   }
 
@@ -6126,6 +6127,92 @@ button.chart-range-btn[data-range="ALL"] {
   } else {
     window.addEventListener('DOMContentLoaded', function() {
       setTimeout(enhanceCharts, 600);
+    });
+  }
+})();
+</script>
+
+<script>
+// Yahoo-only mutual fund data patch v13 with symbol cleanup
+(function() {
+  function installYahooFunds() {
+    try {
+      const t = window.stockTracker;
+      if (!t || !t.apiService || t._v13YahooFundsInstalled) return;
+      const svc = t.apiService;
+      const proto = svc.constructor && svc.constructor.prototype;
+      if (!proto) return;
+
+      proto.fetchMutualFundDataWithFallback = async function(symbol) {
+        try {
+          let clean = (symbol || '').toString().trim();
+          // Basic symbol cleanup: remove trailing .X or .x
+          clean = clean.replace(/\.X$/i, '');
+
+          const url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + encodeURIComponent(clean);
+          const res = await fetch(url);
+          if (!res.ok) {
+            return {
+              success: false,
+              symbol: clean,
+              reason: 'Yahoo HTTP ' + res.status
+            };
+          }
+          const json = await res.json();
+          const q = json &&
+                    json.quoteResponse &&
+                    Array.isArray(json.quoteResponse.result) &&
+                    json.quoteResponse.result[0];
+
+          if (!q) {
+            return {
+              success: false,
+              symbol: clean,
+              reason: 'Yahoo returned no quote result'
+            };
+          }
+
+          const price = typeof q.regularMarketPrice === 'number' ? q.regularMarketPrice : null;
+          if (price === null) {
+            return {
+              success: false,
+              symbol: clean,
+              reason: 'Yahoo quote missing regularMarketPrice'
+            };
+          }
+
+          return {
+            success: true,
+            symbol: clean,
+            data: {
+              price: price,
+              change: typeof q.regularMarketChange === 'number' ? q.regularMarketChange : null,
+              percent: typeof q.regularMarketChangePercent === 'number' ? q.regularMarketChangePercent : null,
+              timestamp: q.regularMarketTime || null,
+              raw: q
+            }
+          };
+        } catch (e) {
+          return {
+            success: false,
+            symbol,
+            reason: e && e.message ? e.message : 'Yahoo fetch failed'
+          };
+        }
+      };
+
+      t._v13YahooFundsInstalled = true;
+      console.log('Yahoo mutual fund fetch installed (v13)');
+    } catch (e) {
+      console.warn('v13 Yahoo funds patch failed:', e);
+    }
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(installYahooFunds, 700);
+  } else {
+    window.addEventListener('DOMContentLoaded', function() {
+      setTimeout(installYahooFunds, 700);
     });
   }
 })();
