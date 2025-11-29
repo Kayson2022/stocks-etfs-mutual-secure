@@ -7,7 +7,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live Stocks & Funds Tracker</title>
     <link rel="icon" href="data:,">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+<script>
+// v19: restore missing getRgbColor helper
+if (!window.getRgbColor) {
+    window.getRgbColor = function(cssVariableName) {
+        try {
+            const raw = getComputedStyle(document.documentElement)
+                .getPropertyValue(cssVariableName)
+                .trim();
+            const nums = raw.split(",").map(x => parseFloat(x.trim()));
+            return {
+                r: nums[0] || 0,
+                g: nums[1] || 0,
+                b: nums[2] || 0
+            };
+        } catch (e) {
+            return { r: 255, g: 255, b: 255 };
+        }
+    };
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <!-- NEW: Chart.js Annotation Plugin for the horizontal reference line -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script> 
