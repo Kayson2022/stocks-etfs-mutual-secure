@@ -1,6 +1,7 @@
 
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1390,6 +1391,253 @@ body, body.dark-mode {
     box-shadow:
         0 28px 70px rgba(15, 23, 42, 1),
         0 0 0 1px rgba(15, 23, 42, 0.95);
+}
+
+/* ============================================================
+   A5-ULTRA DASHBOARD ENHANCEMENTS
+   - Extra polish for phone, tablet, and desktop
+   - No structural / JS-breaking changes (CSS-only overrides)
+   ============================================================ */
+
+/* Global typography & smoothing */
+body {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+/* Subtle animated backdrop */
+body::before {
+    content: "";
+    position: fixed;
+    inset: -40%;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 0% 0%, rgba(56,189,248,0.22), transparent 60%),
+        radial-gradient(circle at 100% 100%, rgba(168,85,247,0.14), transparent 60%);
+    opacity: 0.8;
+    z-index: -1;
+}
+
+/* Slightly tighter container on huge screens, softer corners */
+.container {
+    max-width: 1280px;
+    border-radius: 20px;
+}
+
+/* Header polish */
+.header {
+    padding-inline: 20px;
+    padding-block: 14px;
+}
+
+/* Make the app breathe more on large screens */
+@media (min-width: 1200px) {
+    .container {
+        margin-top: 32px;
+        margin-bottom: 48px;
+    }
+}
+
+/* ===========================
+   MOBILE-FIRST IMPROVEMENTS
+   =========================== */
+@media (max-width: 900px) {
+    .container {
+        padding: 16px 14px 24px 14px;
+        border-radius: 18px;
+    }
+
+    .header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .header h1 {
+        font-size: 1.25rem;
+    }
+
+    .header-controls {
+        width: 100%;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    #user-info {
+        flex: 1;
+        justify-content: flex-start;
+    }
+
+    #sign-out-btn {
+        padding-inline: 10px;
+    }
+
+    /* Tabs: make them pill-row with scroll */
+    .tabs {
+        padding: 4px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.5);
+        scrollbar-width: none; /* Firefox */
+    }
+    .tabs::-webkit-scrollbar {
+        display: none; /* Chrome/Safari */
+    }
+    .tab {
+        font-size: 0.8rem;
+        padding: 8px 12px;
+    }
+
+    /* Portfolio summary: tighter on phone */
+    .portfolio-summary {
+        padding: 18px 14px 20px 14px;
+        border-radius: 18px;
+    }
+    .portfolio-summary h3 {
+        font-size: 1.35rem;
+    }
+    .summary-stats {
+        gap: 16px;
+    }
+    .summary-value {
+        font-size: 1.3rem;
+    }
+
+    /* Utility bar: stack vertically */
+    .utility-buttons-grid {
+        flex-direction: column;
+        padding: 12px;
+        border-radius: 16px;
+        gap: 8px;
+    }
+    .utility-buttons-grid .add-btn,
+    .utility-buttons-grid label {
+        width: 100%;
+        justify-content: center;
+        font-size: 0.85rem;
+        padding-block: 9px;
+    }
+
+    /* Search & filters */
+    .search-section,
+    .portfolio-controls,
+    .funds-controls,
+    .watchlist-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    .search-input,
+    #portfolioFilter,
+    #portfolioSort,
+    #platformFilter {
+        width: 100%;
+        font-size: 0.9rem;
+    }
+    .input-wrapper {
+        width: 100%;
+    }
+
+    /* Cards: single column, full width */
+    .stocks-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+    }
+    .stock-card,
+    .fund-card,
+    .watchlist-card {
+        padding: 18px 16px 16px 16px;
+        border-radius: 18px;
+    }
+    .stock-symbol,
+    .fund-symbol,
+    .watchlist-symbol {
+        font-size: 1.35rem;
+    }
+    .stock-price {
+        font-size: 2.0rem;
+    }
+
+    .stock-info {
+        padding-top: 12px;
+        margin-top: 12px;
+    }
+    .info-row {
+        font-size: 0.85rem;
+    }
+
+    .card-actions {
+        grid-template-columns: 1fr;
+    }
+    .transaction-btn {
+        font-size: 0.85rem;
+        padding-block: 9px;
+    }
+
+    /* Per-card mini chart */
+    .stock-card.expanded .card-chart-container,
+    .fund-card.expanded .card-chart-container {
+        max-height: 260px;
+    }
+
+    /* Main performance chart card */
+    #portfolio-performance-container {
+        margin-top: 20px;
+        border-radius: 18px !important;
+        padding: 14px 12px 16px 12px !important;
+    }
+    .chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+    .chart-big-value {
+        font-size: 1.75rem;
+    }
+    .chart-range-btn {
+        padding-inline: 10px;
+        padding-block: 4px;
+        font-size: 0.75rem;
+    }
+
+    /* Group headers & summaries */
+    .group-header, .watchlist-title {
+        padding-inline: 4px;
+        font-size: 1rem;
+    }
+    .summary-card {
+        margin-inline: 0;
+        padding: 18px 14px;
+    }
+
+    /* Modals: edge-to-edge feel */
+    .modal-content {
+        width: 94%;
+        padding: 22px 18px 20px 18px;
+        border-radius: 16px;
+    }
+}
+
+/* Extra-small devices */
+@media (max-width: 480px) {
+    .header-controls {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+    #sign-out-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    #user-info {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .small-countdown {
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 10px;
+    }
 }
 </style>
 </head>
