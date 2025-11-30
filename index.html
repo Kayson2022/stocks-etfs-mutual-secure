@@ -2083,22 +2083,151 @@ body::before {
             }
 
             // --- Finnhub Quote (for refreshing) ---
-            async fetchStockEtfQuote(symbol) {
-                const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${this.config.finnhubApiKey}`;
-                try {
-                    const response = await fetch(quoteUrl);
-                    if (!response.ok) return { success: false, symbol, reason: `Finnhub HTTP Error: ${response.status}` };
-                    const quoteData = await response.json();
-                    if (quoteData.c === 0 && quoteData.pc === 0) return { success: false, symbol, reason: 'Finnhub: Invalid or empty API payload' };
-                    return { success: true, data: { price: quoteData.c ?? 0, change: quoteData.d ?? 0, changePercent: quoteData.dp ?? 0, open: quoteData.o ?? 0, high: quoteData.h ?? 0, low: quoteData.l ?? 0, previousClose: quoteData.pc ?? 0 } };
-                } catch (error) {
-                    console.error(`Error fetching stock/ETF quote for ${symbol} (Finnhub):`, error);
-                    return { success: false, symbol, reason: `Finnhub Error: ${error.message}` };
-                }
+
+async fetchYahooQuote(symbol) {
+    const encodedUrl = encodeURIComponent(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`);
+    const url = `https://corsproxy.io/?${encodedUrl}`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn(`Yahoo quote HTTP error for ${symbol}:`, response.status, response.statusText);
+            return { success: false, symbol, reason: `Yahoo HTTP Error: ${response.status}` };
+        }
+        const data = await response.json();
+        const quote = data && data.quoteResponse && Array.isArray(data.quoteResponse.result)
+            ? data.quoteResponse.result[0]
+            : null;
+        if (!quote || quote.regularMarketPrice == null) {
+            return { success: false, symbol, reason: 'Yahoo: No quote data.' };
+        }
+
+        const price = parseFloat(quote.regularMarketPrice) || 0;
+        const prevClose = quote.regularMarketPreviousClose != null ? parseFloat(quote.regularMarketPreviousClose) : null;
+        const change = quote.regularMarketChange != null
+            ? parseFloat(quote.regularMarketChange)
+            : (prevClose != null ? (price - prevClose) : 0);
+        const changePercent = quote.regularMarketChangePercent != null
+            ? parseFloat(quote.regularMarketChangePercent)
+            : (prevClose && prevClose !== 0 ? (change / prevClose) * 100 : 0);
+
+        return {
+            success: true,
+            data: {
+                symbol: quote.symbol || symbol,
+                name: quote.longName || quote.shortName || symbol,
+                price,
+                change,
+                changePercent,
+                open: quote.regularMarketOpen != null ? parseFloat(quote.regularMarketOpen) : 0,
+                high: quote.regularMarketDayHigh != null ? parseFloat(quote.regularMarketDayHigh) : 0,
+                low: quote.regularMarketDayLow != null ? parseFloat(quote.regularMarketDayLow) : 0,
+                previousClose: prevClose != null ? prevClose : price,
+                industry: quote.quoteType || 'Equity'
             }
+        };
+    } catch (error) {
+        console.error(`Yahoo quote fetch failed for ${symbol}:`, error);
+        return { success: false, symbol, reason: 'Yahoo quote fetch error.' };
+    }
+}
+
+async fetchStockEtfQuote(symbol) {
+    // 1) Try Yahoo quote first (no API key required)
+    const yahooResult = await this.fetchYahooQuote(symbol);
+    if (yahooResult && yahooResult.success && yahooResult.data && yahooResult.data.price > 0) {
+        return yahooResult;
+    }
+
+    // 2) Fallback to Finnhub using configured API key
+    if (!this.config.finnhubApiKey || this.config.finnhubApiKey === 'YOUR_FINNHUB_API_KEY') {
+        return { success: false, symbol, reason: 'Finnhub API key missing. Please add it in Settings.' };
+    }
+
+    const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${this.config.finnhubApiKey}`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn(`Finnhub HTTP error for ${symbol}:`, response.status, response.statusText);
+            return { success: false, symbol, reason: `Finnhub HTTP Error: ${response.status}` };
+        }
+        const data = await response.json();
+        if (!data || data.c == null) {
+            return { success: false, symbol, reason: 'Finnhub: No quote data.' };
+        }
+
+        const price = parseFloat(data.c) || 0;
+        const prevClose = data.pc != null ? parseFloat(data.pc) : null;
+        const change = prevClose != null ? price - prevClose : 0;
+        const changePercent = prevClose && prevClose !== 0 ? (change / prevClose) * 100 : 0;
+
+        return {
+            success: true,
+            data: {
+                symbol,
+                name: symbol,
+                price,
+                change,
+                changePercent,
+                open: data.o != null ? parseFloat(data.o) : 0,
+                high: data.h != null ? parseFloat(data.h) : 0,
+                low: data.l != null ? parseFloat(data.l) : 0,
+                previousClose: prevClose != null ? prevClose : price,
+                industry: 'Equity'
+            }
+        };
+    } catch (error) {
+        console.error(`Finnhub quote fetch failed for ${symbol}:`, error);
+        return { success: false, symbol, reason: 'Finnhub quote fetch error.' };
+    }
+}
             
             // --- FMP Fetch (Second Priority for Mutual Funds) ---
-            async fetchFmpFundData(symbol) {
+
+async fetchMarketStackFundData(symbol) {
+    const apiKey = this.config.marketStackKey;
+    if (!apiKey || apiKey === 'YOUR_MARKETSTACK_KEY') {
+        return { success: false, symbol, reason: 'MarketStack API key missing. Add it in Settings.' };
+    }
+    const url = `https://api.marketstack.com/v1/eod?access_key=${apiKey}&symbols=${encodeURIComponent(symbol)}&limit=1`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn(`MarketStack HTTP error for ${symbol}:`, response.status, response.statusText);
+            return { success: false, symbol, reason: `MarketStack HTTP Error: ${response.status}` };
+        }
+        const json = await response.json();
+        const d = json && Array.isArray(json.data) && json.data.length ? json.data[0] : null;
+        if (!d || d.close == null) {
+            return { success: false, symbol, reason: 'MarketStack: No EOD data.' };
+        }
+
+        const close = parseFloat(d.close) || 0;
+        const prevClose = d.previous_close != null ? parseFloat(d.previous_close) : close;
+        const change = close - prevClose;
+        const changePercent = prevClose && prevClose !== 0 ? (change / prevClose) * 100 : 0;
+
+        return {
+            success: true,
+            data: {
+                symbol: d.symbol || symbol,
+                name: d.name || symbol,
+                price: close,
+                change,
+                changePercent,
+                open: d.open != null ? parseFloat(d.open) : 0,
+                high: d.high != null ? parseFloat(d.high) : 0,
+                low: d.low != null ? parseFloat(d.low) : 0,
+                previousClose: prevClose,
+                industry: 'Mutual Fund'
+            }
+        };
+    } catch (error) {
+        console.error(`MarketStack fund fetch failed for ${symbol}:`, error);
+        return { success: false, symbol, reason: 'MarketStack fund fetch error.' };
+    }
+}
+
+async fetchFmpFundData(symbol) {
                  const url = `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${this.config.fmpApiKey}`;
                  if (!this.config.fmpApiKey || this.config.fmpApiKey === 'YOUR_FMP_API_KEY') {
                     return { success: false, symbol, reason: "FMP API Key missing." };
@@ -2160,38 +2289,32 @@ body::before {
             
             // --- Fallback Function for Mutual Funds (STRICTLY FMP -> AV) ---
             async fetchMutualFundDataWithFallback(symbol) {
-                // Check if the symbol might be a stock/ETF first via Finnhub quote
-                let quoteResult = await this.fetchStockEtfQuote(symbol);
+    if (!this.isMutualFund(symbol)) {
+        return { success: false, symbol, reason: 'Not detected as mutual fund.' };
+    }
 
-                if (quoteResult.success && !this.isMutualFund(symbol)) {
-                    // It seems like a stock/ETF (non-mutual fund format), use the full data fetch
-                    const dataResult = await this.fetchStockEtfData(symbol);
-                    if (dataResult.success) {
-                         return dataResult;
-                    }
-                }
-                
-                // If it's explicitly a mutual fund (e.g., ends with X) or Finnhub failed, proceed with fund fallbacks
-                
-                // 1. Try FMP (Primary for Mutual Funds)
-                let result = await this.fetchFmpFundData(symbol);
+    // 1) MarketStack (primary)
+    let result = await this.fetchMarketStackFundData(symbol);
+    if (result && result.success && result.data && result.data.price > 0) {
+        return result;
+    }
+    console.warn(`MarketStack failed for ${symbol}, falling back to FMP...`);
 
-                if (result.success && result.data.price > 0) {
-                    return result;
-                }
+    // 2) FMP (secondary)
+    result = await this.fetchFmpFundData(symbol);
+    if (result && result.success && result.data && result.data.price > 0) {
+        return result;
+    }
+    console.warn(`FMP failed for ${symbol}, falling back to Alpha Vantage...`);
 
-                console.log(`FMP failed for ${symbol}. Falling back to Alpha Vantage...`);
-                
-                // 2. Try Alpha Vantage last resort
-                result = await this.fetchAlphaVantageFundData(symbol); 
+    // 3) Alpha Vantage (last resort)
+    result = await this.fetchAlphaVantageFundData(symbol);
+    if (result && result.success && result.data && result.data.price > 0) {
+        return result;
+    }
 
-                if (result.success && result.data.price > 0) {
-                    return result;
-                }
-                
-                // All failed
-                return { success: false, symbol, reason: `All fund APIs failed. Last error: ${result.reason || 'Data not found.'}` };
-            }
+    return { success: false, symbol, reason: 'All mutual fund data providers failed (MarketStack, FMP, Alpha Vantage).' };
+}
 
             // --- NEW: Historical Data Fetch (Uses Yahoo Finance via CORS Proxy) ---
             async fetchHistoricalData(symbol, range = '1Y') {
@@ -2545,7 +2668,7 @@ body::before {
                     closeSettingsBtn: document.getElementById('closeSettingsBtn'),
                     modalFinnhubKey: document.getElementById('modal-finnhub-key'),
                     modalAlphaVantageKey: document.getElementById('modal-alpha-vantage-key'),
-                    modalFmpKey: document.getElementById('modal-fmp-key'),
+                    modalFmpKey: document.getElementById('modal-fmp-key'), modalMarketStackKey: document.getElementById('modal-marketstack-key'),
                     modalRefreshInterval: document.getElementById('modal-refresh-interval'),
                     modalSaveSettingsBtn: document.getElementById('modal-save-settings-btn'),
                     enablePushNotificationsBtn: document.getElementById('enable-push-notifications-btn'),
@@ -4804,6 +4927,7 @@ body::before {
                 if (this.elements.modalFinnhubKey) this.elements.modalFinnhubKey.value = localStorage.getItem('finnhubApiKey') || this.config.finnhubApiKey;
                 if (this.elements.modalAlphaVantageKey) this.elements.modalAlphaVantageKey.value = localStorage.getItem('alphaVantageApiKey') || this.config.alphaVantageKey;
                 if (this.elements.modalFmpKey) this.elements.modalFmpKey.value = localStorage.getItem('fmpApiKey') || this.config.fmpApiKey;
+                if (this.elements.modalMarketStackKey) this.elements.modalMarketStackKey.value = localStorage.getItem('marketStackApiKey') || this.config.marketStackKey;
                 if (this.elements.modalRefreshInterval) this.elements.modalRefreshInterval.value = this.config.refreshIntervalMs / 1000;
             }
             closeSettingsModal() { if (this.elements.settingsModal) this.elements.settingsModal.style.display = 'none'; }
