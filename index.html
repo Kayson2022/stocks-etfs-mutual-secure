@@ -4514,23 +4514,23 @@ select {
                                     title: (ctx) => new Date(ctx[0].parsed.x).toLocaleDateString()
                                 }
                             },
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+                            annotation: {
+                                annotations: {
+                                    // Reference Line at Start Value (Dotted Line)
+                                    startLine: {
+                                        type: 'line',
+                                        yMin: startValue,
+                                        yMax: startValue,
+                                        borderColor: refColor,
+                                        borderWidth: 2,
+                                        borderDash: [5, 5],
+                                        label: {
+                                            content: 'Start Value',
+                                            display: false 
+                                        },
+                                    }
+                                }
+                            }
                         },
                         scales: {
                             x: {
@@ -4651,7 +4651,7 @@ select {
                                 ctx.restore();
                             }
                         },
-
+                        ChartAnnotation,
                     ]
                 });
             }
@@ -5562,15 +5562,40 @@ function getIntradayData() {
   };
 
   // Crosshair plugin
-  const crosshairPlugin = {
-    id: 'crosshair',
-    afterEvent(chart, evt) {
-      const e = evt.event;
-      const canvas = chart.canvas;
-      const rect = canvas.getBoundingClientRect();
-      // remove any existing lines
-      const existX = canvas.parentNode.querySelector('.crosshair-x');
-      const existY = canvas.parentNode.querySelector('.crosshair-
+  
+    // Crosshair plugin: draws crosshair lines at the active tooltip point
+    const crosshairPlugin = {
+        id: 'crosshair',
+        afterDatasetsDraw(chart, args, pluginOptions) {
+            const active = chart.getActiveElements && chart.getActiveElements();
+            if (!active || !active.length) return;
+
+            const {ctx, chartArea: {top, bottom, left, right}} = chart;
+            const {x, y} = active[0].element || {};
+
+            if (x == null || y == null) return;
+
+            ctx.save();
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)'; // soft slate
+            ctx.beginPath();
+            // vertical
+            ctx.moveTo(x, top);
+            ctx.lineTo(x, bottom);
+            // horizontal
+            ctx.moveTo(left, y);
+            ctx.lineTo(right, y);
+            ctx.stroke();
+            ctx.restore();
+        }
+    };
+
+    if (typeof Chart !== 'undefined' && Chart.register) {
+        Chart.register(crosshairPlugin);
+    }
+
+</script>
 
 <!-- BEGIN YAHOO + FIRESTORE HISTORY INTEGRATION -->
 <script>
