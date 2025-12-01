@@ -16,18 +16,16 @@ stock-backend-secure.giolamchieu1975.workers.dev for:
     <title>Live Stocks & Funds Tracker</title>
     <link rel="icon" href="data:,">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <!-- NEW: Chart.js Annotation Plugin for the horizontal reference line -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script> 
-    <!-- 
-    ==================================================================
-    ==      REVISED & IMPROVED STYLESHEET                           ==
-    ==================================================================
-    This stylesheet includes the fix for the chart color parsing issue
-    and the final visual styles.
-    -->
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<!-- NEW: Chart.js Annotation Plugin for the horizontal reference line -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script> 
+
+<!-- NEW: load helper for window.getRgbColor -->
+<script src="engine.js"></script>
+
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 
         /* --- CSS Variables for Theming --- */
         :root {
