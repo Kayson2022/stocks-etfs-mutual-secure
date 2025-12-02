@@ -3064,64 +3064,115 @@ select {
             }
 
             renderPortfolioSummary() {
-                // Get metric sums from individual lists (stocks/funds)
-                const stockMetrics = this.calculateSummaryMetrics(this.stocks);
-                const fundMetrics = this.calculateSummaryMetrics(this.mutualFunds);
+    // 1. Get metric sums from individual lists (stocks/funds)
+    const stockMetrics = this.calculateSummaryMetrics(this.stocks);
+    const fundMetrics = this.calculateSummaryMetrics(this.mutualFunds);
 
-                const combinedMetrics = {
-                    totalCurrentValue: stockMetrics.totalCurrentValue + fundMetrics.totalCurrentValue,
-                    totalUnrealizedPL: stockMetrics.totalUnrealizedPL + fundMetrics.totalUnrealizedPL,
-                    totalRealizedPL: stockMetrics.totalRealizedPL + fundMetrics.totalRealizedPL,
-                    totalPLToday: stockMetrics.totalPLToday + fundMetrics.totalPLToday, // Base total P/L
-                    totalPreviousDayValue: stockMetrics.totalPreviousDayValue + fundMetrics.totalPreviousDayValue,
-                    totalContributions: stockMetrics.totalContributions + fundMetrics.totalContributions,
-                    totalDividends: stockMetrics.totalDividends + fundMetrics.totalDividends
-                };
+    const combinedMetrics = {
+        totalCurrentValue:
+            stockMetrics.totalCurrentValue + fundMetrics.totalCurrentValue,
+        totalUnrealizedPL:
+            stockMetrics.totalUnrealizedPL + fundMetrics.totalUnrealizedPL,
+        totalRealizedPL:
+            stockMetrics.totalRealizedPL + fundMetrics.totalRealizedPL,
+        // ✅ pure daily P/L from all positions
+        totalPLToday:
+            stockMetrics.totalPLToday + fundMetrics.totalPLToday,
+        totalPreviousDayValue:
+            stockMetrics.totalPreviousDayValue +
+            fundMetrics.totalPreviousDayValue,
+        totalContributions:
+            stockMetrics.totalContributions + fundMetrics.totalContributions,
+        totalDividends:
+            stockMetrics.totalDividends + fundMetrics.totalDividends
+    };
 
-                // FIX: Use the calculated group totals for display consistency and accuracy
-                const aggregatedPLToday = 
-                    (this.biggestGainToday || 0) +
-                    (this.todaysGainsTotal || 0) -
-                    (this.todaysLossesTotal || 0); // Explicitly subtract the positive loss amount
+    // ✅ DO NOT override with biggestGainToday / todaysGainsTotal / todaysLossesTotal
+    // Those are still used for the group cards, but not for the global P/L total.
+    const totalPLTodayFinal = combinedMetrics.totalPLToday;
 
-                // Prefer the group-based total if it's non-zero (meaning groups were rendered and totals were updated), otherwise fall back to the direct item sum.
-                const totalPLTodayFinal = (aggregatedPLToday !== 0 && !isNaN(aggregatedPLToday)) 
-                    ? aggregatedPLToday 
-                    : combinedMetrics.totalPLToday;
+    const totalOverallPL =
+        combinedMetrics.totalUnrealizedPL + combinedMetrics.totalRealizedPL;
 
-                const totalOverallPL = combinedMetrics.totalUnrealizedPL + combinedMetrics.totalRealizedPL;
-                const totalOverallPLPercent = combinedMetrics.totalContributions > 0 ? (totalOverallPL / combinedMetrics.totalContributions) * 100 : 0;
-                const totalPLPercentToday = combinedMetrics.totalPreviousDayValue > 0 ? (totalPLTodayFinal / combinedMetrics.totalPreviousDayValue) * 100 : 0;
+    const totalOverallPLPercent =
+        combinedMetrics.totalContributions > 0
+            ? (totalOverallPL / combinedMetrics.totalContributions) * 100
+            : 0;
 
-                const setElement = (el, value, isPercent = false) => {
-                    if (!el) return;
-                    el.textContent = isPercent ? `${this.formatNumber(value, 2)}%` : this.formatCurrency(value);
-                    el.className = `summary-value ${value >= 0 ? 'positive' : 'negative'}`;
-                };
-                
-                // 💰 Update all summary labels
-                setElement(document.getElementById('combined-total-value'), combinedMetrics.totalCurrentValue);
-                setElement(document.getElementById('stocks-total-value'), stockMetrics.totalCurrentValue);
-                setElement(document.getElementById('mutual-fund-total-value'), fundMetrics.totalCurrentValue);
-                
-                const contributionsEl = document.getElementById('total-contributions');
-                if (contributionsEl) contributionsEl.textContent = this.formatCurrency(combinedMetrics.totalContributions);
+    // ✅ Today % is based on start-of-day portfolio value
+    const totalPLPercentToday =
+        combinedMetrics.totalPreviousDayValue > 0
+            ? (totalPLTodayFinal / combinedMetrics.totalPreviousDayValue) * 100
+            : 0;
 
-                setElement(document.getElementById('total-dividends'), combinedMetrics.totalDividends);
-                setElement(document.getElementById('total-pl-today'), totalPLTodayFinal); // Use final calculated value
-                setElement(document.getElementById('total-pl-percent-today'), totalPLPercentToday, true);
-                setElement(document.getElementById('total-pl-unrealized'), combinedMetrics.totalUnrealizedPL);
-                setElement(document.getElementById('total-pl-realized'), combinedMetrics.totalRealizedPL);
-                
-                // Update the big chart value
-                const chartValueEl = document.getElementById('chart-current-value');
-                if (chartValueEl) {
-                    chartValueEl.textContent = this.formatCurrency(combinedMetrics.totalCurrentValue);
-                    // Also update its color based on today's P/L
-                    chartValueEl.classList.remove('positive', 'negative');
-                    chartValueEl.classList.add(totalPLTodayFinal >= 0 ? 'positive' : 'negative');
-                }
-            }
+    const setElement = (el, value, isPercent = false) => {
+        if (!el) return;
+        el.textContent = isPercent
+            ? `${this.formatNumber(value, 2)}%`
+            : this.formatCurrency(value);
+        el.className = `summary-value ${
+            value >= 0 ? 'positive' : 'negative'
+        }`;
+    };
+
+    // 💰 Update all summary labels
+    setElement(
+        document.getElementById('combined-total-value'),
+        combinedMetrics.totalCurrentValue
+    );
+    setElement(
+        document.getElementById('stocks-total-value'),
+        stockMetrics.totalCurrentValue
+    );
+    setElement(
+        document.getElementById('mutual-fund-total-value'),
+        fundMetrics.totalCurrentValue
+    );
+
+    const contributionsEl = document.getElementById('total-contributions');
+    if (contributionsEl) {
+        contributionsEl.textContent =
+            this.formatCurrency(combinedMetrics.totalContributions);
+    }
+
+    setElement(
+        document.getElementById('total-dividends'),
+        combinedMetrics.totalDividends
+    );
+    setElement(
+        document.getElementById('total-pl-today'),
+        totalPLTodayFinal
+    );
+    setElement(
+        document.getElementById('total-pl-percent-today'),
+        totalPLPercentToday,
+        true
+    );
+    setElement(
+        document.getElementById('total-pl-unrealized'),
+        combinedMetrics.totalUnrealizedPL
+    );
+    setElement(
+        document.getElementById('total-pl-realized'),
+        combinedMetrics.totalRealizedPL
+    );
+
+    // Update the big chart value
+    const chartValueEl = document.getElementById('chart-current-value');
+    if (chartValueEl) {
+        chartValueEl.textContent =
+            this.formatCurrency(combinedMetrics.totalCurrentValue);
+        chartValueEl.classList.remove('positive', 'negative');
+        chartValueEl.classList.add(
+            totalPLTodayFinal >= 0 ? 'positive' : 'negative'
+        );
+    }
+
+    // (Optional) if you want to use totalOverallPLPercent somewhere later,
+    // you can store it on this object:
+    this.totalOverallPLPercent = totalOverallPLPercent;
+}
+
 
             isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
             async addItemFromInput(type) {
