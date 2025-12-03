@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Neon Portfolio Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:,">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+            --bg-body: #050910;
+            --bg-elevated: #0c1118;
+            --bg-elevated-soft: #0f151f;
+
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+
+            --accent-neon-1: #00ffc6;
+            --accent-neon-2: #00d4ff;
+            --accent-neon-3: #00ff88;
+
+            --danger: #ff4b5c;
+            --success: #22c55e;
+
+            --radius-md: 14px;
+            --radius-lg: 18px;
+
+            --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.6);
+            --shadow-card: 0 16px 40px rgba(0, 0, 0, 0.8);
+            --shadow-glow: 0 0 25px rgba(0, 240, 180, 0.35);
+
+            --border-subtle: rgba(148, 163, 184, 0.12);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background: radial-gradient(circle at top, #0b1220 0%, #020617 55%, #000000 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            transition: background 0.25s ease-out, color 0.25s ease-out;
+        }
+
+        .page-shell {
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 18px 16px 32px;
+        }
+
+        /* ============ HEADER (Option C – Hybrid) ============ */
+
+        .app-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .app-logo {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            background: conic-gradient(
+                from 160deg,
+                var(--accent-neon-1),
+                var(--accent-neon-2),
+                var(--accent-neon-3),
+                var(--accent-neon-2),
+                var(--accent-neon-1)
+            );
+            box-shadow: var(--shadow-glow);
+        }
+
+        .app-title-block {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .app-title {
+            font-weight: 800;
+            font-size: 1.2rem;
+            letter-spacing: 0.03em;
+        }
+
+        .app-subtitle {
+            font-size: 0.76rem;
+            color: var(--text-muted);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            background: radial-gradient(circle at top, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.6));
+        }
+
+        .pill-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: #22c55e;
+            box-shadow: 0 0 12px rgba(34, 197, 94, 0.7);
+        }
+
+        .icon-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at top, rgba(17, 24, 39, 0.95), rgba(15, 23, 42, 0.8));
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.18s ease-out;
+        }
+
+        .icon-btn:hover {
+            transform: translateY(-1px) scale(1.02);
+            box-shadow: 0 0 14px rgba(14, 165, 233, 0.5);
+            color: #e5e7eb;
+            border-color: rgba(56, 189, 248, 0.7);
+        }
+
+        .user-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .user-avatar {
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #22c55e, #0ea5e9);
+        }
+
+        .user-name {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        /* ============ TABS ============ */
+
+        .tabs {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            box-shadow: 0 14px 40px rgba(15, 23, 42, 0.7);
+            margin-bottom: 18px;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            flex: 0 0 auto;
+            border: none;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            padding: 6px 14px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.18s ease-out;
+        }
+
+        .tab-btn span.icon {
+            font-size: 1rem;
+        }
+
+        .tab-btn.active {
+            background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.3), rgba(16, 185, 129, 0.2));
+            color: var(--text-primary);
+            box-shadow: 0 0 18px rgba(45, 212, 191, 0.7);
+        }
+
+        .tab-btn:not(.active):hover {
+            color: #e5e7eb;
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .tab-panels {
+            margin-top: 10px;
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* ============ PORTFOLIO SUMMARY BANNER (GRADIENT HERO) ============ */
+
+        .portfolio-summary {
+            position: relative;
+            overflow: hidden;
+            border-radius: 22px;
+            padding: 20px 20px 18px;
+            margin-bottom: 18px;
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.35), transparent 60%),
+                radial-gradient(circle at top right, rgba(34, 197, 94, 0.35), transparent 60%),
+                radial-gradient(circle at bottom, rgba(59, 130, 246, 0.45), rgba(15, 23, 42, 1) 70%);
+            border: 1px solid rgba(56, 189, 248, 0.5);
+            box-shadow: var(--shadow-soft), var(--shadow-glow);
+        }
+
+        .portfolio-summary::before {
+            content: "";
+            position: absolute;
+            inset: -40%;
+            background: conic-gradient(
+                from 180deg,
+                rgba(56, 189, 248, 0.42),
+                rgba(45, 212, 191, 0.6),
+                rgba(34, 197, 94, 0.42),
+                rgba(56, 189, 248, 0.42)
+            );
+            opacity: 0.35;
+            filter: blur(45px);
+            animation: gradient-spin 18s linear infinite;
+            pointer-events: none;
+        }
+
+        .portfolio-inner {
+            position: relative;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            z-index: 1;
+        }
+
+        .summary-main {
+            flex: 1 1 220px;
+        }
+
+        .summary-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: rgba(226, 232, 240, 0.85);
+        }
+
+        .summary-total {
+            font-size: 2.3rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            margin-top: 6px;
+            text-shadow: 0 8px 25px rgba(15, 23, 42, 0.65);
+        }
+
+        .summary-subline {
+            margin-top: 4px;
+            font-size: 0.85rem;
+            color: rgba(226, 232, 240, 0.9);
+        }
+
+        .summary-subline-value.positive {
+            color: var(--success);
+        }
+        .summary-subline-value.negative {
+            color: var(--danger);
+        }
+
+        .summary-badges {
+            margin-top: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .summary-badge {
+            font-size: 0.78rem;
+            padding: 4px 9px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.4);
+        }
+
+        .summary-grid {
+            flex: 2 1 320px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .summary-item {
+            padding: 10px 10px;
+            border-radius: 14px;
+            background: linear-gradient(
+                135deg,
+                rgba(15, 23, 42, 0.95),
+                rgba(15, 23, 42, 0.7)
+            );
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            backdrop-filter: blur(10px);
+        }
+
+        .summary-item-label {
+            font-size: 0.76rem;
+            color: rgba(226, 232, 240, 0.85);
+        }
+
+        .summary-item-value {
+            margin-top: 4px;
+            font-size: 1.02rem;
+            font-weight: 600;
+        }
+
+        .summary-item-value.positive {
+            color: var(--success);
+        }
+
+        .summary-item-value.negative {
+            color: var(--danger);
+        }
+
+        /* ============ SEARCH + CONTROLS ROW ============ */
+
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .input-pill {
+            flex: 1 1 220px;
+            position: relative;
+        }
+
+        .input-pill input {
+            width: 100%;
+            padding: 9px 34px 9px 11px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.85));
+            color: var(--text-primary);
+            font-size: 0.86rem;
+            outline: none;
+            box-shadow: 0 12px 26px rgba(15, 23, 42, 0.7);
+        }
+
+        .input-pill input::placeholder {
+            color: rgba(148, 163, 184, 0.7);
+        }
+
+        .input-clear {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.1rem;
+            color: rgba(148, 163, 184, 0.8);
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            flex: 0 0 auto;
+            border-radius: 999px;
+            padding: 9px 16px;
+            font-size: 0.86rem;
+            border: none;
+            cursor: pointer;
+            background-image: linear-gradient(120deg, var(--accent-neon-1), var(--accent-neon-2), var(--accent-neon-3));
+            color: #020617;
+            font-weight: 600;
+            box-shadow: 0 14px 26px rgba(34, 211, 238, 0.5);
+            transition: all 0.15s ease-out;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 18px 36px rgba(34, 211, 238, 0.7);
+        }
+
+        .btn-ghost {
+            flex: 0 0 auto;
+            border-radius: 999px;
+            padding: 9px 14px;
+            font-size: 0.82rem;
+            border: 1px solid rgba(148, 163, 184, 0.55);
+            background: radial-gradient(circle at top, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.85));
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* ============ STOCK CARDS GRID (SOFT AURORA EDGE) ============ */
+
+        .cards-section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .cards-title {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            color: var(--text-muted);
+        }
+
+        .cards-sub {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        .stocks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+        }
+
+        .stock-card {
+            position: relative;
+            border-radius: 18px;
+            padding: 13px 13px 12px;
+            /* brighter slate gradient for readability */
+            background:
+                radial-gradient(circle at top left, rgba(30, 41, 59, 0.95), rgba(30, 41, 59, 0.93)),
+                linear-gradient(135deg, rgba(30, 41, 59, 0.94), rgba(30, 41, 59, 0.90));
+            box-shadow: var(--shadow-card);
+            overflow: hidden;
+            cursor: pointer;
+            isolation: isolate;
+            transform: translateY(0);
+            transition: transform 0.25s ease-out, box-shadow 0.25s ease-out;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+        }
+
+        /* Soft static aurora glow around card, no rotation */
+        .stock-card::before {
+            content: "";
+            position: absolute;
+            inset: -1px;
+            border-radius: 20px;
+            background: conic-gradient(
+                from 180deg,
+                rgba(56, 189, 248, 0.28),
+                rgba(34, 197, 94, 0.28),
+                rgba(45, 212, 191, 0.28),
+                rgba(56, 189, 248, 0.28)
+            );
+            opacity: 0.40;
+            z-index: -1;
+            filter: blur(8px);
+        }
+
+        .stock-card::after {
+            content: "";
+            position: absolute;
+            inset: 1px;
+            border-radius: 17px;
+            background:
+                radial-gradient(circle at top right, rgba(30, 41, 59, 0.90), rgba(30, 41, 59, 0.95)),
+                radial-gradient(circle at bottom left, rgba(30, 41, 59, 0.95), rgba(30, 41, 59, 1));
+            z-index: -1;
+        }
+
+        .stock-card:hover {
+            transform: translateY(-6px) scale(1.012);
+            box-shadow:
+                0 22px 48px rgba(0,0,0,0.55),
+                0 0 22px rgba(56,189,248,0.45),
+                0 0 32px rgba(34,197,94,0.40);
+        }
+
+        .stock-header-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .stock-symbol {
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+        }
+
+        .stock-name {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .stock-price-block {
+            text-align: right;
+        }
+
+        .stock-price {
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+
+        .stock-change-line {
+            font-size: 0.8rem;
+            margin-top: 2px;
+        }
+
+        .stock-change-positive {
+            color: var(--success);
+        }
+
+        .stock-change-negative {
+            color: var(--danger);
+        }
+
+        .stock-tags-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 0.74rem;
+            color: var(--text-secondary);
+        }
+
+        .stock-tags-row span.badge-soft {
+            padding: 4px 9px;
+            border-radius: 999px;
+            font-weight: 600;
+            border: 1.7px solid;
+            
+            background: rgba(30, 41, 59, 0.95);
+            color: #ffffffde;
+            text-shadow: 0 0 1px rgba(0,0,0,0.35);
+            transition: 0.25s;
+        }
+
+        .stock-metrics {
+            margin-top: 8px;
+            border-top: 1px solid rgba(148, 163, 184, 0.22);
+            padding-top: 8px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
+            font-size: 0.74rem;
+        }
+
+        .metric-label {
+            color: var(--text-muted);
+        }
+
+        .metric-value {
+            margin-top: 2px;
+            font-weight: 600;
+        }
+
+        .metric-value.positive {
+            color: var(--success);
+        }
+
+        .metric-value.negative {
+            color: var(--danger);
+        }
+
+        .stock-footer-row {
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.74rem;
+            color: var(--text-secondary);
+        }
+
+        .mini-btn {
+            border-radius: 999px;
+            padding: 4px 12px;
+            font-weight: 600;
+            border: 1.7px solid;
+            
+            background: rgba(30, 41, 59, 0.95);
+            color: #fff;
+            cursor: pointer;
+            transition: 0.25s;
+        }
+
+        .badge-soft:hover,
+        .mini-btn:hover {
+            box-shadow:
+                0 0 14px rgba(56,189,248,0.45),
+                0 0 22px rgba(34,197,94,0.35);
+            transform: translateY(-2px);
+        }
+
+        /* ============ SIMPLE CHART PLACEHOLDER ============ */
+
+        .chart-shell {
+            margin-top: 18px;
+            border-radius: 18px;
+            padding: 12px 12px 16px;
+            background:
+                linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.75));
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 10px;
+        }
+
+        .chart-title-block {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .chart-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .chart-big-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .chart-ranges {
+            display: inline-flex;
+            padding: 3px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+        }
+
+        .range-btn {
+            border-radius: 999px;
+            border: none;
+            padding: 4px 9px;
+            font-size: 0.72rem;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .range-btn.active {
+            background: radial-gradient(circle at top, rgba(56, 189, 248, 0.4), rgba(16, 185, 129, 0.3));
+            color: var(--text-primary);
+        }
+
+        .chart-placeholder {
+            margin-top: 8px;
+            border-radius: 12px;
+            height: 220px;
+            background: radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 55%),
+                        repeating-linear-gradient(
+                            to right,
+                            rgba(15, 23, 42, 0.9),
+                            rgba(15, 23, 42, 0.9) 1px,
+                            rgba(15, 23, 42, 0.95) 1px,
+                            rgba(15, 23, 42, 0.95) 12px
+                        );
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chart-placeholder::before {
+            content: "";
+            position: absolute;
+            inset: 12px 8px;
+            border-radius: 10px;
+            background: linear-gradient(
+                135deg,
+                rgba(56, 189, 248, 0.65),
+                rgba(16, 185, 129, 0.7)
+            );
+            opacity: 0.22;
+            filter: blur(10px);
+        }
+
+        /* ============ KEYFRAMES ============ */
+
+        @keyframes gradient-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* ============ LIGHT MODE OVERRIDES ============ */
+
+        body.light-mode {
+            background: radial-gradient(circle at top, #f9fafb 0%, #e5e7eb 55%, #d1d5db 100%);
+            color: #020617;
+        }
+
+        body.light-mode .tabs,
+        body.light-mode .btn-ghost,
+        body.light-mode .pill,
+        body.light-mode .icon-btn,
+        body.light-mode .user-chip {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(148, 163, 184, 0.4);
+            box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+        }
+
+        body.light-mode .portfolio-summary {
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.25), transparent 60%),
+                radial-gradient(circle at top right, rgba(34, 197, 94, 0.25), transparent 60%),
+                radial-gradient(circle at bottom, rgba(191, 219, 254, 0.95), rgba(255, 255, 255, 1) 70%);
+            border-color: rgba(56, 189, 248, 0.45);
+        }
+
+        body.light-mode .summary-item {
+            background: linear-gradient(135deg, #ffffff, #e5e7eb);
+            border-color: rgba(148, 163, 184, 0.35);
+        }
+
+        body.light-mode .summary-label,
+        body.light-mode .summary-item-label {
+            color: #4b5563;
+        }
+
+        body.light-mode .summary-total,
+        body.light-mode .summary-item-value {
+            color: #111827;
+        }
+
+        body.light-mode .summary-item-value.positive,
+        body.light-mode .summary-subline-value.positive,
+        body.light-mode .metric-value.positive {
+            color: #16a34a;
+        }
+
+        body.light-mode .summary-item-value.negative,
+        body.light-mode .summary-subline-value.negative,
+        body.light-mode .metric-value.negative {
+            color: #dc2626;
+        }
+
+        body.light-mode .stocks-grid .stock-card {
+            background: linear-gradient(135deg, #ffffff, #e5e7eb);
+            border-color: rgba(148, 163, 184, 0.45);
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+        }
+
+        body.light-mode .stock-card::before {
+            opacity: 0.30;
+            filter: blur(10px);
+        }
+
+        body.light-mode .stock-card::after {
+            background: radial-gradient(circle at top, #ffffff, #e5e7eb);
+        }
+
+        body.light-mode .stock-name,
+        body.light-mode .stock-tags-row,
+        body.light-mode .metric-label,
+        body.light-mode .stock-footer-row,
+        body.light-mode .cards-sub {
+            color: #4b5563;
+        }
+
+        body.light-mode .stock-price,
+        body.light-mode .stock-symbol {
+            color: #111827;
+        }
+
+        body.light-mode .badge-soft {
+            background: #f8fafc;
+            color: #0f172a;
+            text-shadow: none;
+        }
+
+        body.light-mode .mini-btn {
+            background: #f1f5f9;
+            color: #0f172a;
+        }
+
+        body.light-mode .chart-shell {
+            background: linear-gradient(135deg, #ffffff, #e5e7eb);
+            border-color: rgba(148, 163, 184, 0.4);
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+        }
+
+        body.light-mode .chart-ranges {
+            background: rgba(255,255,255,0.9);
+            border-color: rgba(148,163,184,0.45);
+        }
+
+        body.light-mode .range-btn {
+            color: #6b7280;
+        }
+
+        body.light-mode .range-btn.active {
+            color: #111827;
+        }
+
+        body.light-mode .chart-placeholder {
+            background: radial-gradient(circle at top, rgba(56, 189, 248, 0.24), transparent 55%), #e5e7eb;
+        }
+
+        body.light-mode .cards-title {
+            color: #9ca3af;
+        }
+
+        body.light-mode .app-subtitle {
+            color: #6b7280;
+        }
+
+        /* ============ RESPONSIVE ============ */
+
+        @media (max-width: 768px) {
+            .app-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header-right {
+                align-self: stretch;
+                justify-content: flex-end;
+            }
+
+            .summary-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .portfolio-summary {
+                padding: 16px 14px 14px;
+            }
+
+            .summary-total {
+                font-size: 1.8rem;
+            }
+        }
+    
+/* --- MATCH STOCK-CARD BADGE READABILITY FOR SUMMARY BADGES (LIGHT MODE) --- */
+body.light-mode .summary-badge {
+    background: #f8fafc;
+    border-color: #d1d5db;
+    color: #0f172a;
+    text-shadow: none;
+}
+
+body.light-mode .summary-badge .summary-subline-value.positive {
+    color: #16a34a;
+}
+
+body.light-mode .summary-badge .summary-subline-value.negative {
+    color: #dc2626;
+}
+
+
+/* === V5 Aurora Glow + Neon-Lite Badge Update === */
+
+/* Animated aurora edge */
+@keyframes auroraPulse {
+    0% { opacity: 0.35; transform: rotate(0deg); }
+    50% { opacity: 0.55; transform: rotate(2deg); }
+    100% { opacity: 0.35; transform: rotate(0deg); }
+}
+
+.stock-card::before {
+    animation: auroraPulse 6s ease-in-out infinite;
+}
+
+/* Neon-lite borders for summary badges (light mode) */
+body.light-mode .summary-badge {
+    background: #ffffff;
+    border: 1.6px solid;
+    
+    color: #0f172a;
+}
+
+/* Neon-lite borders for summary badges (dark mode) */
+.summary-badge {
+    border: 1.6px solid;
+    
+}
+
+/* Slight glow on hover */
+.summary-badge:hover {
+    box-shadow: 0 0 12px rgba(0,255,198,0.25), 0 0 18px rgba(0,212,255,0.25);
+    transform: translateY(-2px);
+    transition: 0.25s ease;
+}
+
+
+/* === V5.2B: Strong Neon Edge (Option B) === */
+
+.stock-card {
+    position: relative;
+    border-radius: 18px;
+    border: 3px solid transparent;
+    
+}
+
+/* Hover: brighter + more intense glow */
+.stock-card:hover {
+    
+    box-shadow:
+        0 0 18px rgba(0, 255, 200, 0.45),
+        0 0 28px rgba(0, 200, 255, 0.35),
+        0 0 38px rgba(0, 255, 140, 0.25);
+    transition: 0.22s ease-out;
+}
+
+
+/* === V5.2B CLEAN NEON BORDER (3px, perfect rounded corners) === */
+
+.stock-card {
+    position: relative;
+    z-index: 1;
+    border: none !important;
+}
+
+/* Neon border wrapper */
+.stock-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 18px;
+    padding: 3px; /* 3px border thickness */
+    background: linear-gradient(135deg, #00f7ff, #00ff88);
+    -webkit-mask: 
+        linear-gradient(#fff 0 0) content-box, 
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    z-index: -1;
+}
+
+/* Hover → brighter */
+.stock-card:hover::before {
+    background: linear-gradient(135deg, #00c8ff, #00ffcc);
+}
+
+
+/* === V5.2C: Stronger Day-Mode Edge + Popup Hover === */
+
+/* Day-mode neon edge: darker + more saturated to stand out on white */
+body.light-mode .stock-card::before {
+    background: linear-gradient(135deg, #00c6ff, #00ff9d);
+    opacity: 0.9;
+    filter: blur(0px);
+}
+
+/* Hover popup effect: lifted, brighter, stronger glow */
+body.light-mode .stock-card:hover {
+    transform: translateY(-8px) scale(1.015);
+    box-shadow:
+        0 12px 28px rgba(0,0,0,0.20),
+        0 0 20px rgba(0, 198, 255, 0.35),
+        0 0 32px rgba(0, 255, 180, 0.25);
+}
+
+.stock-card:hover::before {
+    background: linear-gradient(135deg, #00b3ff, #00ffcc);
+    opacity: 1;
+    filter: blur(0px);
+}
+
+/* Non-hover cards dim slightly when another card is hovered */
+.stock-card.dimmed {
+    opacity: 0.55;
+    filter: blur(0px);
+    transition: opacity 0.25s ease;
+}
+
+</style>
+</head>
+
+<body>
+<div class="page-shell">
+
+    <!-- HEADER (Option C – Hybrid) -->
+    <header class="app-header">
+        <div class="header-left">
+            <div class="app-logo"></div>
+            <div class="app-title-block">
+                <div class="app-title">NEON PORTFOLIO</div>
+                <div class="app-subtitle">Live stocks • ETFs • funds</div>
+            </div>
+        </div>
+
+        <div class="header-right">
+            <div class="pill">
+                <span class="pill-dot"></span>
+                <span>Live update · <span id="header-countdown">90s</span></span>
+            </div>
+            <button class="icon-btn" id="themeToggle" title="Toggle theme">
+                🌙
+            </button>
+            <button class="icon-btn" id="refreshBtn" title="Refresh now">
+                ⟳
+            </button>
+            <div class="user-chip">
+                <div class="user-avatar"></div>
+                <div class="user-name">Signed in</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- TABS -->
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="stocks-tab">
+            <span class="icon">📊</span> Stocks
+        </button>
+        <button class="tab-btn" data-tab="funds-tab">
+            <span class="icon">🏛️</span> Mutual Funds
+        </button>
+        <button class="tab-btn" data-tab="watchlist-tab">
+            <span class="icon">👀</span> Watchlist
+        </button>
+        <button class="tab-btn" data-tab="news-tab">
+            <span class="icon">📰</span> News
+        </button>
+    </div>
+
+    <div class="tab-panels">
+        <!-- STOCKS TAB -->
+        <section id="stocks-tab" class="tab-panel active">
+            <!-- PORTFOLIO SUMMARY BANNER -->
+            <section id="portfolio-summary" class="portfolio-summary">
+                <div class="portfolio-inner">
+                    <div class="summary-main">
+                        <div class="summary-label">Combined Total</div>
+                        <div id="combined-total-value" class="summary-total">$102,345.67</div>
+                        <div class="summary-subline">
+                            <span id="total-pl-today" class="summary-subline-value positive">+$1,234.56</span>
+                            &nbsp;·&nbsp;
+                            <span id="total-pl-percent-today" class="summary-subline-value positive">+1.21%</span>
+                            &nbsp;today
+                        </div>
+                        <div class="summary-badges">
+                            <div class="summary-badge">Unrealized P/L: <span id="total-pl-unrealized" class="summary-subline-value positive">+$9,876.54</span></div>
+                            <div class="summary-badge">Realized P/L: <span id="total-pl-realized" class="summary-subline-value positive">+$2,345.67</span></div>
+                        </div>
+                    </div>
+
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <div class="summary-item-label">Stocks Total Value</div>
+                            <div id="stocks-total-value" class="summary-item-value">$78,900.12</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-item-label">Mutual Fund Value</div>
+                            <div id="mutual-fund-total-value" class="summary-item-value">$23,445.55</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-item-label">Total Contributions</div>
+                            <div id="total-contributions" class="summary-item-value">$90,000.00</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-item-label">Total Dividends</div>
+                            <div id="total-dividends" class="summary-item-value positive">$1,234.56</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-item-label">Best Day P/L</div>
+                            <div id="best-day-pl" class="summary-item-value positive">+$2,100.00</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-item-label">Worst Day P/L</div>
+                            <div id="worst-day-pl" class="summary-item-value negative">-$1,350.00</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SEARCH + CONTROLS -->
+            <div class="controls-row">
+                <div class="input-pill">
+                    <input id="stockInput" type="text" placeholder="Add stock symbol (e.g. NVDA, AAPL, TSLA)" />
+                    <span class="input-clear">&times;</span>
+                </div>
+                <button id="addBtn" class="btn-primary">+ Add Stock</button>
+                <button class="btn-ghost">Filter / Sort</button>
+                <button class="btn-ghost">⚙ Settings</button>
+            </div>
+
+            <!-- PORTFOLIO PERFORMANCE CHART SHELL (placeholder for now) -->
+            <section class="chart-shell">
+                <div class="chart-header">
+                    <div class="chart-title-block">
+                        <div class="chart-title">Portfolio Performance</div>
+                        <div id="chart-current-value" class="chart-big-number">$102,345.67</div>
+                    </div>
+                    <div class="chart-ranges">
+                        <button class="range-btn active">1D</button>
+                        <button class="range-btn">1W</button>
+                        <button class="range-btn">1M</button>
+                        <button class="range-btn">YTD</button>
+                        <button class="range-btn">1Y</button>
+                        <button class="range-btn">All</button>
+                    </div>
+                </div>
+                <div class="chart-placeholder"></div>
+            </section>
+
+            <!-- STOCK CARDS SECTION -->
+            <div class="cards-section-header">
+                <div>
+                    <div class="cards-title">Holdings</div>
+                    <div class="cards-sub">Each card will be powered by your engine.js logic later.</div>
+                </div>
+                <div class="cards-sub">Tap a card to expand details / chart (future behavior).</div>
+            </div>
+
+            <div id="stocksGrid" class="stocks-grid">
+                <!-- Example Card 1 -->
+                <article class="stock-card">
+                    <div class="stock-header-row">
+                        <div>
+                            <div class="stock-symbol">NVDA</div>
+                            <div class="stock-name">NVIDIA Corp.</div>
+                        </div>
+                        <div class="stock-price-block">
+                            <div class="stock-price">$128.45</div>
+                            <div class="stock-change-line stock-change-positive">+2.34 ( +1.86% )</div>
+                        </div>
+                    </div>
+                    <div class="stock-tags-row">
+                        <span class="badge-soft">Platform: Fidelity</span>
+                        <span>Shares: 50</span>
+                    </div>
+                    <div class="stock-metrics">
+                        <div>
+                            <div class="metric-label">Value</div>
+                            <div class="metric-value">$6,422.50</div>
+                        </div>
+                        <div>
+                            <div class="metric-label">Overall P/L</div>
+                            <div class="metric-value positive">+$1,230.40</div>
+                        </div>
+                        <div>
+                            <div class="metric-label">Today P/L</div>
+                            <div class="metric-value positive">+$95.10</div>
+                        </div>
+                    </div>
+                    <div class="stock-footer-row">
+                        <span>Avg cost: $103.50</span>
+                        <button class="mini-btn">Details</button>
+                    </div>
+                </article>
+
+                <!-- Example Card 2 -->
+                <article class="stock-card">
+                    <div class="stock-header-row">
+                        <div>
+                            <div class="stock-symbol">TSLA</div>
+                            <div class="stock-name">Tesla, Inc.</div>
+                        </div>
+                        <div class="stock-price-block">
+                            <div class="stock-price">$214.12</div>
+                            <div class="stock-change-line stock-change-negative">-1.94 ( -0.90% )</div>
+                        </div>
+                    </div>
+                    <div class="stock-tags-row">
+                        <span class="badge-soft">Platform: Robinhood</span>
+                        <span>Shares: 20</span>
+                    </div>
+                    <div class="stock-metrics">
+                        <div>
+                            <div class="metric-label">Value</div>
+                            <div class="metric-value">$4,282.40</div>
+                        </div>
+                        <div>
+                            <div class="metric-label">Overall P/L</div>
+                            <div class="metric-value negative">-$350.00</div>
+                        </div>
+                        <div>
+                            <div class="metric-label">Today P/L</div>
+                            <div class="metric-value negative">-$38.80</div>
+                        </div>
+                    </div>
+                    <div class="stock-footer-row">
+                        <span>Avg cost: $231.50</span>
+                        <button class="mini-btn">Details</button>
+                    </div>
+                </article>
+
+                <!-- Example Card 3 -->
+                <article class="stock-card">
+                    <div class="stock-header-row">
+                        <div>
+                            <div class="stock-symbol">AVGO</div>
+                            <div class="stock-name">Broadcom Inc.</div>
+                        </div>
+                        <div class="stock-price-block">
+                            <div class="stock-price">$1,620.18</div>
+                            <div class="stock-change-line stock-change-positive">+8.12 ( +0.50% )</div>
+                        </div>
+                    </div>
+                    <div class="stock-tags-row">
+                        <span class="badge-soft">Platform: Schwab</span>
+                        <span>Shares: 4</span>
+                    </div>
+                    <div class="stock-metrics">
+                        <div>
+                            <div class="metric-label">Value</div>
+                            <div class="metric-value">$6,480.72</div>
+                        </div>
+                        <div>
+                            <div class="metric-label">Overall P/L</div>
+                            <div class="metric-value positive">+$910.00</div>
+                        </div>
+                        <div>
+                            <div class="metric-label">Today P/L</div>
+                            <div class="metric-value positive">+$32.48</div>
+                        </div>
+                    </div>
+                    <div class="stock-footer-row">
+                        <span>Avg cost: $1,395.00</span>
+                        <button class="mini-btn">Details</button>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <!-- OTHER TABS – simple placeholders for now -->
+        <section id="funds-tab" class="tab-panel">
+            <p style="margin-top: 18px; color: var(--text-secondary); font-size: 0.9rem;">
+                Mutual Funds UI will follow the same neon-card style. We’ll wire real data later with engine.js.
+            </p>
+        </section>
+
+        <section id="watchlist-tab" class="tab-panel">
+            <p style="margin-top: 18px; color: var(--text-secondary); font-size: 0.9rem;">
+                Watchlist UI coming here. Similar cards, read-only style.
+            </p>
+        </section>
+
+        <section id="news-tab" class="tab-panel">
+            <p style="margin-top: 18px; color: var(--text-secondary); font-size: 0.9rem;">
+                News feed cards will appear here in a vertical list.
+            </p>
+        </section>
+    </div>
+
+</div>
+
+<script>
+    // Tab UI logic (visual only)
+    const tabButtons = document.querySelectorAll(".tab-btn");
+    const tabPanels = document.querySelectorAll(".tab-panel");
+
+    tabButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const target = btn.getAttribute("data-tab");
+            tabButtons.forEach(b => b.classList.remove("active"));
+            tabPanels.forEach(p => p.classList.remove("active"));
+            btn.classList.add("active");
+            document.getElementById(target).classList.add("active");
+        });
+    });
+
+    // Theme toggle (dark <-> light), default dark
+    const body = document.body;
+    const themeToggle = document.getElementById("themeToggle");
+
+    // Load saved theme if present
+    const savedTheme = localStorage.getItem("neonPortfolioTheme");
+    if (savedTheme === "light") {
+        body.classList.add("light-mode");
+        themeToggle.textContent = "☀️";
+    }
+
+    themeToggle.addEventListener("click", () => {
+        const isLight = body.classList.toggle("light-mode");
+        localStorage.setItem("neonPortfolioTheme", isLight ? "light" : "dark");
+        themeToggle.textContent = isLight ? "☀️" : "🌙";
+    });
+
+    // Dim non-hover cards in the row
+    const cards = document.querySelectorAll('.stock-card');
+    cards.forEach(card => {
+        card.addEventListener('mouseenter', () => {
+            cards.forEach(c => {
+                if (c !== card) c.classList.add('dimmed');
+            });
+        });
+        card.addEventListener('mouseleave', () => {
+            cards.forEach(c => c.classList.remove('dimmed'));
+        });
+    });
+
+</script>
+
+</body>
+</html>
