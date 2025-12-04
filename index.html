@@ -1,14 +1,114 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Loading App…</title>
-    <!-- 🔴 Change ONLY the filename after url= when you switch versions -->
-    <meta http-equiv="refresh" content="0; url=base_index_bottom_fixed.html">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Portfolio App Loader</title>
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* Loader panel */
+        #loaderPanel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(245, 245, 245, 0.92);
+            padding: 12px 16px;
+            border-radius: 10px;
+            box-shadow: 0px 3px 10px rgba(0,0,0,0.22);
+            z-index: 9999;
+            backdrop-filter: blur(6px);
+        }
+
+        #loaderPanel label {
+            font-size: 14px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        #loaderPanel select {
+            padding: 5px 8px;
+            font-size: 13px;
+            border-radius: 6px;
+            outline: none;
+        }
+
+        #loaderPanel button {
+            padding: 6px 12px;
+            margin-left: 6px;
+            font-size: 13px;
+            background: #3a7afe;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        #loaderPanel button:hover {
+            background: #1f5de0;
+        }
+    </style>
 </head>
+
 <body>
-    <p>Loading…</p>
+
+    <!-- Loader Control Panel -->
+    <div id="loaderPanel">
+        <label for="versionSelect">App Version:</label>
+        <select id="versionSelect">
+            <!-- You can add/remove versions here -->
+            <option value="base_index.html">Base Version</option>
+            <option value="base_index_bottom_fixed.html">Bottom Chart Fix</option>
+            <option value="base_index_charts_fixed.html">Charts Fixed Version</option>
+        </select>
+
+        <button onclick="loadVersion()">Load</button>
+    </div>
+
+    <!-- Frame where your real app loads -->
+    <iframe id="appFrame" src=""></iframe>
+
+    <script>
+        const STORAGE_KEY = "preferred_app_version";
+
+        function loadVersion() {
+            const selected = document.getElementById("versionSelect").value;
+            document.getElementById("appFrame").src = selected;
+
+            // Save preference
+            localStorage.setItem(STORAGE_KEY, selected);
+        }
+
+        function loadSavedVersion() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+
+            if (saved) {
+                document.getElementById("versionSelect").value = saved;
+                document.getElementById("appFrame").src = saved;
+            } else {
+                // Default version if nothing saved yet
+                const defaultFile = "base_index_bottom_fixed.html";
+                document.getElementById("versionSelect").value = defaultFile;
+                document.getElementById("appFrame").src = defaultFile;
+            }
+        }
+
+        // Load saved version on startup
+        loadSavedVersion();
+    </script>
+
 </body>
 </html>
-
-
