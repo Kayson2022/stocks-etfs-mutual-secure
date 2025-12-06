@@ -938,7 +938,6 @@ async fetchFmpFundHistory(symbol, range) {
                 const refreshInput = document.getElementById('modal-refresh-interval');
                 if (refreshInput) refreshInput.value = Math.floor(refreshInterval / 1000);
             }
-            }
             cacheDOMElements() {
                 this.elements = {
                     loginContainer: document.getElementById('login-container'),
