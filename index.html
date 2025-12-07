@@ -2251,7 +2251,11 @@ async fetchFmpFundHistory(symbol, range) {
                     const previousClose = parseFloat(q["08. previous close"]) || price;
                     const change = parseFloat(q["09. change"]) || (price - previousClose);
                     const percentRaw = q["10. change percent"] || '';
-                    const changePercent = parseFloat(String(percentRaw).replace('%', '')) or (previousClose ? (change / previousClose) * 100 : 0);
+                    let changePercent = parseFloat(String(percentRaw).replace('%', '').trim());
+if (isNaN(changePercent)) {
+    changePercent = previousClose ? (change / previousClose) * 100 : 0;
+}
+
 
                     return {
                         success: true,
