@@ -1854,6 +1854,9 @@
 
             // --- Finnhub Quote (for refreshing) ---
             async fetchStockEtfQuote(symbol) {
+                if (this.isMutualFund(symbol)) {
+                    return { success: false, symbol, reason: "Skipped Finnhub for mutual fund" };
+                }
                 const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${this.config.finnhubApiKey}`;
                 try {
                     const response = await fetch(quoteUrl);
@@ -1894,7 +1897,8 @@
                     } };
                 } catch (error) {
                     console.error(`Error fetching fund data for ${symbol} (FMP):`, error);
-                    return { success: false, symbol, reason: `FMP Error: ${error.message}` };
+                                    console.log(`MF Source: FMP → ${symbol}`);
+return { success: false, symbol, reason: `FMP Error: ${error.message}` };
                 }
             }
             
@@ -1944,39 +1948,65 @@
                     };
                 } catch (error) {
                     console.error(`Error fetching fund data for ${symbol} (Alpha Vantage):`, error);
-                    return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}` };
+                                    console.log(`MF Source: ALPHA VANTAGE → ${symbol}`);
+return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}` };
                 }
             }
             
             // --- Fallback Function for Mutual Funds (Alpha Vantage PRIMARY -> FMP) ---
+            
+            // --- Fallback Function for Mutual Funds (Alpha Vantage PRIMARY -> FMP) ---
             async fetchMutualFundDataWithFallback(symbol) {
-                // Check if the symbol might be a stock/ETF first via Finnhub quote
-                let quoteResult = await this.fetchStockEtfQuote(symbol);
+                console.log(`Fetching Mutual Fund: ${symbol}`);
                 
+                // If it's explicitly a mutual fund (e.g., ends with X), skip Finnhub entirely
+                if (this.isMutualFund(symbol)) {
+                    // 1. Try Alpha Vantage FIRST (primary for mutual funds)
+                    let result = await this.fetchAlphaVantageFundData(symbol);
+                    if (result && result.success && result.data && result.data.price > 0) {
+                        return result;
+                    }
+
+                    console.log(`Alpha Vantage failed for ${symbol}. Falling back to FMP...`);
+
+                    // 2. Try FMP second
+                    result = await this.fetchFmpFundData(symbol);
+                    if (result && result.success && result.data && result.data.price > 0) {
+                        return result;
+                    }
+
+                    // All failed for a mutual fund
+                    return {
+                        success: false,
+                        symbol,
+                        reason: `All fund APIs failed. Last error: ${result && result.reason ? result.reason : 'Data not found.'}`
+                    };
+                }
+
+                // Non-mutual-fund symbol: treat like stock/ETF first via Finnhub
+                let quoteResult = await this.fetchStockEtfQuote(symbol);
+
                 if (quoteResult.success && !this.isMutualFund(symbol)) {
                     // It seems like a stock/ETF (non-mutual fund format), use the full data fetch
                     const dataResult = await this.fetchStockEtfData(symbol);
                     if (dataResult.success) {
-                        return dataResult;
+                         return dataResult;
                     }
                 }
                 
-                // If it's explicitly a mutual fund (e.g., ends with X) or Finnhub failed, proceed with fund fallbacks
-                
-                // 1. Try Alpha Vantage FIRST (primary for mutual funds)
+                // Fallback even for non-mutual or ambiguous symbols: Alpha then FMP
                 let result = await this.fetchAlphaVantageFundData(symbol);
                 if (result && result.success && result.data && result.data.price > 0) {
                     return result;
                 }
-                
+
                 console.log(`Alpha Vantage failed for ${symbol}. Falling back to FMP...`);
-                
-                // 2. Try FMP second
+
                 result = await this.fetchFmpFundData(symbol);
                 if (result && result.success && result.data && result.data.price > 0) {
                     return result;
                 }
-                
+
                 // All failed
                 return {
                     success: false,
@@ -1984,6 +2014,7 @@
                     reason: `All fund APIs failed. Last error: ${result && result.reason ? result.reason : 'Data not found.'}`
                 };
             }
+
 // --- Historical Data Fetch (Uses Alpha Vantage) ---
             async fetchHistoricalData(symbol) {
                 if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
