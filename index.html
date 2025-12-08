@@ -1577,7 +1577,14 @@
     <script type="module">
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, browserPopupRedirectResolver, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, browserPopupRedirectResolver, 
+onAuthStateChanged(auth, user => {
+    if (user) {
+        alert("YOUR UID = " + user.uid);
+    }
+});
+
+onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, serverTimestamp, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-firestore.js";
         
         const firebaseConfig = {
