@@ -2285,19 +2285,22 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 };
             }
 
+            
             async loadApiKeysFromFirestore() {
-                if (!db) {
-                    console.warn("Firestore (db) is not initialized; skipping API key load.");
+                if (!db || !this.userId) {
+                    console.warn("Firestore (db) not initialized or no userId; skipping API key load.");
                     return;
                 }
                 try {
-                    const apiDocRef = doc(db, "global", "apiKeys");
+                    const apiDocRef = doc(db, "users", this.userId, "config", "api_keys");
                     const snap = await getDoc(apiDocRef);
                     if (snap.exists()) {
                         const data = snap.data() || {};
                         this.config.finnhubApiKey = data.finnhubKey || "";
-                        this.config.alphaVantageKey = data.alphaKey || "";
+                        this.config.alphaVantageKey = data.alphaVantageKey || data.alphaKey || "";
                         this.config.fmpApiKey = data.fmpKey || "";
+                        this.config.marketstackApiKey = data.marketstackKey || "";
+
                         if (this.elements && this.elements.modalFinnhubKey) {
                             this.elements.modalFinnhubKey.value = this.config.finnhubApiKey;
                         }
@@ -2307,14 +2310,23 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         if (this.elements && this.elements.modalFmpKey) {
                             this.elements.modalFmpKey.value = this.config.fmpApiKey;
                         }
-                        console.log("API keys loaded from Firestore.");
+                        if (this.elements && this.elements.modalMarketstackKey) {
+                            this.elements.modalMarketstackKey.value = this.config.marketstackApiKey;
+                        }
+
+                        console.log("API keys loaded from Firestore (users/%s/config/api_keys).", this.userId);
+
+                        // Re-init API service with loaded keys
+                        this.apiService = new ApiService(this.config);
                     } else {
-                        console.log("No global/apiKeys document found; using empty API keys.");
+                        console.log("No custom API keys found for this user (users/%s/config/api_keys).", this.userId);
                     }
                 } catch (error) {
                     console.error("Error loading API keys from Firestore:", error);
                 }
             }
+
+
             cacheDOMElements() {
                 this.elements = {
                     loginContainer: document.getElementById('login-container'),
@@ -4720,48 +4732,79 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 if (this.elements.modalRefreshInterval) this.elements.modalRefreshInterval.value = this.config.refreshIntervalMs / 1000;
             }
             closeSettingsModal() { if (this.elements.settingsModal) this.elements.settingsModal.style.display = 'none'; }
+            
             async saveSettings() {
-                const finnhubKey = this.elements.modalFinnhubKey ? this.elements.modalFinnhubKey.value.trim() : this.config.finnhubApiKey;
-                const alphaVantageKey = this.elements.modalAlphaVantageKey ? this.elements.modalAlphaVantageKey.value.trim() : this.config.alphaVantageKey;
-                const fmpKey = this.elements.modalFmpKey ? this.elements.modalFmpKey.value.trim() : this.config.fmpApiKey;
-                const refreshInterval = parseInt(this.elements.modalRefreshInterval ? this.elements.modalRefreshInterval.value : 90);
+                const finnhubKey = this.elements.modalFinnhubKey
+                    ? this.elements.modalFinnhubKey.value.trim()
+                    : this.config.finnhubApiKey;
+                const alphaVantageKey = this.elements.modalAlphaVantageKey
+                    ? this.elements.modalAlphaVantageKey.value.trim()
+                    : this.config.alphaVantageKey;
+                const fmpKey = this.elements.modalFmpKey
+                    ? this.elements.modalFmpKey.value.trim()
+                    : this.config.fmpApiKey;
+                const marketstackKey = this.elements.modalMarketstackKey
+                    ? this.elements.modalMarketstackKey.value.trim()
+                    : (this.config.marketstackApiKey || "");
+                const refreshInterval = parseInt(
+                    this.elements.modalRefreshInterval
+                        ? this.elements.modalRefreshInterval.value
+                        : 90,
+                    10
+                );
 
-                if (refreshInterval < 10) { this.showError("Refresh interval must be at least 10 seconds."); return; }
+                if (refreshInterval < 10) {
+                    this.showError("Refresh interval must be at least 10 seconds.");
+                    return;
+                }
 
-                localStorage.setItem('refreshIntervalMs', refreshInterval * 1000);
+                // Persist refresh interval locally
+                this.config.refreshIntervalMs = refreshInterval * 1000;
+                localStorage.setItem("refreshIntervalMs", this.config.refreshIntervalMs.toString());
 
+                // Update local config immediately so app uses new keys even if Firestore fails
                 this.config.finnhubApiKey = finnhubKey;
                 this.config.alphaVantageKey = alphaVantageKey;
                 this.config.fmpApiKey = fmpKey;
-                this.config.refreshIntervalMs = refreshInterval * 1000;
-                
-                
-                if (db) {
+                this.config.marketstackApiKey = marketstackKey;
+
+                // Re-initialize API service with new config
+                this.apiService = new ApiService(this.config);
+
+                if (db && this.userId) {
                     try {
-                        const apiDocRef = doc(db, "global", "apiKeys");
-                        await setDoc(apiDocRef, {
-                            finnhubKey,
-                            alphaKey: alphaVantageKey,
-                            fmpKey,
-                            updatedAt: serverTimestamp()
-                        }, { merge: true });
-                        console.log("API keys saved to Firestore.");
+                        // Save per-user, NOT global
+                        const apiDocRef = doc(db, "users", this.userId, "config", "api_keys");
+                        await setDoc(
+                            apiDocRef,
+                            {
+                                finnhubKey,
+                                alphaVantageKey,
+                                fmpKey,
+                                marketstackKey,
+                                refreshIntervalMs: this.config.refreshIntervalMs,
+                                updatedAt: serverTimestamp()
+                            },
+                            { merge: true }
+                        );
+
+                        console.log("API keys saved to Firestore (users/%s/config/api_keys).", this.userId);
+                        this.showSuccess("✅ Settings saved to your account and auto-refresh restarted!");
                     } catch (error) {
                         console.error("Error saving API keys to Firestore:", error);
+                        this.showError(`Saved locally, but failed to sync to cloud: ${error.message}`);
                     }
                 } else {
-                    console.warn("Firestore (db) is not initialized; API keys not persisted.");
+                    console.warn("Firestore not initialized or user not logged in; API keys only saved locally.");
+                    this.showSuccess("✅ Settings saved (local session only).");
                 }
-
-this.apiService = new ApiService(this.config); // Re-initialize API service with new keys
 
                 this.closeSettingsModal();
                 this.stopLiveUpdate();
                 this.startLiveUpdate();
-                this.showSuccess("✅ Settings saved and auto-refresh restarted!");
             }
 
-            // --- Theme/Privacy Toggles ---
+// --- Theme/Privacy Toggles ---
             toggleDarkMode() {
                 this.isDarkMode = !this.isDarkMode;
                 localStorage.setItem('darkMode', this.isDarkMode ? 'enabled' : 'disabled');
