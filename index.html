@@ -4762,6 +4762,12 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 this.config.refreshIntervalMs = refreshInterval * 1000;
                 localStorage.setItem("refreshIntervalMs", this.config.refreshIntervalMs.toString());
 
+                // Persist API keys locally so Settings modal doesn't revert to old values
+                localStorage.setItem("finnhubApiKey", finnhubKey);
+                localStorage.setItem("alphaVantageApiKey", alphaVantageKey);
+                localStorage.setItem("fmpApiKey", fmpKey);
+                localStorage.setItem("marketstackApiKey", marketstackKey);
+
                 // Update local config immediately so app uses new keys even if Firestore fails
                 this.config.finnhubApiKey = finnhubKey;
                 this.config.alphaVantageKey = alphaVantageKey;
