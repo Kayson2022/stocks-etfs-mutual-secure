@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1574,16 +1575,49 @@
     version updated for better performance and stability.
     -->
     <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+  import {
+    getAuth,
+    GoogleAuthProvider,
+    signInWithPopup,
+    browserPopupRedirectResolver,
+    onAuthStateChanged,
+    signOut
+  } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+  import {
+    getFirestore,
+    doc,
+    setDoc,
+    getDoc,
+    serverTimestamp,
+    onSnapshot,
+    deleteDoc
+  } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
+  const firebaseConfig = {
+    apiKey: "AIzaSyB8wQ0-O2avYjRW7Wjtmiql03q1ikwhX7s",
+    authDomain: "stocks-etfs-mutual.firebaseapp.com",
+    projectId: "stocks-etfs-mutual",
+    storageBucket: "stocks-etfs-mutual.firebasestorage.app",
+    messagingSenderId: "326474465163",
+    appId: "1:326474465163:web:6d140efca04077ba8f1f98e"
+  };
 
-// expose db
-window._db = db;
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+  const auth = getAuth(app);
+
+  window.firebaseApp = app;
+  window.db = db;
+  window.auth = auth;
+  window._db = db;
+
+  window.fsDoc = doc;
+  window.fsSetDoc = setDoc;
+  window.fsGetDoc = getDoc;
+  window.fsServerTime = serverTimestamp;
+  window.fsOnSnapshot = onSnapshot;
+  window.fsDeleteDoc = deleteDoc;
 </script>
 
 
