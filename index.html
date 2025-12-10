@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2295,7 +2296,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     if (snap.exists()) {
                         const data = snap.data() || {};
                         this.config.finnhubApiKey = data.finnhubKey || "";
-                        this.config.alphaVantageKey = data.alphaKey || "";
+                        this.config.alphaVantageKey = data.alphaVantageKey || data.alphaKey || "";
                         this.config.fmpApiKey = data.fmpKey || "";
                         if (this.elements && this.elements.modalFinnhubKey) {
                             this.elements.modalFinnhubKey.value = this.config.finnhubApiKey;
@@ -2308,7 +2309,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         }
                         console.log("API keys loaded from Firestore.");
                     } else {
-                        console.log("No global/apiKeys document found; using empty API keys.");
+                        console.log("No config/api_keys document found; using empty API keys.");
                     }
                 } catch (error) {
                     console.error("Error loading API keys from Firestore:", error);
@@ -4740,8 +4741,10 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         const apiDocRef = doc(db, "config", "api_keys");
                         await setDoc(apiDocRef, {
                             finnhubKey,
-                            alphaKey: alphaVantageKey,
+                            alphaVantageKey,
                             fmpKey,
+                            marketstackKey: this.config.marketstackApiKey || "",
+                            refreshIntervalMs: this.config.refreshIntervalMs,
                             updatedAt: serverTimestamp()
                         }, { merge: true });
                         console.log("API keys saved to Firestore.");
