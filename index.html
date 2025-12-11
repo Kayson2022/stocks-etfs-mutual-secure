@@ -1577,9 +1577,10 @@
     -->
     <script type="module">
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+                import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, browserPopupRedirectResolver, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, serverTimestamp, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+
 
         const firebaseConfig = {
             apiKey: "AIzaSyB8wQ0-O2avYjRW7Wjtmiql03q1ikwhX7s",
@@ -3615,7 +3616,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 }).join('');
             }
             
-            renderCards(itemList, container, type) {
+                        renderCards(itemList, container, type) {
                 if (!container.classList.contains('group-content')) {
                      container.innerHTML = '';
                 }
@@ -3689,7 +3690,10 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         const positiveClass = value => value >= 0 ? 'positive' : 'negative';
                 
                         if (type === 'watchlist') {
-                            stockInfoHTML = `<div class="info-row"><span class="info-label">Open:</span><span class="info-value">${this.formatCurrency(item.open || 0)}</span></div><div class="info-row"><span class="info-label">High:</span><span class="info-value">${this.formatCurrency(item.high || 0)}</span></div><div class="info-row"><span class="info-label">Low:</span><span class="info-value">${this.formatCurrency(item.low || 0)}</span></div><div class="info-row"><span class="info-label">Prev. Close:</span><span class="info-value">${this.formatCurrency(item.previousClose || 0)}</span></div>`;
+                            stockInfoHTML = `<div class="info-row"><span class="info-label">Open:</span><span class="info-value">${this.formatCurrency(item.open || 0)}</span></div>
+<div class="info-row"><span class="info-label">High:</span><span class="info-value">${this.formatCurrency(item.high || 0)}</span></div>
+<div class="info-row"><span class="info-label">Low:</span><span class="info-value">${this.formatCurrency(item.low || 0)}</span></div>
+<div class="info-row"><span class="info-label">Prev. Close:</span><span class="info-value">${this.formatCurrency(item.previousClose || 0)}</span></div>`;
                         } else { 
                             stockInfoHTML = `
                                 <div class="info-row"> <span class="info-label">Open:</span> <span class="info-value">${this.formatCurrency(item.open || 0)}</span> </div>
@@ -3706,14 +3710,14 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     
                     let cardActionsHTML = '';
                     if (type === 'watchlist') {
-                        cardActionsHTML = `
+                         cardActionsHTML = `
                             <div class="card-actions" style="grid-template-columns: 1fr 1fr;">
                                 <button class="add-btn move-to-portfolio-btn" data-id="${item.id}" data-type="${type}">Move to Portfolio</button>
                                 <button class="add-btn set-alert-btn" data-id="${item.id}" data-type="${type}">Set Price Alert</button>
                             </div>
                         `;
                     } else if (!isClosedPosition) {
-                        cardActionsHTML = `
+                         cardActionsHTML = `
                             <div class="card-actions" style="grid-template-columns: repeat(4, 1fr); margin-top: 10px;">
                                 <button class="add-btn buy-btn transaction-btn" data-id="${item.id}" data-type="${type}">Buy</button>
                                 <button class="add-btn sell-btn transaction-btn" data-id="${item.id}" data-type="${type}">Sell</button>
@@ -3733,45 +3737,6 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                             </div>
                         `;
                     } else {
-                        cardActionsHTML = `
-                            <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 10px;">
-                                <button class="add-btn transaction-btn buy-btn" data-id="${item.id}" data-type="${type}" style="background-color: var(--color-positive);">Re-open Position (Buy)</button>
-                            </div>
-                            <div class="transaction-details">
-                                <div class="transaction-header">
-                                    <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
-                                </div>
-                                <div class="transactions-container collapsed">
-                                    ${this.renderTransactions(item.transactions, item.dividends, item.id, type)}
-                                </div>
-                            </div>
-                        `;
-                    }
-
-                    card.innerHTML = `
-                        <div class="stock-header">
-                            <span class="${type}-symbol stock-symbol">${item.symbol}</span>
-                            <button class="remove-btn" onclick="window.stockTracker.removeItem('${item.id}', '${type}')">×</button>
-                        </div>
-                        <div class="stock-price">${this.formatCurrency(item.price || 0)}</div>
-                        <div class="stock-change ${item.change >= 0 ? 'positive' : 'negative'}">
-                            <span>${item.change >= 0 ? '▲' : '▼'} ${this.formatCurrency(item.change || 0)} (${(item.changePercent || 0).toFixed(2)}%)${sessionLabel}</span>
-                        </div>
-                        <div class="stock-info">${stockInfoHTML}</div>
-                        ${cardChartHTML}
-                        <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}` : ''}</div>
-                        ${cardActionsHTML}
-                    `;
-                    
-                    container.appendChild(card);
-                });
-            }
-renderTransactions(item.transactions, item.dividends, item.id, type)}
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        // Closed Position (only transactions visible)
                          cardActionsHTML = `
                             <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 10px;">
                                 <button class="add-btn transaction-btn buy-btn" data-id="${item.id}" data-type="${type}" style="background-color: var(--color-positive);">Re-open Position (Buy)</button>
@@ -3806,49 +3771,7 @@ renderTransactions(item.transactions, item.dividends, item.id, type)}
                     container.appendChild(card);
                 });
             }
-renderTransactions(item.transactions, item.dividends, item.id, type)}
-                                </div>
-                            </div>
-                        `;
-                    } else {
-                        // Closed Position (only transactions visible)
-                         cardActionsHTML = `
-                            <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 10px;">
-                                <button class="add-btn transaction-btn buy-btn" data-id="${item.id}" data-type="${type}" style="background-color: var(--color-positive);">Re-open Position (Buy)</button>
-                            </div>
-                            <div class="transaction-details">
-                                <div class="transaction-header">
-                                    <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
-                                </div>
-                                <div class="transactions-container collapsed">
-                                    ${this.renderTransactions(item.transactions, item.dividends, item.id, type)}
-                                </div>
-                            </div>
-                        `;
-                    }
-
-
-                    card.innerHTML = `
-                        <div class="stock-header">
-                            <span class="${type}-symbol stock-symbol">${item.symbol}</span>
-                            <button class="remove-btn" onclick="window.stockTracker.removeItem('${item.id}', '${type}')">×</button>
-                        </div>
-                        <div class="stock-price">${this.formatCurrency(item.price || 0)}</div>
-                        <div class="stock-change ${item.change >= 0 ? 'positive' : 'negative'}">
-                            <span>${item.change >= 0 ? '▲' : '▼'} ${this.formatCurrency(item.change || 0)} (${(item.changePercent || 0).toFixed(2)}%)</span>
-                        </div>
-                        <div class="stock-info">${stockInfoHTML}</div>
-                        ${cardChartHTML}
-                        <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}` : ''}</div>
-                        ${cardActionsHTML}
-                    `;
-                    
-                    container.appendChild(card);
-                    // No need to add extra event listeners here, as handleCardAction handles the delegated events.
-                });
-            }
-            
-            getOldestTransactionDate(item) {
+getOldestTransactionDate(item) {
                 const transactions = item.transactions || [];
                 if (transactions.length === 0) {
                     // Return 5 years ago if no transactions found, matching the default '5Y' data range
