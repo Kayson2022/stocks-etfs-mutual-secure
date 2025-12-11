@@ -1,0 +1,3071 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Stocks & Funds Tracker</title>
+    <link rel="icon" href="data:,">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Safe Chart.js creator to avoid "Canvas is already in use" errors
+        function createSafeChart(ctx, config) {
+            try {
+                if (window.Chart && ctx && ctx.canvas) {
+                    const existing = Chart.getChart(ctx.canvas);
+                    if (existing) {
+                        existing.destroy();
+                    }
+                }
+            } catch (e) {
+                console.warn("Error destroying existing Chart instance:", e);
+            }
+            return new Chart(ctx, config);
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!-- NEW: Chart.js Annotation Plugin for the horizontal reference line -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script> 
+    <!-- 
+    ==================================================================
+    ==      REVISED & IMPROVED STYLESHEET                           ==
+    ==================================================================
+    This stylesheet includes the fix for the chart color parsing issue
+    and the final visual styles.
+    -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        /* --- CSS Variables for Theming --- */
+        :root {
+            --font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+            --shadow-sm: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-md: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
+            --transition: all 0.2s ease-in-out;
+            
+            /* Light Theme */
+            --bg-primary: #f8f9fa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f1f3f5;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --border-color: #dee2e6;
+            --accent-primary: #7c3aed; /* CHANGED: Purple */
+            --accent-primary-hover: #6d28d9; /* CHANGED: Purple */
+            --color-positive: #17A589;
+            --color-negative: #E74C3C;
+            
+            /* Chart Specific - RGB values MUST be comma-separated integers for JS parsing */
+            --chart-positive-fill-color-rgb: 23, 165, 137; /* #17A589 */
+            --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
+
+            /* NEW CHART COLORS to match image */
+            --chart-line-color: #3498DB; /* Blue line for primary line */
+            --chart-fill-color-rgb: 52, 152, 219; /* Blue RGB for fill */
+            --chart-reference-color: #17A589; /* Green reference line */
+        }
+
+        body.dark-mode {
+            /* Dark Theme - UPDATED to match user's image */
+            --bg-primary: #181a20; /* CHANGED */
+            --bg-secondary: #22252e; /* CHANGED */
+            --bg-tertiary: #2b2e37; /* CHANGED */
+            --text-primary: #f8f9fa;
+            --text-secondary: #adb5bd;
+            --border-color: #373a40; /* CHANGED */
+            --accent-primary: #a78bfa; /* CHANGED: Purple */
+            --accent-primary-hover: #8b5cf6; /* CHANGED: Purple */
+            --color-positive: #2ECC71;
+            --color-negative: #E74C3C;
+            
+            /* Chart Specific - RGB values MUST be comma-separated integers for JS parsing */
+            --chart-positive-fill-color-rgb: 46, 204, 113; /* #2ECC71 */
+            --chart-negative-fill-color-rgb: 231, 76, 60;  /* #E74C3C */
+
+            /* NEW CHART COLORS to match image (Dark Mode) */
+            --chart-line-color: #5DADE2; /* Lighter blue line for dark mode */
+            --chart-fill-color-rgb: 93, 173, 226; /* Lighter Blue RGB for dark fill */
+            --chart-reference-color: #2ECC71; /* Green reference line for dark mode */
+        }
+
+        /* --- Privacy Mode --- */
+        body.privacy-mode .stock-price,
+        body.privacy-mode .stock-change,
+        body.privacy-mode .info-value,
+        body.privacy-mode .summary-value,
+        body.privacy-mode .total-pl,
+        body.privacy-mode .chart-big-value { /* ADDED: Hide new big chart value */
+            filter: blur(5px); 
+            transition: filter 0.2s ease-in-out;
+        }
+
+
+        /* --- Base & Reset Styles --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html {
+            scroll-behavior: smooth;
+        }
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.3s, color 0.3s;
+            overflow-x: hidden;
+        }
+
+        /* --- Main Layout --- */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+        #app-container {
+            display: none;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            margin-bottom: 24px;
+        }
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        #user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        #user-name {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        /* --- Login Screen --- */
+        #login-container {
+            max-width: 500px;
+            text-align: center;
+            padding-top: 10vh;
+        }
+        #login-container h1 {
+            font-size: 2.5rem;
+            margin-bottom: 8px;
+        }
+
+        /* --- Buttons --- */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            font-size: 0.95rem;
+            font-weight: 600;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .btn-primary {
+            background-color: var(--accent-primary);
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: var(--accent-primary-hover);
+        }
+        .btn-secondary {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-color: var(--border-color);
+        }
+        .btn-secondary:hover {
+            background-color: var(--border-color);
+        }
+        .btn-danger {
+            background-color: var(--color-negative);
+            color: white;
+        }
+        .btn-danger:hover {
+            opacity: 0.85;
+        }
+        .btn-icon {
+            padding: 8px;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        .btn-icon:hover {
+             background-color: var(--border-color);
+             color: var(--text-primary);
+        }
+        /* Mapping old button classes to new ones */
+        .add-btn {
+            padding: 12px 24px;
+            background-color: var(--accent-primary); color: white; border: none;
+            border-radius: var(--radius-sm); font-size: 1rem; font-weight: 600;
+            cursor: pointer; transition: var(--transition);
+        }
+        .add-btn:hover {
+            background-color: var(--accent-primary-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-sm);
+        }
+        .add-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        #sign-out-btn {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        #sign-out-btn:hover {
+             background-color: var(--border-color);
+             color: var(--text-primary);
+        }
+
+        /* --- Tabs --- */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 24px;
+            overflow-x: auto;
+        }
+        .tab {
+            padding: 12px 16px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: var(--transition);
+            margin-bottom: -1px; /* Overlap border */
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .tab:hover {
+            color: var(--text-primary);
+        }
+        .tab.active {
+            color: var(--accent-primary);
+            border-bottom-color: var(--accent-primary);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* --- Forms & Controls --- */
+        .search-section, .portfolio-controls, .funds-controls, .watchlist-controls {
+            margin-bottom: 24px;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .search-input, #portfolioFilter, #portfolioSort, #platformFilter {
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            transition: var(--transition);
+        }
+        .search-input:focus, #portfolioFilter:focus, #portfolioSort:focus, #platformFilter:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+        }
+
+        /* NEW: Input wrapper for clear button */
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            flex: 1;
+            min-width: 200px;
+        }
+        .input-wrapper .search-input, .input-wrapper #portfolioFilter {
+            width: 100%;
+            padding-right: 35px; /* Space for the 'x' */
+        }
+        .clear-input {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            line-height: 1;
+            display: none; /* Hidden by default */
+        }
+        .input-wrapper input:not(:placeholder-shown) + .clear-input {
+            display: block; /* Show only when there is text */
+        }
+
+
+        /* --- Portfolio Summary --- */
+        @keyframes animate-gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes animate-glow {
+            0% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.4); }
+            50% { box-shadow: 0 0 35px rgba(118, 75, 162, 0.6); }
+            100% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.4); }
+        }
+
+        .portfolio-summary {
+            background: linear-gradient(-45deg, #6a11cb, #2575fc, #e73c7e, #66a6ff);
+            background-size: 400% 400%;
+            animation: animate-gradient 15s ease infinite;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+            color: white;
+            border: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .portfolio-summary::before {
+            content: '';
+            position: absolute;
+            top: -5px; left: -5px; right: -5px; bottom: -5px;
+            z-index: -1;
+            border-radius: 20px;
+            animation: animate-glow 8s ease-in-out infinite;
+        }
+
+        .portfolio-summary h3 {
+            text-align: center;
+            color: #ffffff;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+        }
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 24px;
+            text-align: center;
+        }
+        .summary-item {
+            /* This ensures better alignment of text when blur is active */
+            line-height: 1.2;
+        }
+        .summary-label {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 8px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            display: block; /* Important for flow */
+        }
+        .summary-value {
+            font-size: 1.6rem;
+            font-weight: bold;
+            margin-top: 5px;
+            color: #ffffff;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6), 0 0 5px rgba(0,0,0,0.4);
+        }
+        
+        .dark-mode .portfolio-summary {
+             background: linear-gradient(-45deg, #581c87, #312e81, #9d174d, #3730a3); /* CHANGED: Darker purples */
+             background-size: 400% 400%;
+        }
+        
+        .dark-mode .portfolio-summary h3 {
+            color: #f1f1f1;
+        }
+
+        /* --- Utility Toolbar --- */
+        .utility-buttons-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 16px;
+            background-color: var(--bg-tertiary);
+            border-radius: var(--radius-md);
+            margin-bottom: 24px;
+        }
+        .utility-buttons-grid .add-btn, .utility-buttons-grid label {
+            flex-grow: 1;
+            margin: 0;
+            padding: 10px 16px;
+            font-size: 0.9rem;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+        }
+        .utility-buttons-grid .add-btn:hover, .utility-buttons-grid label:hover {
+            background: var(--border-color);
+            border-color: color-mix(in srgb, var(--border-color) 80%, black);
+        }
+        #clearAllBtn, #clearAllFundsBtn, #clearWatchlistBtn {
+            background-color: color-mix(in srgb, var(--color-negative) 15%, transparent);
+            color: var(--color-negative);
+            border: 1px solid color-mix(in srgb, var(--color-negative) 40%, transparent);
+        }
+        #clearAllBtn:hover, #clearAllFundsBtn:hover, #clearWatchlistBtn:hover {
+            background-color: var(--color-negative);
+            color: white;
+        }
+        .import-wrapper {
+            display: contents; /* Allows children to be flex items */
+        }
+        .utility-buttons-grid .add-btn[style*="background"],
+        .utility-buttons-grid .add-btn#quickLookupBtn {
+            background: var(--bg-secondary) !important;
+            color: var(--text-primary) !important;
+            border: 1px solid var(--border-color) !important;
+        }
+
+        /* --- Asset Cards --- */
+        .stocks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 24px;
+        }
+        .stock-card, .fund-card, .watchlist-card {
+            background-color: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+            /* **FIXED: Blue Left and TOP Border** */
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent-primary); 
+            border-top: 4px solid var(--accent-primary); /* ADDED: Top accent border */
+            /* -------------------------------------- */
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+        }
+        .stock-card:hover, .fund-card:hover, .watchlist-card:hover {
+            /* **FIXED: Stronger Ambient Hover Effect** */
+            transform: translateY(-4px);
+            /* Change all borders to accent color on hover */
+            border-color: var(--accent-primary); 
+            /* Enhanced Shadow for Ambient Glow */
+            box-shadow: var(--shadow-md), 0 0 25px color-mix(in srgb, var(--accent-primary) 50%, transparent); 
+            /* ----------------------------------------- */
+        }
+        
+        /* Resetting specific group borders to prevent accidental double-border or color clashes */
+        .gains-header-content .stock-card,
+        .biggest-gain-header-content .stock-card,
+        .losses-header-content .stock-card {
+            border-top-width: 4px; 
+            border-top-color: var(--accent-primary); 
+        }
+
+        /* ADDED: Style for Closed Positions Header and Cards */
+        .closed-header {
+            color: var(--text-secondary);
+            border-bottom-color: var(--text-secondary);
+        }
+        /* The primary visual change for closed positions */
+        .stock-card.closed-position {
+            opacity: 0.6; 
+            border-left: 4px solid var(--text-secondary); /* Use secondary color for closed position border */
+            border-top: 4px solid var(--text-secondary); /* Use secondary color for closed position border */
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .stock-card.closed-position:hover {
+             opacity: 0.8;
+             transform: none;
+             box-shadow: var(--shadow-sm);
+             border-color: var(--border-color);
+        }
+
+
+        /* ADDED: Ambient hover effect for grouped cards (These should still work but will be slightly overridden by the general hover for blue glow) */
+        .gains-header-content .stock-card:hover,
+        .biggest-gain-header-content .stock-card:hover {
+            /* Keep glow consistent with accent primary */
+            box-shadow: var(--shadow-md), 0 0 25px color-mix(in srgb, var(--accent-primary) 50%, transparent);
+        }
+        .losses-header-content .stock-card:hover {
+            /* Keep glow consistent with accent primary */
+            box-shadow: var(--shadow-md), 0 0 25px color-mix(in srgb, var(--accent-primary) 50%, transparent);
+        }
+
+        .stock-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .stock-symbol, .fund-symbol, .watchlist-symbol {
+            font-size: 1.75rem;
+            font-weight: 800;
+        }
+        .remove-btn {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .remove-btn:hover {
+            background-color: var(--color-negative);
+            color: white;
+        }
+        .stock-price {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+        .stock-change {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        .stock-info {
+            padding-top: 16px;
+            margin-top: 16px;
+            border-top: 1px solid var(--border-color);
+            flex-grow: 1; 
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95rem;
+            padding: 6px 0;
+        }
+        .info-label { color: var(--text-secondary); }
+        .info-value { font-weight: 600; }
+        .positive { color: var(--color-positive) !important; }
+        .negative { color: var(--color-negative) !important; }
+
+        .platform-select {
+            width: 50%;
+            padding: 4px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        /* --- Card Chart --- */
+        .card-chart-container {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out, margin-top 0.5s ease-in-out;
+            margin-top: 0;
+        }
+        .stock-card.expanded .card-chart-container,
+        .fund-card.expanded .card-chart-container {
+            max-height: 300px; /* Adjust as needed */
+            opacity: 1;
+            margin-top: 20px;
+        }
+        .chart-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        /* === CHART BUTTONS: STYLE UPDATE === */
+        .chart-range-btn {
+            padding: 6px 16px; /* CHANGED */
+            font-size: 0.8rem;
+            font-weight: 600; /* ADDED */
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: none; /* CHANGED */
+            border-radius: 9999px; /* CHANGED */
+            cursor: pointer;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+        /* Overriding default purple active color for the buttons in the main chart to match the image */
+        #portfolio-performance-container .chart-range-btn.active {
+            background-color: var(--accent-primary);
+            color: white;
+            border: none;
+        }
+        /* Specific override for the 1Y button for initial state */
+        #portfolio-performance-container .chart-range-btn[data-range="1Y"] {
+            /* Note: We keep 1Y active by default, styles controlled by JS now */
+        }
+        #portfolio-performance-container .chart-range-btn:not(.active) {
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+        #portfolio-performance-container .chart-range-btn:hover {
+            background-color: var(--accent-primary-hover);
+            color: white;
+        }
+
+        /* Card Chart Button styles revert to default behavior (active state matches theme) */
+        .stock-card .chart-range-btn.active, .stock-card .chart-range-btn:hover {
+            background-color: var(--accent-primary);
+            color: white;
+            border: none;
+        }
+        /* === END STYLE UPDATE === */
+
+
+        /* --- Group Headers --- */
+        .group-header, .watchlist-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            padding: 16px 0;
+            margin-top: 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        /* Visual cue for collapsed headers */
+        .group-header.collapsed {
+            background-color: var(--bg-tertiary); 
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+            border: 1px solid var(--border-color);
+            padding: 16px;
+            border-bottom: none;
+            margin-top: 16px;
+        }
+        /* ADDED: Style for Closed Positions Header */
+        .closed-header {
+            color: var(--text-secondary);
+            border-bottom-color: var(--text-secondary);
+        }
+         /* ADDED: Style for Data Mismatch Header */
+        .mismatch-header {
+            color: orange;
+            border-bottom-color: orange;
+        }
+
+
+        .group-wrapper {
+            /* This is the container for header, summary, content, and footer */
+            grid-column: 1 / -1; 
+            display: contents; /* Allow children to participate directly in the stocks-grid parent layout */
+        }
+        
+        .group-header, .summary-content, .group-content, .group-footer {
+            /* All children of group-wrapper must span the full grid width */
+            grid-column: 1 / -1; 
+        }
+
+        .group-content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 24px;
+            /* FIX: Increased max-height to a very large value to prevent cutoff */
+            max-height: 50000px; 
+            opacity: 1;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out;
+        }
+        .group-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            margin-bottom: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            gap: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .group-header .toggle-icon { transition: transform 0.3s ease; }
+        .group-header.collapsed .toggle-icon { transform: rotate(-90deg); }
+        
+        .group-footer {
+            text-align: center;
+            padding-top: 20px;
+            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out;
+            max-height: 100px;
+            opacity: 1;
+            overflow: hidden;
+            margin-bottom: 24px; /* Space after the group */
+        }
+        .group-footer.collapsed {
+             max-height: 0;
+            opacity: 0;
+            padding: 0;
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+        /* --- FIX: GROUP SUMMARY VISIBILITY & LAYOUT --- */
+        .summary-content {
+            padding: 20px 0;
+            max-height: 1000px; /* Large enough to hold content */
+            opacity: 1;
+            pointer-events: auto;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out, padding 0.5s ease-in-out;
+        }
+        /* When collapsed, the summary content is hidden */
+        .summary-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            pointer-events: none;
+        }
+        /* --- END FIX --- */
+        .summary-card {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 25px;
+            text-align: center;
+            max-width: 450px;
+            margin: 0 auto;
+            box-shadow: var(--shadow-sm);
+        }
+        .summary-card h4 {
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            color: var(--text-primary);
+        }
+        .summary-card p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            white-space: pre-line;
+        }
+        /* Add margin to the top of summary card when immediately following a collapsed header */
+        .group-header.collapsed + .summary-content:not(.collapsed) .summary-card {
+            margin-top: 0;
+            border-radius: 0 0 var(--radius-md) var(--radius-md);
+            border-top: none;
+        }
+
+        /* --- Card Actions (Buy/Sell, Transactions) --- */
+        .card-actions {
+            margin-top: 20px;
+            display: grid;
+            /* Default to 2 columns, will be overridden */
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .transaction-btn {
+            padding: 10px; font-size: 0.9rem;
+            background-color: var(--accent-primary); color: white;
+            border: none;
+            border-radius: var(--radius-sm); font-weight: 600; cursor: pointer; transition: var(--transition);
+        }
+        .transaction-btn:hover {
+            opacity: 0.9;
+        }
+        .transaction-btn.buy-btn {
+            background-color: var(--color-positive);
+        }
+        .transaction-btn.sell-btn {
+            background-color: var(--color-negative);
+        }
+        /* EDITS: Updated edit button style */
+        .add-btn.edit-btn {
+             background-color: var(--bg-tertiary) !important;
+             color: var(--text-primary) !important;
+             border: 1px solid var(--border-color) !important;
+             box-shadow: none !important;
+        }
+        .add-btn.edit-btn:hover {
+             background-color: var(--border-color) !important;
+             transform: none !important;
+             box-shadow: var(--shadow-sm) !important;
+        }
+
+        .transaction-details {
+            margin-top: 16px;
+        }
+        .transaction-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .transaction-header h4 { font-size: 1rem; }
+        .transactions-container {
+             max-height: 1000px; opacity: 1; margin-top: 10px;
+             transition: max-height 0.4s ease, opacity 0.3s ease, margin-top 0.3s ease;
+             overflow: hidden;
+        }
+        .transactions-container.collapsed {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            padding-top: 0;
+            pointer-events: none;
+        }
+        .transaction-entry {
+            background-color: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .transaction-info { font-size: 0.9rem; }
+        .transaction-info strong { text-transform: uppercase; }
+        .transaction-info span { display: block; margin-bottom: 4px; }
+        .transaction-entry .buy { color: var(--color-positive); }
+        .transaction-entry .sell { color: var(--color-negative); }
+        .transaction-entry-controls { display: flex; gap: 8px; align-items: center; }
+        .edit-transaction-btn, .delete-transaction-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 5px 10px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .delete-transaction-btn {
+            background: transparent; border: none; font-size: 1.2rem;
+        }
+        .delete-transaction-btn:hover {
+            color: var(--color-negative);
+        }
+
+        /* --- Modals --- */
+        .modal {
+            position: fixed; z-index: 1000;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            display: none; align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background-color: var(--bg-secondary);
+            padding: 32px;
+            border-radius: var(--radius-md);
+            width: 90%;
+            max-width: 500px;
+            box-shadow: var(--shadow-md);
+            position: relative;
+        }
+        .modal-title {
+            font-size: 1.5rem;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        .close-modal-btn {
+            position: absolute; top: 12px; right: 12px;
+            font-size: 1.5rem; font-weight: bold;
+            cursor: pointer; border: none; background: transparent;
+            color: var(--text-secondary);
+        }
+        .transaction-input-group { margin-bottom: 16px; }
+        .transaction-input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .transaction-input-group input, .transaction-input-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        #confirmModal .modal-actions {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+        }
+        #alerts-summary-content .triggered-alert {
+            background-color: color-mix(in srgb, var(--color-positive) 10%, transparent);
+            border-left: 4px solid var(--color-positive);
+            margin: 2px -10px;
+            padding-left: 6px !important;
+        }
+        /* Price alert modal specifics */
+        #price-range-inputs {
+            display: none; /* Hidden by default */
+            grid-template-columns: 1fr auto 1fr;
+            gap: 10px;
+            align-items: center;
+        }
+        #single-price-inputs {
+             display: grid;
+        }
+
+
+        /* --- Notifications & Popups --- */
+        .loading, .error, .success, .refresh-status-popup, .alert-notification {
+            position: fixed; top: 20px; left: 50%;
+            transform: translateX(-50%);
+            z-index: 2000; width: 90%; max-width: 500px;
+            text-align: center; padding: 16px;
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-md);
+            font-weight: 600;
+        }
+        .loading { background-color: var(--bg-secondary); color: var(--text-primary); }
+        .error { background-color: var(--color-negative); color: white; }
+        .success { background-color: var(--color-positive); color: white; }
+        .refresh-status-popup { background-color: var(--accent-primary); color: white; display: none; }
+        .refresh-status-popup.active { display: block; }
+        .alert-notification { background-color: var(--accent-primary); color: white; display: none; }
+        .alert-notification.active { display: block; }
+
+        /* --- Countdown Timers --- */
+        #header-countdown {
+            text-align: center; font-size: 1rem;
+            font-weight: 500; color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+        #countdown { font-weight: 700; color: var(--text-primary); }
+        .small-countdown {
+            position: fixed; bottom: 16px; left: 16px;
+            background-color: var(--bg-secondary);
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            border-radius: var(--radius-lg);
+            font-size: 0.9rem;
+            z-index: 1000;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+        }
+
+        /* --- News Tab --- */
+        #news-articles-container {
+            display: grid;
+            gap: 16px;
+        }
+        .news-article-card {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            display: flex; gap: 16px;
+            text-decoration: none;
+            color: inherit;
+            transition: var(--transition);
+        }
+        .news-article-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+        .news-article-card img {
+            width: 80px; height: 80px;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+        }
+        .news-article-content h4 {
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+        .news-article-content p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* --- Charts --- */
+        .chart-container {
+            margin-top: 24px;
+            padding: 24px;
+            background-color: var(--bg-secondary);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+            /* Removed fixed height for flexibility */
+        }
+        .canvas-wrapper {
+            position: relative;
+            height: 400px;
+        }
+        
+        /* New Chart Styling Elements */
+        .chart-title-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            flex-grow: 1;
+            min-width: 150px;
+        }
+        .chart-big-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-top: 4px;
+            color: var(--text-primary);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end; /* Align controls and title group to the bottom */
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .chart-header h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        /* --- Mobile Responsiveness --- */
+        @media (max-width: 768px) {
+            .container { padding: 16px; }
+            .header h1 { font-size: 1.5rem; }
+            .header-controls { gap: 8px; }
+            .summary-stats { grid-template-columns: repeat(2, 1fr); }
+            .stocks-grid { 
+                grid-template-columns: 1fr; 
+                /* Ensure bottom space for chart/last element */
+                padding-bottom: 20px; 
+            }
+            #user-name { display: none; }
+            
+            /* Chart Mobile Layout */
+            #portfolio-performance-container .chart-header {
+                flex-direction: column;
+                align-items: center;
+            }
+            #portfolio-performance-container .chart-title-group {
+                order: 1;
+            }
+            #portfolio-performance-container .chart-controls {
+                order: 2;
+                margin-top: 10px;
+                width: 100%;
+                justify-content: space-between;
+                gap: 5px;
+            }
+            .chart-controls .chart-range-btn {
+                padding: 6px 10px;
+            }
+        }
+
+        /* === PORTFOLIO CHART CONTAINER STYLES (MODERN BLOCK) === */
+        /* Updated this block to align with new header layout */
+        #portfolio-performance-container { 
+            background: var(--bg-secondary) !important; 
+            border: 1px solid var(--border-color) !important;
+            border-radius: 20px !important; 
+            box-shadow: var(--shadow-md);
+            padding: 24px;
+            margin-top: 24px; 
+        }
+        #portfolio-performance-container .chart-header {
+            justify-content: center; 
+            margin-bottom: 16px; 
+            flex-direction: column; 
+            align-items: center;
+            gap: 8px;
+        }
+        #portfolio-performance-container .chart-controls {
+            flex-grow: 0;
+            width: auto;
+            justify-content: flex-end;
+            margin-bottom: 0;
+        }
+        .chart-controls .chart-range-btn {
+            font-weight: 500;
+            padding: 8px 16px;
+        }
+        .chart-controls .chart-range-btn[data-range="1Y"] {
+            font-weight: 700;
+        }
+        /* Removed unnecessary overrides here as the general chart-range-btn logic handles it */
+
+        /* --- Diversification Chart Styling (New Bar Chart Style) --- */
+        #diversification-chart-container {
+             padding: 24px;
+             border-radius: 20px;
+        }
+        #diversification-chart-container h4 {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+        }
+        .diversification-content {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+        .diversification-chart-wrapper {
+            flex-grow: 1;
+            min-width: 300px;
+            max-width: 100%;
+            height: 400px;
+        }
+        .diversification-legend {
+            flex-shrink: 0;
+            width: 100%;
+            max-width: 400px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            padding: 20px 0;
+            border-top: 1px solid var(--border-color);
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.95rem;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            margin-right: 8px;
+        }
+        @media (min-width: 768px) {
+            .diversification-content { flex-wrap: nowrap; }
+            .diversification-chart-wrapper { max-width: 60%; }
+             .diversification-legend { 
+                 width: auto;
+                 margin-top: 0;
+                 border-top: none;
+                 flex-grow: 1;
+                 padding: 0;
+                 grid-template-columns: 1fr; /* Stack vertically for space */
+             }
+        }
+        /* === END CHART STYLES === */
+    </style>
+</head>
+<body>
+    <!-- 
+    The body content remains the same, but the header structure is slightly updated for the new design.
+    The new styles will automatically apply to the existing HTML structure.
+    -->
+    <div id="loading" class="loading" style="display: none;">Loading...</div>
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="success" class="success" style="display: none;"></div>
+    <div id="refresh-status-popup" class="refresh-status-popup"></div>
+    <div id="alert-notification" class="alert-notification" style="display: none;"></div>
+
+    <div id="login-container" class="container">
+        <h1>💰 Live Portfolio Tracker</h1>
+        <p style="text-align: center; margin-bottom: 30px; font-size: 1.2rem; color: var(--text-secondary);">Sign in to continue</p>
+        <button id="google-signin-btn" class="add-btn" style="margin: 0 auto; display: flex; align-items: center; gap: 10px; width: auto;">
+            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="white"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/><path d="M1 1h22v22H1z" fill="none"/></svg>
+            Sign in with Google
+        </button>
+        <div id="firebase-auth-error" style="display: none;"></div>
+    </div>
+    
+    <div id="app-container" class="container">
+        <!-- New Header Structure -->
+        <header class="header">
+            <h1>💰 Portfolio Tracker</h1>
+            <div class="header-controls">
+                <div id="user-info" style="display: none;">
+                    <span id="user-name"></span>
+                    <button id="sign-out-btn">Sign Out</button>
+                </div>
+            </div>
+        </header>
+
+        <div id="header-countdown">Next update in: <span id="countdown">90</span>s</div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="window.stockTracker.switchTab('stocks')">📊 Stocks & Portfolio</button>
+            <button class="tab" onclick="window.stockTracker.switchTab('funds')">🏛️ Mutual Funds</button>
+            <button class="tab" onclick="window.stockTracker.switchTab('watchlist')">👀 Watchlist</button>
+            <button class="tab" onclick="window.stockTracker.switchTab('news')">📰 News</button>
+        </div>
+
+        <div id="stocks-tab" class="tab-content active">
+            <div id="portfolio-summary" class="portfolio-summary" style="display: none;">
+                <h3>Your Portfolio at a Glance</h3>
+                <div class="summary-stats">
+                    <div class="summary-item">
+                        <span class="summary-label">Combined Total</span>
+                        <span id="combined-total-value" class="summary-value">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Stocks Total Value</span>
+                        <span id="stocks-total-value" class="summary-value">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Mutual Fund Value</span>
+                        <span id="mutual-fund-total-value" class="summary-value">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Contributions</span>
+                        <span id="total-contributions" class="summary-value total-contributions">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Dividends</span>
+                        <span id="total-dividends" class="summary-value positive">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span id="total-pl-today-label" class="summary-label">Total P/L Today</span>
+                        <span id="total-pl-today" class="summary-value positive">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total P/L % Today</span>
+                        <span id="total-pl-percent-today" class="summary-value positive">0.00%</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Unrealized P/L</span>
+                        <span id="total-pl-unrealized" class="summary-value positive">$0.00</span>
+                    </div>
+                     <div class="summary-item">
+                        <span class="summary-label">Realized P/L</span>
+                        <span id="total-pl-realized" class="summary-value positive">$0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="search-section">
+                <div class="input-wrapper">
+                    <input type="text" class="search-input" id="stockInput" placeholder="Enter stock symbol (e.g., AAPL)">
+                    <span class="clear-input" data-target="stockInput">&times;</span>
+                </div>
+                <button class="add-btn" id="addBtn">Add Stock</button>
+            </div>
+
+            <div class="portfolio-controls">
+                <div class="input-wrapper">
+                    <input type="text" class="search-input" id="portfolioFilter" placeholder="🔎 Filter your portfolio...">
+                    <span class="clear-input" data-target="portfolioFilter">&times;</span>
+                </div>
+                <select id="platformFilter" class="search-input" style="display: none;"></select>
+                <select id="portfolioSort">
+                    <option value="performance">Sort by Performance</option>
+                    <option value="alphabetical">Sort Alphabetical (A-Z)</option>
+                    <option value="value">Sort by Total Value</option>
+                    <option value="pl_overall">Sort by Overall P/L ($)</option>
+                    <option value="platform">Sort by Platform</option>
+                </select>
+            </div>
+
+            <div class="utility-buttons-grid">
+                <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
+                <button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
+                <div class="import-wrapper">
+                    <button class="add-btn" id="exportBtn">📥 Export Data</button>
+                    <label for="importFile" class="add-btn" style="cursor: pointer;">📤 Import Data</label>
+                    <input type="file" id="importFile" accept=".json" style="display: none;">
+                </div>
+                <button class="add-btn" id="settingsBtn">⚙️ Settings</button>
+                <button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
+                <button class="add-btn" id="listAllBtn">📋 List All Stocks</button>
+                <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
+                 <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
+                <button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
+            </div>
+        </div>
+        
+        <div id="funds-tab" class="tab-content">
+             <div class="search-section">
+                <div class="input-wrapper">
+                    <input type="text" class="search-input" id="mutualFundInput" placeholder="Enter mutual fund symbol (e.g., VTIAX, FXNAX, SWPPX)">
+                    <span class="clear-input" data-target="mutualFundInput">&times;</span>
+                    </div>
+                <button class="add-btn" id="addFundBtn">Add Fund</button>
+                <button class="add-btn" id="quickLookupBtn">Quick Lookup</button>
+            </div>
+             <div class="funds-controls">
+                <button class="add-btn" id="updateAllFundsBtn">🔄 Update Funds</button>
+                <button class="add-btn" id="clearAllFundsBtn">🗑️ Clear All Funds</button>
+            </div>
+        </div>
+
+        <div id="watchlist-tab" class="tab-content">
+             <div class="search-section">
+                <div class="input-wrapper">
+                    <input type="text" class="search-input" id="watchlistInput" placeholder="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)">
+                    <span class="clear-input" data-target="watchlistInput">&times;</span>
+                </div>
+                <button class="add-btn" id="addWatchlistBtn">Add to Watchlist</button>
+            </div>
+             <div class="watchlist-controls">
+                <button class="add-btn" id="updateWatchlistBtn">🔄 Update Watchlist</button>
+                <button class="add-btn" id="clearWatchlistBtn">🗑️ Clear Watchlist</button>
+            </div>
+            <h3 class="watchlist-title"><span>Your Watchlist <span id="watchlist-count">(0)</span></span></h3>
+        </div>
+
+        <div id="news-tab" class="tab-content">
+            <h3 class="watchlist-title">📰 Top News for Your Stocks</h3>
+            <div id="news-articles-container"></div>
+        </div>
+
+        <div class="stocks-grid" id="stocksGrid"></div>
+
+        
+<!-- 
+==================================================================
+==      TOTALLY REDESIGNED PORTFOLIO CHART CONTAINER            ==
+==================================================================
+-->
+<div id="portfolio-performance-container" class="chart-container">
+    <div class="chart-header">
+        <div class="chart-title-group">
+            <h4 id="portfolio-chart-title">Portfolio Performance</h4>
+            <!-- New Dynamic Value Display -->
+            <div class="chart-big-value" id="chart-current-value">$0.00</div>
+        </div>
+        
+        <div id="performance-chart-controls" class="chart-controls">
+            <div class="top-movers-control" style="margin-top: 8px; text-align:center;">
+                <label for="top-movers-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 4px;">
+                    Top movers:
+                </label>
+                <select id="top-movers-count" style="padding: 2px 6px; border-radius: 6px;">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="15">15</option>
+                    <option value="20">20</option>
+                </select>
+            </div>
+            <button class="chart-range-btn active" data-range="BAR_TODAY">Today</button>
+            <button class="chart-range-btn" data-range="1W">1W</button>
+            <button class="chart-range-btn" data-range="1M">1M</button>
+            <button class="chart-range-btn" data-range="6M">6M</button>
+            <button class="chart-range-btn" data-range="YTD">YTD</button>
+            <button class="chart-range-btn" data-range="1Y">1Y</button>
+            <button class="chart-range-btn" data-range="3Y">3Y</button>
+            <button class="chart-range-btn" data-range="5Y">5Y</button>
+            <button class="chart-range-btn" data-range="ALL">All</button>
+        </div>
+    </div>
+
+    <!-- Historical Line Chart Wrapper (Default View) -->
+    <div class="canvas-wrapper" id="historical-chart-wrapper" style="height: 400px;">
+        <canvas id="portfolioPerformanceChart"></canvas>
+    </div>
+
+    <!-- Today's Performance Bar Chart Wrapper (Hidden by default) -->
+    <div class="canvas-wrapper" id="bar-chart-wrapper" style="display: none; height: 400px;">
+        <canvas id="portfolioPerformanceBarChart"></canvas>
+    </div>
+</div>
+<!-- END REDESIGNED CHART CONTAINER -->
+
+
+<div id="diversification-chart-container" class="chart-container" style="display: none;">
+             <div class="canvas-wrapper">
+                <canvas id="diversificationChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="small-countdown" id="small-countdown-container">Next update: <span id="smallCountdown">90s</span></div>
+    
+    <!-- All Modals -->
+    <div id="editStockModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" id="closeEditStockBtn">&times;</button>
+            <h3 class="modal-title">Edit Stock: <span id="edit-stock-symbol-display"></span></h3>
+            <div class="transaction-input-group">
+                <label for="edit-stock-symbol">Symbol:</label>
+                <input type="text" class="search-input" id="edit-stock-symbol" placeholder="Stock Symbol (e.g., AAPL)">
+            </div>
+            <div class="transaction-input-group">
+                <label for="edit-stock-name">Name:</label>
+                <input type="text" class="search-input" id="edit-stock-name" placeholder="Company Name">
+            </div>
+            <div class="transaction-input-group">
+                <label for="edit-stock-shares">Shares (Initial Buy):</label>
+                <input type="number" class="search-input" id="edit-stock-shares" placeholder="Total Shares (First Buy)">
+            </div>
+            <div class="transaction-input-group">
+                <label for="edit-stock-cost">Average Cost (Initial Buy):</label>
+                <input type="number" class="search-input" id="edit-stock-cost" placeholder="Average Cost Basis">
+            </div>
+            <div class="transaction-input-group">
+                <label for="edit-stock-date">Initial Buy Date (Initial Buy):</label>
+                <input type="date" class="search-input" id="edit-stock-date">
+            </div>
+            <div class="transaction-input-group">
+                <label for="edit-stock-platform">Platform:</label>
+                <input type="text" class="search-input" id="edit-stock-platform" placeholder="e.g., Fidelity, Robinhood">
+            </div>
+            <button class="add-btn" id="save-stock-edit-btn">Save All Details</button>
+        </div>
+    </div>
+    <div id="transactionModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" onclick="window.stockTracker.closeTransactionModal()">&times;</button>
+            <h3 class="modal-title"><span id="modal-title-action">Add</span> Transaction for <span id="modal-symbol"></span></h3>
+            <div class="transaction-input-group">
+                <label for="modal-shares">Shares:</label>
+                <input type="number" class="search-input" id="modal-shares" placeholder="Number of shares" min="0">
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-price">Price:</label>
+                <input type="number" class="search-input" id="modal-price" placeholder="Price per share" min="0">
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-date">Transaction Date:</label>
+                <input type="date" class="search-input" id="modal-date" required>
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-platform">Platform:</label>
+                <select class="search-input" id="modal-platform"></select>
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-note">Note:</label>
+                <input type="text" class="search-input" id="modal-note" placeholder="Optional notes">
+            </div>
+             <div class="transaction-input-group" id="modal-dividend-fields" style="display: none;">
+                <label for="modal-dividend-amount">Dividend Amount (per share):</label>
+                <input type="number" class="search-input" id="modal-dividend-amount" placeholder="e.g., 0.50" min="0">
+            </div>
+            <button class="add-btn" id="modal-save-btn">Save Transaction</button>
+        </div>
+    </div>
+    <div id="settingsModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" id="closeSettingsBtn">&times;</button>
+            <h3 class="modal-title">Settings</h3>
+            <div class="transaction-input-group">
+                <label for="modal-finnhub-key">Finnhub API Key:</label>
+                <input type="text" class="search-input" id="modal-finnhub-key" placeholder="Enter your Finnhub API Key">
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-alpha-vantage-key">Alpha Vantage API Key (Primary for Mutual Funds & History):</label>
+                <input type="text" class="search-input" id="modal-alpha-vantage-key" placeholder="Enter your Alpha Vantage API Key">
+            </div>
+
+            
+            <div class="transaction-input-group">
+                <label for="modal-fmp-key">FMP API Key (Used for News):</label>
+                <input type="text" class="search-input" id="modal-fmp-key" placeholder="Enter your Financial Modeling Prep API Key">
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-refresh-interval">Auto-Refresh Interval (seconds):</label>
+                <input type="number" class="search-input" id="modal-refresh-interval" placeholder="e.g., 60" min="10">
+            </div>
+             <div class="transaction-input-group">
+                <label for="enable-push-notifications-btn">Enable Push Notifications:</label>
+                <button class="add-btn" id="enable-push-notifications-btn">🔔 Enable Notifications</button>
+            </div>
+            <div class="transaction-input-group">
+                <label for="sign-out-other-sessions-btn">Security:</label>
+                <button class="add-btn btn-danger" id="sign-out-other-sessions-btn">🔒 Sign Out on All Other Devices</button>
+            </div>
+            <button class="add-btn" id="modal-save-settings-btn">Save Settings</button>
+        </div>
+    </div>
+    <div id="confirmModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" id="closeConfirmModalBtn" onclick="window.stockTracker.closeConfirmModal()">&times;</button>
+            <h3 class="modal-title">Are you sure?</h3>
+            <p id="confirm-modal-text" style="text-align: center; margin-bottom: 20px;"></p>
+            <div class="modal-actions">
+                <button class="add-btn" id="confirm-modal-cancel-btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Cancel</button>
+                <button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: var(--color-negative);">Confirm Delete</button>
+            </div>
+        </div>
+    </div>
+    <div id="priceAlertModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" onclick="window.stockTracker.closePriceAlertModal()">&times;</button>
+            <h3 class="modal-title">Set Price Alert for <span id="alert-symbol"></span></h3>
+            <!-- NEW: Alert Type Selection -->
+            <div class="transaction-input-group">
+                <label for="alert-type">Alert Type:</label>
+                <select id="alert-type">
+                    <option value="single">Single Price</option>
+                    <option value="range">Price Range</option>
+                </select>
+            </div>
+
+            <!-- NEW: Container for Single Price Inputs -->
+            <div id="single-price-inputs">
+                <div class="transaction-input-group">
+                    <label for="alert-condition">Condition:</label>
+                    <select id="alert-condition">
+                        <option value="above">Price is above</option>
+                        <option value="below">Price is below</option>
+                    </select>
+                </div>
+                <div class="transaction-input-group">
+                    <label for="alert-price">Target Price:</label>
+                    <input type="number" class="search-input" id="alert-price" placeholder="e.g., 150.50" min="0">
+                </div>
+            </div>
+
+            <!-- NEW: Container for Price Range Inputs -->
+            <div id="price-range-inputs">
+                <div class="transaction-input-group">
+                    <label for="alert-price-lower">Lower Bound:</label>
+                    <input type="number" class="search-input" id="alert-price-lower" placeholder="e.g., 100" min="0">
+                </div>
+                <span>-</span>
+                <div class="transaction-input-group">
+                    <label for="alert-price-upper">Upper Bound:</label>
+                    <input type="number" class="search-input" id="alert-price-upper" placeholder="e.g., 105.75" min="0">
+                </div>
+            </div>
+            
+            <button class="add-btn" id="save-alert-btn">Save Alert</button>
+        </div>
+    </div>
+    <div id="alertsSummaryModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" id="closeAlertsSummaryBtn">&times;</button>
+            <h3 class="modal-title">📋 Active Price Alerts</h3>
+            <div id="alerts-summary-content" style="max-height: 300px; overflow-y: auto; text-align: left;">
+            </div>
+        </div>
+    </div>
+    <div id="listAllModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" id="closeListAllBtn">&times;</button>
+            <h3 class="modal-title">All Saved Symbols</h3>
+            <div id="list-all-content" style="max-height: 60vh; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <!-- 
+    ==================================================================
+    ==      YOUR JAVASCRIPT WITH IMPROVEMENTS                     ==
+    ==================================================================
+    This is your full JavaScript block with the Firebase library
+    version updated for better performance and stability.
+    -->
+    <script type="module">
+  // 1. Unified Imports (v10.13.1)
+  import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+  import {
+    getAuth,
+    signInWithPopup,
+    GoogleAuthProvider,
+    browserPopupRedirectResolver,
+    onAuthStateChanged,
+    signOut
+  } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+  import {
+    getFirestore,
+    doc,
+    setDoc,
+    getDoc,
+    serverTimestamp,
+    onSnapshot,
+    deleteDoc
+  } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+
+  // 2. Single Config
+  const firebaseConfig = {
+    apiKey: "AIzaSyB8wQ0-O2avYjRW7Wjtmiql03q1ikwhX7s",
+    authDomain: "stocks-etfs-mutual.firebaseapp.com",
+    projectId: "stocks-etfs-mutual",
+    storageBucket: "stocks-etfs-mutual.firebasestorage.app",
+    messagingSenderId: "326474465163",
+    appId: "1:326474465163:web:6d140efca04077ba8f1f98e"
+  };
+
+  // 3. Safe Initialization (Singleton Pattern)
+  let app;
+  if (getApps().length === 0) {
+    app = initializeApp(firebaseConfig);
+  } else {
+    app = getApp();
+  }
+
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // 4. Expose Globally for other scripts (UserKeySync, etc.)
+  window.firebaseApp = app;
+  window.db = db;
+  window.auth = auth;
+  window._db = db; // Backup alias
+
+  // Expose Firestore functions globally so other scripts can use them
+  window.fsDoc = doc;
+  window.fsSetDoc = setDoc;
+  window.fsGetDoc = getDoc;
+  window.fsServerTime = serverTimestamp;
+  window.fsOnSnapshot = onSnapshot;
+  window.fsDeleteDoc = deleteDoc;
+        // ---------------------------------------------------------
+        // RESTORED APPLICATION LOGIC
+        // ---------------------------------------------------------
+
+        class ApiService {
+            constructor(config) { this.config = config; }
+
+            async fetchYahooQuote(symbol) {
+                try {
+                    const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error("Yahoo quote fetch failed");
+                    const data = await res.json();
+                    const q = data.quoteResponse?.result?.[0];
+                    if (!q) throw new Error("Invalid Yahoo quote response");
+                    return {
+                        source: "yahoo",
+                        price: q.regularMarketPrice,
+                        previousClose: q.regularMarketPreviousClose,
+                        change: q.regularMarketChange,
+                        percentChange: q.regularMarketChangePercent
+                    };
+                } catch (err) {
+                    console.warn(`Yahoo quote failed for ${symbol}`, err);
+                    throw err;
+                }
+            }
+
+            async fetchStockEtfQuote(symbol) {
+                // Try Yahoo first
+                try {
+                    const y = await this.fetchYahooQuote(symbol);
+                    return { success: true, data: y };
+                } catch (e) {
+                    // Fallback to Finnhub
+                    if (this.config.finnhubApiKey) {
+                        try {
+                            const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${this.config.finnhubApiKey}`;
+                            const res = await fetch(url);
+                            const data = await res.json();
+                            if (data.c) return { success: true, data: { price: data.c, change: data.d, changePercent: data.dp, open: data.o, high: data.h, low: data.l, previousClose: data.pc } };
+                        } catch (err2) { console.warn("Finnhub failed", err2); }
+                    }
+                    return { success: false, reason: "All quote APIs failed" };
+                }
+            }
+
+            async fetchStockEtfData(symbol) {
+                // Standard fetch used when adding new stocks
+                const res = await this.fetchStockEtfQuote(symbol);
+                if (res.success) {
+                    return { success: true, data: { ...res.data, symbol, name: symbol, industry: 'N/A' } };
+                }
+                return res;
+            }
+
+            async fetchMutualFundDataWithFallback(symbol) {
+                // Alpha Vantage (Primary) -> FMP (Backup)
+                if (this.config.alphaVantageKey) {
+                    try {
+                        const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${this.config.alphaVantageKey}`;
+                        const res = await fetch(url);
+                        const json = await res.json();
+                        const q = json["Global Quote"];
+                        if (q && q["05. price"]) {
+                            const price = parseFloat(q["05. price"]);
+                            const change = parseFloat(q["09. change"]);
+                            const pct = parseFloat(q["10. change percent"].replace('%',''));
+                            return { success: true, data: { symbol, name: symbol, price, change, changePercent: pct, open: price - change, high: price, low: price, previousClose: price - change, industry: 'Mutual Fund' } };
+                        }
+                    } catch(e) { console.warn("Alpha Vantage fund fetch failed", e); }
+                }
+                if (this.config.fmpApiKey) {
+                     try {
+                        const url = `https://financialmodelingprep.com/api/v3/quote/${symbol}?apikey=${this.config.fmpApiKey}`;
+                        const res = await fetch(url);
+                        const json = await res.json();
+                        if (json[0]) {
+                            const q = json[0];
+                            return { success: true, data: { symbol, name: q.name, price: q.price, change: q.change, changePercent: q.changesPercentage, open: q.open, high: q.dayHigh, low: q.dayLow, previousClose: q.previousClose, industry: 'Mutual Fund' } };
+                        }
+                     } catch(e) { console.warn("FMP fund fetch failed", e); }
+                }
+                return { success: false, reason: "Fund Data Not Found (Check API Keys)" };
+            }
+
+            async fetchSymbolNews(symbol) { return []; } 
+            async fetchHistoricalData(symbol) { return { success: false, reason: "Historical Data Not Available" }; }
+        }
+
+        class StockTracker {
+            constructor() {
+                this.activeBottomRange = "BAR_TODAY"; 
+                this.currentRange = "BAR_TODAY";
+                this.userId = null; 
+                this.stocks = []; 
+                this.mutualFunds = []; 
+                this.watchlist = []; 
+                this.portfolioHistory = [];
+                this.priceAlerts = []; 
+                this.newsFeed = []; 
+                this.currentTab = 'stocks'; 
+                this.isLiveUpdatePaused = false;
+                this.config = { refreshIntervalMs: 90000, finnhubApiKey: "", alphaVantageKey: "", fmpApiKey: "" };
+                this.sessionId = crypto.randomUUID();
+                this.init();
+            }
+
+            init() {
+                document.addEventListener('DOMContentLoaded', () => {
+                    this.loadConfig();
+                    this.cacheDOMElements();
+                    this.setupEventListeners();
+                    this.apiService = new ApiService(this.config);
+
+                    // Auth Listener using the GLOBAL auth object
+                    onAuthStateChanged(window.auth, async user => {
+                        if (user) {
+                            this.userId = user.uid;
+                            if(this.elements.loginContainer) this.elements.loginContainer.style.display = 'none';
+                            if(this.elements.appContainer) this.elements.appContainer.style.display = 'block';
+                            if(this.elements.userName) this.elements.userName.textContent = `Welcome, ${user.displayName || 'User'}`;
+                            if(this.elements.userInfo) this.elements.userInfo.style.display = 'flex';
+
+                            await this.loadApiKeysFromFirestore(); // Load keys
+                            this.loadData(); // Load stocks
+                            this.startLiveUpdate();
+                        } else {
+                            this.userId = null;
+                            if(this.elements.loginContainer) this.elements.loginContainer.style.display = 'block';
+                            if(this.elements.appContainer) this.elements.appContainer.style.display = 'none';
+                        }
+                    });
+                });
+            }
+
+            loadConfig() {
+                this.config.refreshIntervalMs = parseInt(localStorage.getItem('refreshIntervalMs')) || 90000;
+                this.config.finnhubApiKey = localStorage.getItem('finnhubApiKey') || "";
+                this.config.alphaVantageKey = localStorage.getItem('alphaVantageApiKey') || "";
+                this.config.fmpApiKey = localStorage.getItem('fmpApiKey') || "";
+            }
+
+            // --- FIXED: Load from MAIN user doc (apiKeys field) ---
+            async loadApiKeysFromFirestore() {
+                if (!window.db || !this.userId) return;
+                try {
+                    const userDocRef = doc(window.db, "users", this.userId);
+                    const snap = await getDoc(userDocRef);
+
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        const keys = data.apiKeys || {};
+
+                        this.config.finnhubApiKey = keys.finnhubKey || "";
+                        this.config.alphaVantageKey = keys.alphaVantageKey || "";
+                        this.config.fmpApiKey = keys.fmpKey || "";
+
+                        // Update UI if present
+                        if (this.elements && this.elements.modalFinnhubKey) this.elements.modalFinnhubKey.value = this.config.finnhubApiKey;
+
+                        console.log("Loaded API keys from main profile.");
+                        this.apiService = new ApiService(this.config);
+                    }
+                } catch (error) {
+                    console.error("Error loading API keys:", error);
+                }
+            }
+
+            // --- FIXED: Save to MAIN user doc (apiKeys field) ---
+            async saveSettings() {
+                const finnhubKey = this.elements.modalFinnhubKey.value.trim();
+                const alphaVantageKey = this.elements.modalAlphaVantageKey.value.trim();
+                const fmpKey = this.elements.modalFmpKey.value.trim();
+                const refreshInterval = parseInt(this.elements.modalRefreshInterval.value);
+
+                if (refreshInterval < 10) { alert("Interval must be > 10s"); return; }
+
+                this.config = { finnhubApiKey: finnhubKey, alphaVantageKey, fmpApiKey: fmpKey, refreshIntervalMs: refreshInterval * 1000 };
+                localStorage.setItem('refreshIntervalMs', this.config.refreshIntervalMs);
+                this.apiService = new ApiService(this.config);
+
+                if (window.db && this.userId) {
+                    try {
+                        const userDocRef = doc(window.db, "users", this.userId);
+                        // Save to 'apiKeys' field, merge=true preserves stocks
+                        await setDoc(userDocRef, {
+                            apiKeys: {
+                                finnhubKey, alphaVantageKey, fmpKey,
+                                refreshIntervalMs: this.config.refreshIntervalMs
+                            }
+                        }, { merge: true }); 
+                        this.showSuccess("✅ Settings saved to account!");
+                    } catch (e) {
+                        this.showError("Saved locally, cloud sync failed: " + e.message);
+                    }
+                }
+                if(this.elements.settingsModal) this.elements.settingsModal.style.display = 'none';
+                this.startLiveUpdate();
+            }
+
+            // --- FIXED: Save Data with MERGE (Prevents overwriting API Keys) ---
+            async saveData() {
+                if (!this.userId || !window.db) return;
+                const userDocRef = doc(window.db, "users", this.userId);
+                const data = {
+                    stocks: this.stocks, 
+                    mutualFunds: this.mutualFunds, 
+                    watchlist: this.watchlist,
+                    portfolioHistory: this.portfolioHistory, 
+                    priceAlerts: this.priceAlerts
+                };
+                // CRITICAL: merge: true keeps the apiKeys field safe
+                await setDoc(userDocRef, data, { merge: true });
+            }
+
+            async loadData() {
+                if (!this.userId) return;
+                const snap = await getDoc(doc(window.db, "users", this.userId));
+                if (snap.exists()) {
+                    const d = snap.data();
+                    this.stocks = d.stocks || [];
+                    this.mutualFunds = d.mutualFunds || [];
+                    this.watchlist = d.watchlist || [];
+                    this.portfolioHistory = d.portfolioHistory || [];
+                    this.priceAlerts = d.priceAlerts || [];
+                    this.renderContent();
+                }
+            }
+
+            cacheDOMElements() {
+                const ids = ['login-container','app-container','google-signin-btn','user-info','user-name','sign-out-btn',
+                             'stocksGrid','loading','error','success','stockInput','addBtn','liveUpdateBtn','toggleLiveUpdateBtn',
+                             'portfolioFilter','settingsBtn','settingsModal','closeSettingsBtn','modal-save-settings-btn',
+                             'modal-finnhub-key','modal-alpha-vantage-key','modal-fmp-key','modal-refresh-interval',
+                             'transactionModal','modal-save-btn','modal-symbol','modal-shares','modal-price','modal-date','modal-platform',
+                             'portfolio-summary','portfolio-performance-container'];
+                this.elements = {};
+                ids.forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el) this.elements[id.replace(/-([a-z])/g, g => g[1].toUpperCase())] = el; 
+                    // Manual ID mapping for specific modal inputs
+                    if(id === 'modal-finnhub-key') this.elements.modalFinnhubKey = el;
+                    if(id === 'modal-alpha-vantage-key') this.elements.modalAlphaVantageKey = el;
+                    if(id === 'modal-fmp-key') this.elements.modalFmpKey = el;
+                    if(id === 'modal-refresh-interval') this.elements.modalRefreshInterval = el;
+                });
+            }
+
+            setupEventListeners() {
+                if(this.elements.googleSigninBtn) {
+                    this.elements.googleSigninBtn.addEventListener('click', () => {
+                        const provider = new GoogleAuthProvider();
+                        signInWithPopup(window.auth, provider, browserPopupRedirectResolver);
+                    });
+                }
+                if(this.elements.signOutBtn) this.elements.signOutBtn.addEventListener('click', () => signOut(window.auth));
+                if(this.elements.addBtn) this.elements.addBtn.addEventListener('click', () => this.addItemFromInput('stock'));
+
+                if(this.elements.settingsBtn) {
+                    this.elements.settingsBtn.addEventListener('click', () => {
+                        this.elements.settingsModal.style.display = 'flex';
+                        if(this.elements.modalFinnhubKey) this.elements.modalFinnhubKey.value = this.config.finnhubApiKey;
+                        if(this.elements.modalAlphaVantageKey) this.elements.modalAlphaVantageKey.value = this.config.alphaVantageKey;
+                        if(this.elements.modalFmpKey) this.elements.modalFmpKey.value = this.config.fmpApiKey;
+                        if(this.elements.modalRefreshInterval) this.elements.modalRefreshInterval.value = this.config.refreshIntervalMs / 1000;
+                    });
+                }
+                if(this.elements.closeSettingsBtn) this.elements.closeSettingsBtn.addEventListener('click', () => this.elements.settingsModal.style.display = 'none');
+                if(this.elements.modalSaveSettingsBtn) this.elements.modalSaveSettingsBtn.addEventListener('click', () => this.saveSettings());
+
+                // Allow global access for inline onclick handlers
+                window.stockTracker = this; 
+            }
+
+            switchTab(tab) {
+                this.currentTab = tab;
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+                const content = document.getElementById(`${tab}-tab`);
+                if(content) content.classList.add('active');
+
+                this.renderContent();
+            }
+
+            async addItemFromInput(type) {
+                const input = document.getElementById('stockInput');
+                const symbol = input.value.trim().toUpperCase();
+                if(!symbol) return;
+                input.value = '';
+                this.showLoading(true);
+                const res = await this.apiService.fetchStockEtfData(symbol);
+                this.showLoading(false);
+                if(res.success) {
+                    const newItem = { ...res.data, id: crypto.randomUUID(), transactions: [] };
+                    this.stocks.push(newItem);
+                    this.saveData();
+                    this.renderContent();
+                } else {
+                    this.showError(res.reason);
+                }
+            }
+
+            renderContent() {
+                const grid = document.getElementById('stocksGrid');
+                if(!grid) return;
+                grid.innerHTML = '';
+
+                if (this.currentTab === 'stocks') {
+                    if(this.elements.portfolioSummary) this.elements.portfolioSummary.style.display = 'block';
+                    this.renderCards(this.stocks, grid, 'stock');
+                }
+            }
+
+            renderCards(items, container, type) {
+                items.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'stock-card';
+                    card.innerHTML = `
+                        <div class="stock-header">
+                            <span class="stock-symbol">${item.symbol}</span>
+                            <button class="remove-btn" onclick="window.stockTracker.removeItem('${item.id}')">×</button>
+                        </div>
+                        <div class="stock-price">$${(item.price||0).toFixed(2)}</div>
+                        <div class="stock-change ${item.change>=0?'positive':'negative'}">${item.change>=0?'+':''}${item.change}</div>
+                    `;
+                    container.appendChild(card);
+                });
+            }
+
+            removeItem(id) {
+                if(confirm("Remove?")) {
+                    this.stocks = this.stocks.filter(s => s.id !== id);
+                    this.saveData();
+                    this.renderContent();
+                }
+            }
+
+            startLiveUpdate() {
+                if (this.refreshIntervalId) clearInterval(this.refreshIntervalId);
+                this.refreshIntervalId = setInterval(() => {
+                    console.log("Auto-refreshing...");
+                }, this.config.refreshIntervalMs);
+            }
+
+            showLoading(show) { if(this.elements.loading) this.elements.loading.style.display = show ? 'block' : 'none'; }
+            showSuccess(msg) { 
+                if(this.elements.success) {
+                    this.elements.success.textContent = msg; 
+                    this.elements.success.style.display = 'block'; 
+                    setTimeout(()=>this.elements.success.style.display='none', 3000); 
+                }
+            }
+            showError(msg) { 
+                if(this.elements.error) {
+                    this.elements.error.textContent = msg; 
+                    this.elements.error.style.display = 'block'; 
+                    setTimeout(()=>this.elements.error.style.display='none', 5000); 
+                }
+            }
+
+            calculateTransactionStats(txs) { return { totalSharesOwned: 0, currentValue: 0, unrealizedPL: 0 }; }
+        }
+
+        // 5. Instantiate Global Tracker
+        window.stockTracker = new StockTracker();
+
+</script>
+
+
+
+
+
+<!-- START: Upgrades - TradingView style candles, improved line, events, summary, smoother switching -->
+<style>
+/* Modern UI tweaks for the chart area */
+#portfolio-performance-container {
+  padding: 20px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.01));
+  backdrop-filter: blur(6px);
+  position: relative;
+}
+.chart-big-value { font-size: 2.25rem; font-weight: 800; letter-spacing: -0.5px; }
+#chart-summary-panel{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  justify-content:center;
+  position:absolute;
+  left:50%;
+  top:18px;
+  transform:translateX(-50%);
+  z-index:5;
+}
+.summary-pill{
+  background:var(--bg-tertiary);
+  border:1px solid var(--border-color);
+  padding:8px 12px;
+  border-radius:12px;
+  font-weight:700;
+  min-width:110px;
+  text-align:center;
+}
+#portfolio-performance-container .chart-header { padding-bottom: 8px; }
+.chart-controls .chart-range-btn { transition: background-color 220ms, transform 180ms; }
+.chart-controls .chart-range-btn.active { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+.canvas-wrapper { height:420px !important; }
+/* Crosshair style */
+.crosshair-line { position:absolute; pointer-events:none; z-index:10; }
+.event-icon { position:absolute; width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;box-shadow:0 4px 8px rgba(0,0,0,0.12);pointer-events:auto; }
+</style>
+
+<div id="chart-summary-panel" aria-hidden="false">
+  <div class="summary-pill" id="summary-daily">Today: $0.00</div>
+  <div class="summary-pill" id="summary-week">1W: 0.00%</div>
+  <div class="summary-pill" id="summary-month">1M: 0.00%</div>
+</div>
+
+<script>
+(function(){
+  // utilities
+  function getIntradayData() {
+    // Try multiple common names for intraday/ticks that the app might expose
+    const possible = [
+      window.stockTracker && window.stockTracker.intradayTicks,
+      window.stockTracker && window.stockTracker.intradayData,
+      window.stockTracker && window.stockTracker.todayTicks,
+      window.stockTracker && window.stockTracker.todayIntraday,
+      window.stockTracker && window.stockTracker.ticks
+    ];
+    for (const p of possible) {
+      if (Array.isArray(p) && p.length) return p;
+    }
+    // Fallback: create sample OHLC (minute) data for today
+    const now = new Date();
+    const start = new Date(); start.setHours(9,30,0,0);
+    const data = [];
+    let price = 100 + Math.random()*5;
+    for (let i=0;i<120;i++){
+      const t = new Date(start.getTime() + i*60*1000);
+      const open = price;
+      const close = open + (Math.random()-0.45)*0.6;
+      const high = Math.max(open, close) + Math.random()*0.6;
+      const low = Math.min(open, close) - Math.random()*0.6;
+      price = close;
+      data.push({t: t, o: open, h: high, l: low, c: close});
+    }
+    return data;
+  }
+
+  function formatCurrency(v) {
+    if (window.stockTracker && window.stockTracker.formatCurrency) return window.stockTracker.formatCurrency(v);
+    return '$' + Number(v).toFixed(2);
+  }
+
+  // Create candlestick renderer plugin (draw wicks and bodies) for Chart.js
+  const candlePlugin = {
+    id: 'candles',
+    afterDatasetDraw(chart, args, options) {
+      const {ctx, chartArea: area, scales: {x, y}} = chart;
+      const meta = chart.getDatasetMeta(0);
+      ctx.save();
+      meta.data.forEach((bar, idx) => {
+        const d = chart.data.datasets[0].data[idx];
+        const xC = bar.x;
+        const openY = y.getPixelForValue(d.o);
+        const closeY = y.getPixelForValue(d.c);
+        const highY = y.getPixelForValue(d.h);
+        const lowY = y.getPixelForValue(d.l);
+        const barWidth = Math.max(4, Math.min(14, bar.width || 8));
+        // wick
+        ctx.beginPath();
+        ctx.strokeStyle = d.c >= d.o ? '#28a745' : '#e74c3c';
+        ctx.lineWidth = 1.5;
+        ctx.moveTo(xC, highY);
+        ctx.lineTo(xC, lowY);
+        ctx.stroke();
+        // body (rectangle)
+        const top = Math.min(openY, closeY);
+        const height = Math.max(1, Math.abs(closeY - openY));
+        ctx.beginPath();
+        if (d.c >= d.o) {
+          // gain: hollow with green border & thin fill
+          ctx.fillStyle = 'rgba(40,167,69,0.08)';
+          ctx.strokeStyle = '#28a745';
+        } else {
+          // loss: filled red
+          ctx.fillStyle = 'rgba(231,76,60,0.18)';
+          ctx.strokeStyle = '#e74c3c';
+        }
+        ctx.lineWidth = 1.2;
+        const left = xC - barWidth/2;
+        ctx.rect(left, top, barWidth, height);
+        ctx.fill();
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+  };
+
+  // Crosshair plugin
+  const crosshairPlugin = {
+    id: 'crosshair',
+    afterEvent(chart, evt) {
+      const e = evt.event;
+      const canvas = chart.canvas;
+      const rect = canvas.getBoundingClientRect();
+      // remove any existing lines
+      const existX = canvas.parentNode.querySelector('.crosshair-x');
+      const existY = canvas.parentNode.querySelector('.crosshair-y');
+      if (existX) existX.remove();
+      if (existY) existY.remove();
+      if (e && (e.type === 'mousemove' || e.type === 'pointermove')) {
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        // vertical
+        const vx = document.createElement('div');
+        vx.className = 'crosshair-x';
+        vx.style.position='absolute';
+        vx.style.left = (rect.left + x) + 'px';
+        vx.style.top = rect.top + 'px';
+        vx.style.height = rect.height + 'px';
+        vx.style.width = '1px';
+        vx.style.background = 'rgba(100,100,100,0.12)';
+        vx.style.pointerEvents='none';
+        canvas.parentNode.appendChild(vx);
+        // horizontal
+        const hy = document.createElement('div');
+        hy.className = 'crosshair-y';
+        hy.style.position='absolute';
+        hy.style.left = rect.left + 'px';
+        hy.style.top = (rect.top + y) + 'px';
+        hy.style.width = rect.width + 'px';
+        hy.style.height = '1px';
+        hy.style.background = 'rgba(100,100,100,0.08)';
+        hy.style.pointerEvents='none';
+        canvas.parentNode.appendChild(hy);
+      }
+    }
+  };
+
+  // Smooth animations utility
+  function animateChart(chart) {
+    chart.options.animation = {duration: 450, easing: 'easeOutCubic'};
+    chart.update();
+  }
+
+  // Build candlestick chart on the bar canvas
+  function buildCandles() {
+  // Candlestick engine disabled (Option A) to avoid conflicts with the Today bar chart.
+  // The bottom chart now uses STEP3A Top Movers logic only.
+  return;
+}
+
+  // Improve line chart appearance for portfolioPerformanceChart
+  function enhanceLineChart() {
+    const canvas = document.getElementById('portfolioPerformanceChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    // If an injected chart instance exists, modify its options, else create overlay plugin
+    const existing = window.__injectedPortfolioChartInstance;
+    if (existing) {
+      existing.options.elements.line.tension = 0.24;
+      existing.options.elements.line.borderWidth = 2.5;
+      existing.options.elements.point.radius = 0;
+      existing.options.plugins.tooltip.mode = 'index';
+      // gradient fill update
+      const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+      grad.addColorStop(0, 'rgba(52,152,219,0.24)');
+      grad.addColorStop(1, 'rgba(52,152,219,0.02)');
+      existing.data.datasets[0].backgroundColor = grad;
+      animateChart(existing);
+    }
+  }
+
+  // Key event icons above chart - uses stockTracker.keyEvents if available
+  function renderEventIcons() {
+    const container = document.getElementById('portfolio-performance-container');
+    if (!container) return;
+    // remove old icons
+    const old = container.querySelectorAll('.event-icon');
+    old.forEach(n=>n.remove());
+    const events = (window.stockTracker && (window.stockTracker.keyEvents || window.stockTracker.events)) || [];
+    events.slice(0,8).forEach(ev => {
+      try {
+        const date = new Date(ev.date || ev.timestamp || ev.time || ev.t);
+        if (isNaN(date)) return;
+        const canvas = document.getElementById('portfolioPerformanceChart');
+        const chart = window.__injectedPortfolioChartInstance;
+        if (!chart) return;
+        const xScale = chart.scales.x;
+        const xPx = xScale.getPixelForValue(date);
+        const rect = canvas.getBoundingClientRect();
+        const icon = document.createElement('div');
+        icon.className = 'event-icon';
+        icon.style.left = (rect.left + xPx - 10) + 'px';
+        icon.style.top = (rect.top + 8) + 'px';
+        icon.style.background = ev.type === 'earnings' ? '#3498DB' : ev.type === 'dividend' ? '#f39c12' : '#9b59b6';
+        icon.title = ev.title || ev.type || 'Event';
+        icon.textContent = ev.type ? ev.type[0].toUpperCase() : 'E';
+        document.body.appendChild(icon);
+        setTimeout(()=>icon.remove(), 7000);
+      } catch(e){}
+    });
+  }
+
+  // Update performance summary numbers from stockTracker if available
+  function updateSummaryPanel() {
+    const tracker = window.stockTracker;
+    if (!tracker) return;
+    const daily = document.getElementById('summary-daily');
+    const week = document.getElementById('summary-week');
+    const month = document.getElementById('summary-month');
+    try {
+      const plToday = tracker.totalPLToday || tracker.total_pl_today || (tracker.getTotalPLToday && tracker.getTotalPLToday());
+      const pct1w = tracker.weekPercent || (tracker.getWeekPercent && tracker.getWeekPercent && tracker.getWeekPercent());
+      const pct1m = tracker.monthPercent || (tracker.getMonthPercent && tracker.getMonthPercent && tracker.getMonthPercent());
+      if (daily) daily.textContent = 'Today: ' + (plToday !== undefined ? formatCurrency(plToday) : '$0.00');
+      if (week) week.textContent = '1W: ' + (pct1w !== undefined ? (pct1w>0?'+':'')+Number(pct1w).toFixed(2)+'%' : '0.00%');
+      if (month) month.textContent = '1M: ' + (pct1m !== undefined ? (pct1m>0?'+':'')+Number(pct1m).toFixed(2)+'%' : '0.00%');
+    } catch(e){}
+  }
+
+  // Smooth range switching: animate fade between charts
+  function setupRangeButtons() {
+    const controls = document.querySelectorAll('#performance-chart-controls .chart-range-btn');
+    controls.forEach(btn => {
+      try { btn.removeEventListener('click', btn._injectedHandler); } catch(e) {}
+      const handler = (e) => {
+        controls.forEach(b => b.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        const range = e.currentTarget.getAttribute('data-range');
+        const histWrap = document.getElementById('historical-chart-wrapper');
+        const barWrap = document.getElementById('bar-chart-wrapper');
+        // fade out
+        histWrap.style.transition = 'opacity 220ms';
+        barWrap.style.transition = 'opacity 220ms';
+        if (range === 'BAR_TODAY') {
+          histWrap.style.opacity = 0;
+          setTimeout(()=>{ histWrap.style.display='none'; barWrap.style.display='block'; barWrap.style.opacity=0; setTimeout(()=>{ buildCandles(); barWrap.style.opacity=1; renderEventIcons(); updateSummaryPanel(); }, 30); }, 220);
+        } else {
+          barWrap.style.opacity = 0;
+          setTimeout(()=>{ barWrap.style.display='none'; histWrap.style.display='block'; histWrap.style.opacity=0; setTimeout(()=>{ if (window.__injectedPortfolioChartInstance && window.__injectedPortfolioChartInstance.update) { try { window.__injectedPortfolioChartInstance.update(); } catch(e){} } enhanceLineChart(); renderEventIcons(); updateSummaryPanel(); histWrap.style.opacity=1; }, 30); }, 220);
+        }
+      };
+      btn.addEventListener('click', handler);
+      btn._injectedHandler = handler;
+    });
+  }
+
+  // Reposition event icons on resize/scroll
+  function repositionEventIcons() {
+    const icons = document.querySelectorAll('.event-icon');
+    icons.forEach(icon => icon.remove()); // they are ephemeral and will be re-rendered
+    renderEventIcons();
+  }
+
+  // Initialize on ready
+  function whenReady(cb, timeout=12000) {
+    const start = Date.now();
+    (function check(){
+      if (document.readyState === 'complete' && window.stockTracker) return cb();
+      if (Date.now() - start > timeout) return cb();
+      requestAnimationFrame(check);
+    })();
+  }
+
+  whenReady(()=>{
+    enhanceLineChart();
+    setupRangeButtons();
+    const active = document.querySelector('#performance-chart-controls .chart-range-btn.active');
+    if (active && active.getAttribute('data-range') === 'BAR_TODAY') buildCandles();
+    renderEventIcons();
+    updateSummaryPanel();
+    window.addEventListener('resize', () => { setTimeout(repositionEventIcons, 200); });
+    setInterval(()=>{ enhanceLineChart(); updateSummaryPanel(); renderEventIcons(); if (document.querySelector('#performance-chart-controls .chart-range-btn.active')?.getAttribute('data-range')==='BAR_TODAY') buildCandles(); }, 5000);
+  });
+})();
+</script>
+<!-- END: Upgrades -->
+
+
+<!-- STEP3A: TODAY chart fix (Top Movers using current portfolio data) -->
+<script>
+(function() {
+    // Wait until the main app is available
+    function initStep3A() {
+        if (!window.stockTracker) {
+            // app not ready yet
+            setTimeout(initStep3A, 500);
+            return;
+        }
+
+        const app = window.stockTracker;
+        if (!app || !app.elements) return;
+
+        // Preserve original implementation for non-Today ranges
+        const originalRender = app.renderPortfolioPerformanceChart
+            ? app.renderPortfolioPerformanceChart.bind(app)
+            : null;
+
+        if (!originalRender) return;
+
+        app.renderPortfolioPerformanceChart = async function(range = null) {
+            // Normalize and remember the active bottom range
+            if (!this.activeBottomRange) { this.activeBottomRange = "BAR_TODAY"; }
+
+            // Decide which range the *bottom chart* should use.
+            // We deliberately ignore any unrelated global "currentRange" so that
+            // the Today bar mode cannot be overridden by other charts.
+            let effectiveRange;
+            if (range) {
+                effectiveRange = range;
+            } else {
+                effectiveRange = this.activeBottomRange || "BAR_TODAY";
+            }
+
+            // Persist selection for future calls
+            this.activeBottomRange = effectiveRange;
+            this.currentRange = effectiveRange;
+
+            // If not Today, defer completely to the original implementation (line chart behavior)
+            if (effectiveRange !== 'BAR_TODAY') {
+                return originalRender(effectiveRange);
+            }
+
+const container = this.elements.portfolioPerformanceContainer;
+            if (!container) return;
+
+            // Show container only when we actually have positions
+            const hasPositions = (this.stocks && this.stocks.length > 0) ||
+                                 (this.mutualFunds && this.mutualFunds.length > 0);
+            container.style.display = hasPositions ? 'block' : 'none';
+            if (!hasPositions) return;
+
+            // Toggle wrappers: Today uses BAR chart (Top Movers)
+            if (this.elements.historicalChartWrapper) {
+                this.elements.historicalChartWrapper.style.display = 'none';
+            }
+            if (this.elements.barChartWrapper) {
+                this.elements.barChartWrapper.style.display = 'block';
+            }
+            if (this.elements.portfolioChartTitle) {
+                this.elements.portfolioChartTitle.textContent = "Portfolio Performance Breakdown (Top Movers)";
+            }
+
+            // Activate the correct button
+            if (this.elements.performanceChartControls) {
+                const buttons = this.elements.performanceChartControls.querySelectorAll('.chart-range-btn');
+                buttons.forEach(btn => {
+                    if (!btn.dataset.range) return;
+                    btn.classList.toggle('active', btn.dataset.range === 'BAR_TODAY');
+                });
+            }
+
+            // Collect all portfolio items (stocks + funds)
+            const items = []
+                .concat(this.stocks || [])
+                .concat(this.mutualFunds || []);
+
+            if (!items.length) return;
+
+            // Helper: safely compute stats for each item
+            const top = [];
+            items.forEach(item => {
+                try {
+                    const price = Number(item.price) || 0;
+                    const changePerShare = Number(item.change) || 0;
+                    const stats = this.calculateTransactionStats
+                        ? this.calculateTransactionStats(item.transactions || [], price)
+                        : { totalSharesOwned: item.shares || 0, currentValue: price * (item.shares || 0) };
+
+                    const shares = stats.totalSharesOwned || 0;
+                    if (shares <= 0 || !price) return;
+
+                    const dailyChangeValue = changePerShare * shares;
+                    const dailyChangePct = price !== 0 ? (changePerShare / price) * 100 : 0;
+
+                    top.push({
+                        symbol: item.symbol || item.ticker || "N/A",
+                        name: item.name || item.symbol || item.ticker || "Unknown",
+                        value: stats.currentValue || (price * shares),
+                        dailyChangeValue,
+                        dailyChangePct
+                    });
+                } catch (e) {
+                    console.error("STEP3A: Failed to compute stats for item", item, e);
+                }
+            });
+
+            if (!top.length) return;
+
+            // Sort by absolute dollar move, biggest first
+            top.sort((a, b) => Math.abs(b.dailyChangeValue) - Math.abs(a.dailyChangeValue));
+
+            // Respect the "Top movers" count selector if present
+            let maxCount = 10;
+            const countSelect = document.getElementById('top-movers-count');
+            if (countSelect && countSelect.value) {
+                const parsed = parseInt(countSelect.value, 10);
+                if (!isNaN(parsed) && parsed > 0) maxCount = parsed;
+            }
+
+            const sliced = top.slice(0, maxCount);
+
+            const labels = sliced.map(x => x.symbol);
+            const data = sliced.map(x => x.dailyChangeValue);
+            const backgroundColors = sliced.map(x =>
+                x.dailyChangeValue >= 0 ? 'rgba(34,197,94,0.75)' : 'rgba(248,113,113,0.75)'
+            );
+            const borderColors = sliced.map(x =>
+                x.dailyChangeValue >= 0 ? 'rgba(22,163,74,1)' : 'rgba(220,38,38,1)'
+            );
+
+            const ctxBar = this.elements.portfolioPerformanceBarChart
+                ? this.elements.portfolioPerformanceBarChart.getContext('2d')
+                : null;
+            if (!ctxBar || typeof Chart === 'undefined') return;
+
+            // Destroy previous instance if exists
+            if (this.portfolioPerformanceBarChartInstance) {
+                this.portfolioPerformanceBarChartInstance.destroy();
+                this.portfolioPerformanceBarChartInstance = null;
+            }
+
+            // Create the bar chart for Today
+            this.portfolioPerformanceBarChartInstance = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Today P/L ($)',
+                        data,
+                        backgroundColor: backgroundColors,
+                        borderColor: borderColors,
+                        borderWidth: 1.2,
+                        borderRadius: 6,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.parsed.y || 0;
+                                    const sign = val >= 0 ? "+" : "";
+                                    return sign + "$" + val.toFixed(2);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                color: 'rgba(148,163,184,0.95)',
+                                font: { size: 11 }
+                            }
+                        },
+                        y: {
+                            grid: { color: 'rgba(30,64,175,0.35)' },
+                            ticks: {
+                                color: 'rgba(148,163,184,0.95)',
+                                font: { size: 11 },
+                                callback: value => "$" + value.toFixed(0)
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Update the header metric to show total Today P/L for the whole portfolio
+            try {
+                const totalTodayPL = top.reduce((sum, x) => sum + x.dailyChangeValue, 0);
+                if (this.elements.chartCurrentValue) {
+                    const sign = totalTodayPL >= 0 ? "+" : "";
+                    this.elements.chartCurrentValue.textContent = sign + "$" + totalTodayPL.toFixed(2) + " today";
+                }
+            } catch (e) {
+                console.error("STEP3A: unable to update chartCurrentValue", e);
+            }
+        }
+;
+
+        // Re-render Today immediately using the new logic
+        app.renderPortfolioPerformanceChart('BAR_TODAY');
+    }
+
+    // Kick off once DOM and initial app are ready
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        initStep3A();
+    } else {
+        document.addEventListener('DOMContentLoaded', initStep3A);
+    }
+})();
+</script>
+
+
+<script>
+// STEP3A-TODAY-PORTFOLIO-PT-FIXED
+(function() {
+  function attachTodayHelpers() {
+    if (typeof StockTracker === 'undefined') return;
+    if (StockTracker.prototype.buildPortfolioTodaySeries) return; // already attached
+
+    StockTracker.prototype.buildPortfolioTodaySeries = function() {
+      try {
+        const hist = Array.isArray(this.portfolioHistory) ? this.portfolioHistory : [];
+        if (!hist.length) return null;
+
+        const today = new Date();
+        const todayStr = today.toISOString().slice(0,10);
+
+        const last = hist[hist.length - 1];
+        const lastDate = new Date(last.date);
+        const lastDateStr = lastDate.toISOString().slice(0,10);
+        let baseEntry = hist.length > 1 ? hist[hist.length - 2] : last;
+
+        const isToday = (lastDateStr === todayStr);
+        const baseVal = Number(
+          (!isToday && (last.value || last.totalValue)) ||
+          baseEntry.value || baseEntry.totalValue || 0
+        ) || 0;
+
+        const currentVal = Number(
+          (isToday && (last.value || last.totalValue)) ||
+          this.totalPortfolioValue ||
+          this.combinedTotal ||
+          baseVal
+        ) || baseVal;
+
+        // 1:00 AM PT to 5:00 PM PT in 15-minute steps
+        const start = new Date();
+        start.setHours(1, 0, 0, 0);
+        const end = new Date();
+        end.setHours(17, 0, 0, 0);
+
+        const stepMinutes = 15;
+        const msStep = stepMinutes * 60 * 1000;
+        const totalSteps = Math.round((end.getTime() - start.getTime()) / msStep);
+
+        const points = [];
+        for (let i = 0; i <= totalSteps; i++) {
+          const t = new Date(start.getTime() + i * msStep);
+          let y;
+          if (t <= start) {
+            y = baseVal;
+          } else if (t >= end) {
+            y = currentVal;
+          } else {
+            const ratio = (t.getTime() - start.getTime()) / (end.getTime() - start.getTime());
+            y = baseVal + (currentVal - baseVal) * ratio;
+          }
+          points.push({ x: t, y });
+        }
+
+        return { points, baselineVal: baseVal };
+      } catch (e) {
+        console.warn('buildPortfolioTodaySeries failed:', e);
+        return null;
+      }
+    };
+
+    StockTracker.prototype.renderTodayPortfolioLineChart = function() {
+      const wrapper = this.elements && this.elements.historicalChartWrapper;
+      if (!wrapper || !this.elements.portfolioPerformanceChart) return;
+      const canvas = this.elements.portfolioPerformanceChart;
+      const ctx = canvas.getContext('2d');
+
+      const series = this.buildPortfolioTodaySeries();
+      if (!series || !series.points || !series.points.length) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
+        ctx.font = "16px 'Inter', sans-serif";
+        ctx.fillText('No intraday portfolio data available.', canvas.width / 2, canvas.height / 2 - 10);
+        return;
+      }
+
+      if (this.portfolioPerformanceChartInstance) {
+        this.portfolioPerformanceChartInstance.destroy();
+        this.portfolioPerformanceChartInstance = null;
+      }
+
+      const lineColor = (window.getComputedStyle && canvas)
+        ? getComputedStyle(document.documentElement).getPropertyValue('--chart-line-color').trim() || '#1f78ff'
+        : '#1f78ff';
+
+      const fillRgb = '31, 120, 255';
+      const gridColor = this.isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)';
+      const labelColor = this.isDarkMode ? '#e2e8f0' : '#475569';
+
+      this.portfolioPerformanceChartInstance = createSafeChart(ctx, {
+        type: 'line',
+        data: {
+          datasets: [
+            {
+              label: "Portfolio Value ($)",
+              data: series.points,
+              borderColor: lineColor,
+              borderWidth: 2,
+              pointRadius: 0,
+              fill: true,
+              backgroundColor: `rgba(${fillRgb},0.15)`,
+              tension: 0.35
+            },
+            {
+              label: "Prev Close",
+              data: [
+                { x: series.points[0].x, y: series.baselineVal },
+                { x: series.points[series.points.length - 1].x, y: series.baselineVal }
+              ],
+              borderColor: 'rgba(148,163,184,0.9)',
+              borderWidth: 1,
+              borderDash: [4, 4],
+              pointRadius: 0,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              callbacks: {
+                label: (ctx) => {
+                  if (ctx.datasetIndex !== 0) return '';
+                  const val = ctx.parsed.y;
+                  const delta = val - series.baselineVal;
+                  const pct = series.baselineVal ? (delta / series.baselineVal) * 100 : 0;
+                  const sign = delta > 0 ? '+' : '';
+                  const cur = this.formatCurrency ? this.formatCurrency(val) : ('$' + val.toFixed(2));
+                  const dStr = sign + delta.toFixed(2);
+                  const pStr = sign + pct.toFixed(2) + '%';
+                  return ` ${cur} (${dStr}, ${pStr})`;
+                },
+                title: (items) => {
+                  if (!items.length) return '';
+                  const d = new Date(items[0].parsed.x);
+                  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'hour',
+                displayFormats: { hour: 'ha' }
+              },
+              ticks: { color: labelColor },
+              grid: { color: gridColor }
+            },
+            y: {
+              ticks: {
+                color: labelColor,
+                callback: (value) => {
+                  const n = Number(value) || 0;
+                  return this.formatCurrency ? this.formatCurrency(n) : ('$' + n.toLocaleString());
+                }
+              },
+              grid: { color: gridColor }
+            }
+          }
+        }
+      });
+    };
+
+    // Now override renderPortfolioPerformanceChart to use our TODAY renderer
+    const proto = StockTracker.prototype;
+    if (!proto._todayPortfolioPatchedV2) {
+      const original = proto.renderPortfolioPerformanceChart;
+      proto.renderPortfolioPerformanceChart = function(range) {
+      if (!this.activeBottomRange) { this.activeBottomRange = "BAR_TODAY"; }
+      const r = range || this.activeBottomRange || "1M";
+      this.activeBottomRange = r;
+        const isToday = (r === 'BAR_TODAY' || r === 'TODAY' || r === 'INTRADAY');
+        if (isToday) {
+          // keep existing UI state behavior
+          if (typeof original === 'function') {
+            original.call(this, r);
+          }
+          // enforce historical chart canvas
+          if (this.elements && this.elements.historicalChartWrapper) {
+            this.elements.historicalChartWrapper.style.display = 'block';
+          }
+          if (this.elements && this.elements.barChartWrapper) {
+            this.elements.barChartWrapper.style.display = 'none';
+          }
+          if (this.elements && this.elements.portfolioChartTitle) {
+            this.elements.portfolioChartTitle.textContent = 'Portfolio Today (PT)';
+          }
+          this.renderTodayPortfolioLineChart();
+          return;
+        }
+        return typeof original === 'function' ? original.call(this, r) : undefined;
+      };
+      proto._todayPortfolioPatchedV2 = true;
+    }
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(attachTodayHelpers, 800);
+  } else {
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(attachTodayHelpers, 800);
+    });
+  }
+})();
+</script>
+
+
+<script>
+// YAHOO-STYLE BOTTOM PORTFOLIO CHART (safe override)
+(function() {
+  function installYahooBottomChart() {
+    const tracker = window.stockTracker;
+    if (!tracker || tracker._yahooBottomInstalled) return;
+    const ctor = tracker.constructor;
+    if (!ctor || !ctor.prototype) return;
+    const proto = ctor.prototype;
+
+    const originalRender = proto.renderPortfolioPerformanceChart;
+
+    proto.renderPortfolioPerformanceChart = function(range) {
+      if (!this.activeBottomRange) { this.activeBottomRange = "BAR_TODAY"; }
+      const r = range || this.activeBottomRange || "1M";
+      this.activeBottomRange = r;
+      const isTodayBar = (r === 'BAR_TODAY');
+      const isToday = (r === 'TODAY' || r === 'INTRADAY' || r === '1D');
+
+      const els = this.elements || {};
+      const container = els.portfolioPerformanceContainer || els.portfolioPerformanceWrapper || null;
+
+      // Ensure container visible when we have holdings
+      if (container) {
+        const hasHoldings = (this.currentHoldings && this.currentHoldings.length > 0)
+          || (this.stocks && this.stocks.length > 0)
+          || (this.mutualFunds && this.mutualFunds.length > 0);
+        container.style.display = hasHoldings ? 'block' : 'none';
+        if (!hasHoldings) return;
+      }
+
+      
+      // Special handling: 'BAR_TODAY' range uses the Today bar chart, not the line chart.
+      if (isTodayBar) {
+        if (els.historicalChartWrapper) {
+          els.historicalChartWrapper.style.display = 'none';
+        }
+        if (els.barChartWrapper) {
+          els.barChartWrapper.style.display = 'block';
+        }
+        if (els.portfolioChartTitle) {
+          els.portfolioChartTitle.textContent = 'Portfolio Today';
+        }
+        // Highlight Today button
+        if (els.performanceChartControls) {
+          const buttons = els.performanceChartControls.querySelectorAll('.chart-range-btn');
+          buttons.forEach(btn => btn.classList.remove('active'));
+          const activeBtn = els.performanceChartControls.querySelector('[data-range="BAR_TODAY"]')
+            || els.performanceChartControls.querySelector('[data-range="TODAY"]');
+          if (activeBtn) activeBtn.classList.add('active');
+        }
+        if (this.portfolioPerformanceChartInstance) {
+          this.portfolioPerformanceChartInstance.destroy();
+          this.portfolioPerformanceChartInstance = null;
+        }
+        if (typeof this.renderTodayPerformanceBarChart === 'function') {
+          this.renderTodayPerformanceBarChart();
+        }
+        return;
+      }
+
+// Always use the historical chart area
+      if (els.historicalChartWrapper) {
+        els.historicalChartWrapper.style.display = 'block';
+      }
+      if (els.barChartWrapper) {
+        els.barChartWrapper.style.display = 'none';
+      }
+      if (els.portfolioChartTitle) {
+        els.portfolioChartTitle.textContent = isToday
+          ? 'Portfolio Today'
+          : 'Portfolio Performance History';
+      }
+
+      // Highlight active range button
+      if (els.performanceChartControls) {
+        const buttons = els.performanceChartControls.querySelectorAll('.chart-range-btn');
+        buttons.forEach(btn => btn.classList.remove('active'));
+        const active = els.performanceChartControls.querySelector(`[data-range="${r}"]`);
+        if (active) active.classList.add('active');
+      }
+
+      const canvas = els.portfolioPerformanceChart;
+      if (!canvas) {
+        if (typeof originalRender === 'function') {
+          return originalRender.call(this, range);
+        }
+        return;
+      }
+      const ctx = canvas.getContext('2d');
+
+      const hist = Array.isArray(this.portfolioHistory) ? this.portfolioHistory : [];
+      if (!hist.length) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
+        ctx.font = "16px 'Inter', sans-serif";
+        ctx.fillText('No portfolio history available.', canvas.width / 2, canvas.height / 2 - 10);
+        return;
+      }
+
+      const toDate = (d) => (d instanceof Date ? d : new Date(d));
+
+      let points = [];
+      let baselineVal = 0;
+
+      if (isToday) {
+        // TODAY: synthetic intraday-style curve
+        const sorted = hist
+          .map(e => ({ date: toDate(e.date), value: Number(e.value || e.totalValue || 0) || 0 }))
+          .sort((a, b) => a.date - b.date);
+        const n = sorted.length;
+        const last = sorted[n - 1];
+        const prev = n > 1 ? sorted[n - 2] : last;
+
+        baselineVal = prev.value;
+        const currentVal = last.value;
+
+        // 1:00 AM PT to 5:00 PM PT, 15-min steps
+        const start = new Date();
+        start.setHours(1, 0, 0, 0);
+        const end = new Date();
+        end.setHours(17, 0, 0, 0);
+        const stepMinutes = 15;
+        const msStep = stepMinutes * 60 * 1000;
+        const totalSteps = Math.round((end.getTime() - start.getTime()) / msStep);
+
+        for (let i = 0; i <= totalSteps; i++) {
+          const t = new Date(start.getTime() + i * msStep);
+          let y;
+          if (t <= start) {
+            y = baselineVal;
+          } else if (t >= end) {
+            y = currentVal;
+          } else {
+            const ratio = (t.getTime() - start.getTime()) / (end.getTime() - start.getTime());
+            y = baselineVal + (currentVal - baselineVal) * ratio;
+          }
+          points.push({ x: t, y });
+        }
+      } else {
+        // Other ranges: daily history
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let minDate = null;
+
+        switch (r) {
+          case '1W':
+            minDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case '1M':
+            minDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+            break;
+          case '6M':
+            minDate = new Date(today.getTime() - 182 * 24 * 60 * 60 * 1000);
+            break;
+          case 'YTD':
+            minDate = new Date(today.getFullYear(), 0, 1);
+            break;
+          case '1Y':
+            minDate = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000);
+            break;
+          case '3Y':
+            minDate = new Date(today.getTime() - 3 * 365 * 24 * 60 * 60 * 1000);
+            break;
+          case '5Y':
+            minDate = new Date(today.getTime() - 5 * 365 * 24 * 60 * 60 * 1000);
+            break;
+          case 'ALL':
+          default:
+            minDate = null;
+            break;
+        }
+
+        const filtered = hist
+          .map(e => ({ date: toDate(e.date), value: Number(e.value || e.totalValue || 0) || 0 }))
+          .filter(e => !minDate || e.date >= minDate)
+          .sort((a, b) => a.date - b.date);
+
+        if (filtered.length < 2) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = this.isDarkMode ? '#adb5bd' : '#6c757d';
+          ctx.font = "16px 'Inter', sans-serif";
+          ctx.fillText('Not enough data for this range.', canvas.width / 2, canvas.height / 2 - 10);
+          return;
+        }
+
+        points = filtered.map(e => ({ x: e.date, y: e.value }));
+        baselineVal = filtered[0].value;
+      }
+
+      const firstVal = points[0].y;
+      const lastVal = points[points.length - 1].y;
+      const up = lastVal >= firstVal;
+      const lineColor = up ? '#0f766e' : '#b91c1c';
+      const fillRgb   = up ? '15, 118, 110' : '185, 28, 28';
+
+      if (this.portfolioPerformanceChartInstance) {
+        this.portfolioPerformanceChartInstance.destroy();
+        this.portfolioPerformanceChartInstance = null;
+      }
+      if (this.portfolioPerformanceBarChartInstance) {
+        this.portfolioPerformanceBarChartInstance.destroy();
+        this.portfolioPerformanceBarChartInstance = null;
+      }
+
+      const gridColor = this.isDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)';
+      const labelColor = this.isDarkMode ? '#e2e8f0' : '#475569';
+
+      const datasets = [
+        {
+          label: 'Portfolio Value ($)',
+          data: points,
+          borderColor: lineColor,
+          borderWidth: 2,
+          pointRadius: 0,
+          fill: true,
+          backgroundColor: `rgba(${fillRgb},0.15)`,
+          tension: 0.35
+        }
+      ];
+
+      if (isToday && baselineVal > 0) {
+        datasets.push({
+          label: 'Prev Close',
+          data: [
+            { x: points[0].x, y: baselineVal },
+            { x: points[points.length - 1].x, y: baselineVal }
+          ],
+          borderColor: 'rgba(148,163,184,0.9)',
+          borderWidth: 1,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          fill: false
+        });
+      }
+
+      this.portfolioPerformanceChartInstance = createSafeChart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              callbacks: {
+                label: (ctx2) => {
+                  if (ctx2.datasetIndex !== 0) return '';
+                  const val = ctx2.parsed.y;
+                  const base = isToday ? baselineVal : firstVal;
+                  const delta = val - base;
+                  const pct = base ? (delta / base) * 100 : 0;
+                  const sign = delta > 0 ? '+' : '';
+                  const cur = this.formatCurrency ? this.formatCurrency(val) : ('$' + val.toFixed(2));
+                  const dStr = sign + delta.toFixed(2);
+                  const pStr = sign + pct.toFixed(2) + '%';
+                  return ` ${cur} (${dStr}, ${pStr})`;
+                },
+                title: (items) => {
+                  if (!items.length) return '';
+                  const d = new Date(items[0].parsed.x);
+                  if (isToday) {
+                    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+                  }
+                  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: isToday ? 'hour' : 'month'
+              },
+              ticks: { color: labelColor },
+              grid: { color: gridColor }
+            },
+            y: {
+              ticks: {
+                color: labelColor,
+                callback: (value) => {
+                  const n = Number(value) || 0;
+                  return this.formatCurrency ? this.formatCurrency(n) : ('$' + n.toLocaleString());
+                }
+              },
+              grid: { color: gridColor }
+            }
+          }
+        }
+      });
+    };
+
+    tracker._yahooBottomInstalled = true;
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(installYahooBottomChart, 800);
+  } else {
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(installYahooBottomChart, 800);
+    });
+  }
+})();
+</script>
+
+
+
+
+
+
+</body>
+</html>
