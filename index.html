@@ -2948,16 +2948,30 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             async refreshStocks() { await this.refreshItems(this.stocks, 'stock'); }
             async refreshFunds() { await this.refreshItems(this.mutualFunds, 'fund'); }
             async refreshWatchlist() { await this.refreshItems(this.watchlist, 'watchlist'); }
-            async refreshItems(items, type) {
+                        async refreshItems(items, type) {
                 if (items.length === 0) return;
                 this.showLoading(true, `Refreshing 0/${items.length} items...`);
+                
+                // 1. Determine Market Status (ET) for badge logic
+                const now = new Date();
+                const nyTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+                const nyHour = nyTime.getHours();
+                const dayOfWeek = nyTime.getDay(); // 0=Sun, 6=Sat
+                
+                // Active M-F, 4pm-8pm ET
+                const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+                const isAfterHours = isWeekday && (nyHour >= 16 && nyHour < 20);
+                
+                // This badge will appear next to the % change
+                const sessionLabel = isAfterHours ? '<span style="font-size: 0.7em; opacity: 0.8; margin-left: 6px;">(After-Hours)</span>' : '';
+
                 let stats = { success: 0, gains: 0, losses: 0, unchanged: 0, failed: 0 };
-                let failedSymbols = [];
+                
                 for (const [i, item] of items.entries()) {
                     let result;
                     if (type === 'fund') {
                         result = await this.apiService.fetchMutualFundDataWithFallback(item.symbol);
-                    } else { // stock or watchlist
+                    } else { 
                         result = await this.apiService.fetchStockEtfQuote(item.symbol);
                     }
                     
@@ -2967,9 +2981,25 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         if ((result.data.change || 0) > 0) stats.gains++;
                         else if ((result.data.change || 0) < 0) stats.losses++;
                         else stats.unchanged++;
+                        
+                        // UPDATE DOM IMMEDIATELY to prevent flickering
+                        const card = document.querySelector(`.stock-card[data-id="${item.id}"]`);
+                        if (card) {
+                            const priceEl = card.querySelector('.stock-price');
+                            const changeEl = card.querySelector('.stock-change');
+                            
+                            if (priceEl) priceEl.textContent = this.formatCurrency(item.price);
+                            if (changeEl) {
+                                const cls = item.change >= 0 ? 'positive' : 'negative';
+                                const arrow = item.change >= 0 ? '▲' : '▼';
+                                changeEl.className = `stock-change ${cls}`;
+                                // INJECT THE BADGE HERE
+                                changeEl.innerHTML = `<span>${arrow} ${this.formatCurrency(item.change)} (${(item.changePercent || 0).toFixed(2)}%)${sessionLabel}</span>`;
+                            }
+                        }
+
                     } else {
                         stats.failed++;
-                        failedSymbols.push(item.symbol);
                         console.error(`Failed to refresh ${item.symbol}:`, result.reason);
                     }
                     this.showLoading(true, `Refreshing ${item.symbol}... (${i + 1}/${items.length})`);
@@ -2977,8 +3007,11 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 this.showLoading(false);
                 this.showRefreshStatus(type, stats);
                 await this.saveData();
-                this.renderContent();
+                
+                this.renderPortfolioSummary();
+                this.renderDiversificationChart();
             }
+
             
             calculateSummaryMetrics(items) {
                 let totalCurrentValue = 0, totalUnrealizedPL = 0, totalRealizedPL = 0, totalPLToday = 0, totalPreviousDayValue = 0, totalContributions = 0, totalDividends = 0;
@@ -3616,7 +3649,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 }).join('');
             }
             
-                        renderCards(itemList, container, type) {
+                                    renderCards(itemList, container, type) {
                 if (!container.classList.contains('group-content')) {
                      container.innerHTML = '';
                 }
@@ -3732,9 +3765,46 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                                     <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
                                 </div>
                                 <div class="transactions-container">
-                                    ${this.container.appendChild(card);
+                                    ${this.renderTransactions(item.transactions, item.dividends, item.id, type)}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                         cardActionsHTML = `
+                            <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 10px;">
+                                <button class="add-btn transaction-btn buy-btn" data-id="${item.id}" data-type="${type}" style="background-color: var(--color-positive);">Re-open Position (Buy)</button>
+                            </div>
+                            <div class="transaction-details">
+                                <div class="transaction-header">
+                                    <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
+                                </div>
+                                <div class="transactions-container collapsed">
+                                    ${this.renderTransactions(item.transactions, item.dividends, item.id, type)}
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // 2. Updated HTML with sessionLabel
+                    card.innerHTML = `
+                        <div class="stock-header">
+                            <span class="${type}-symbol stock-symbol">${item.symbol}</span>
+                            <button class="remove-btn" onclick="window.stockTracker.removeItem('${item.id}', '${type}')">×</button>
+                        </div>
+                        <div class="stock-price">${this.formatCurrency(item.price || 0)}</div>
+                        <div class="stock-change ${item.change >= 0 ? 'positive' : 'negative'}">
+                            <span>${item.change >= 0 ? '▲' : '▼'} ${this.formatCurrency(item.change || 0)} (${(item.changePercent || 0).toFixed(2)}%)${sessionLabel}</span>
+                        </div>
+                        <div class="stock-info">${stockInfoHTML}</div>
+                        ${cardChartHTML}
+                        <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}` : ''}</div>
+                        ${cardActionsHTML}
+                    `;
+                    
+                    container.appendChild(card);
                 });
             }
+
 getOldestTransactionDate(item) {
                 const transactions = item.transactions || [];
                 if (transactions.length === 0) {
