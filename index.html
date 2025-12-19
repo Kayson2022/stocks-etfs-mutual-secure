@@ -1591,9 +1591,11 @@
     -->
     <script type="module">
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+                import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, browserPopupRedirectResolver, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, serverTimestamp, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+
+
         const firebaseConfig = {
             apiKey: "AIzaSyB8wQ0-O2avYjRW7Wjtmiql03q1ikwhX7s",
             authDomain: "stocks-etfs-mutual.firebaseapp.com",
@@ -2877,20 +2879,15 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             async saveData() {
                 if (!this.userId) return;
                 const userDocRef = doc(db, "users", this.userId);
-
                 const data = {
-                    stocks: this.stocks,
-                    mutualFunds: this.mutualFunds,
-                    watchlist: this.watchlist,
-                    portfolioHistory: this.portfolioHistory,
-                    priceAlerts: this.priceAlerts,
+                    stocks: this.stocks, mutualFunds: this.mutualFunds, watchlist: this.watchlist,
+                    portfolioHistory: this.portfolioHistory, priceAlerts: this.priceAlerts,
                 };
 
-                // Firestore rejects `undefined` (even nested). Strip it out defensively.
+                // Firestore rejects `undefined` values (even nested). Strip them out defensively.
                 const stripUndefinedDeep = (val) => {
                     if (val === undefined) return undefined;
                     if (val === null) return null;
-
                     if (Array.isArray(val)) {
                         return val.map(stripUndefinedDeep).filter(v => v !== undefined);
                     }
@@ -2906,8 +2903,6 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 };
 
                 await setDoc(userDocRef, stripUndefinedDeep(data), { merge: true });
-            };
-                await setDoc(userDocRef, data, { merge: true });
             }
             async loadData() {
                 if (!this.userId) return;
@@ -5178,15 +5173,17 @@ getOldestTransactionDate(item) {
                 if(this.elements.priceRangeInputs) this.elements.priceRangeInputs.style.display = type === 'range' ? 'grid' : 'none';
             }
             async savePriceAlert() {
-                const symbol = this.elements.saveAlertBtn?.dataset?.symbol;
-                if (!symbol) { this.showError("Missing symbol for this alert. Please close and re-open the alert modal."); return; }
+                const symbol = this.elements.saveAlertBtn ? this.elements.saveAlertBtn.dataset.symbol : null;
+                if (!symbol) {
+                    this.showError("Missing symbol for alert. Please close and re-open the alert dialog.");
+                    return;
+                }
 
-                const type = this.elements.alertType?.value || 'single';
+                const type = this.elements.alertType ? this.elements.alertType.value : 'single';
 
-                // Firestore does NOT allow `undefined` anywhere inside a document.
-                // So we only include fields that are relevant to the chosen alert type.
+                // Build the alert object WITHOUT undefined fields (Firestore rejects undefined).
                 const alert = {
-                    id: (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+                    id: crypto.randomUUID(),
                     symbol,
                     type,
                     triggered: false,
@@ -5194,17 +5191,22 @@ getOldestTransactionDate(item) {
                 };
 
                 if (type === 'single') {
-                    const price = parseFloat(this.elements.alertPrice?.value || '');
-                    const condition = this.elements.alertCondition?.value || 'above';
-                    if (isNaN(price) || price <= 0) { this.showError("Please enter a valid target price."); return; }
-                    alert.price = price;
-                    alert.condition = condition; // 'above' | 'below'
-                } else { // range
-                    const priceLower = parseFloat(this.elements.alertPriceLower?.value || '');
-                    const priceUpper = parseFloat(this.elements.alertPriceUpper?.value || '');
-                    if (isNaN(priceLower) || isNaN(priceUpper) || priceLower <= 0 || priceUpper <= 0 || priceLower >= priceUpper) {
-                        this.showError("Please enter a valid price range (Lower < Upper, both positive)."); return;
+                    const price = parseFloat(this.elements.alertPrice ? this.elements.alertPrice.value : 0);
+                    const condition = this.elements.alertCondition ? this.elements.alertCondition.value : 'above';
+                    if (isNaN(price) || price <= 0) {
+                        this.showError("Please enter a valid target price.");
+                        return;
                     }
+                    alert.condition = condition;
+                    alert.price = price;
+                } else { // range
+                    const priceLower = parseFloat(this.elements.alertPriceLower ? this.elements.alertPriceLower.value : 0);
+                    const priceUpper = parseFloat(this.elements.alertPriceUpper ? this.elements.alertPriceUpper.value : 0);
+                    if (isNaN(priceLower) || isNaN(priceUpper) || priceLower <= 0 || priceUpper <= 0 || priceLower >= priceUpper) {
+                        this.showError("Please enter a valid price range (Lower < Upper, both positive).");
+                        return;
+                    }
+                    alert.condition = 'range';
                     alert.priceLower = priceLower;
                     alert.priceUpper = priceUpper;
                 }
