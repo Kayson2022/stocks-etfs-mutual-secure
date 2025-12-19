@@ -2883,7 +2883,25 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     stocks: this.stocks, mutualFunds: this.mutualFunds, watchlist: this.watchlist,
                     portfolioHistory: this.portfolioHistory, priceAlerts: this.priceAlerts,
                 };
-                await setDoc(userDocRef, data, { merge: true });
+
+                // Firestore rejects `undefined` anywhere in the payload. Strip it defensively.
+                const stripUndefinedDeep = (value) => {
+                    if (Array.isArray(value)) {
+                        return value.map(stripUndefinedDeep).filter(v => v !== undefined);
+                    }
+                    if (value && typeof value === 'object') {
+                        const out = {};
+                        for (const [k, v] of Object.entries(value)) {
+                            const cleaned = stripUndefinedDeep(v);
+                            if (cleaned !== undefined) out[k] = cleaned;
+                        }
+                        return out;
+                    }
+                    return value === undefined ? undefined : value;
+                };
+
+                await setDoc(userDocRef, stripUndefinedDeep(data), { merge: true });
+
             }
             async loadData() {
                 if (!this.userId) return;
@@ -5156,43 +5174,38 @@ getOldestTransactionDate(item) {
             async savePriceAlert() {
                 const symbol = this.elements.saveAlertBtn ? this.elements.saveAlertBtn.dataset.symbol : null;
                 const type = this.elements.alertType ? this.elements.alertType.value : 'single';
-
-                // FIX: Initialize to null. Firestore throws an error if these remain 'undefined'.
-                let price = null;
-                let condition = null;
-                let priceLower = null;
-                let priceUpper = null;
-
+                let price, condition, priceLower, priceUpper;
+                
                 if (type === 'single') {
                     price = parseFloat(this.elements.alertPrice ? this.elements.alertPrice.value : 0);
                     condition = this.elements.alertCondition ? this.elements.alertCondition.value : 'above';
-
-                    if (isNaN(price) || price <= 0) { 
-                        this.showError("Please enter a valid target price."); 
-                        return; 
-                    }
+                    if (isNaN(price) || price <= 0) { this.showError("Please enter a valid target price."); return; }
                 } else { // range
                     priceLower = parseFloat(this.elements.alertPriceLower ? this.elements.alertPriceLower.value : 0);
                     priceUpper = parseFloat(this.elements.alertPriceUpper ? this.elements.alertPriceUpper.value : 0);
-                    condition = 'range';
-
                     if (isNaN(priceLower) || isNaN(priceUpper) || priceLower <= 0 || priceUpper <= 0 || priceLower >= priceUpper) { 
-                        this.showError("Please enter a valid price range (Lower < Upper, both positive)."); 
-                        return; 
+                        this.showError("Please enter a valid price range (Lower < Upper, both positive)."); return; 
                     }
+                    condition = 'range';
                 }
 
                 const alert = {
                     id: crypto.randomUUID(),
-                    symbol, 
-                    type, 
-                    condition,
-                    price,      // Will be a number or null
-                    priceLower, // Will be a number or null
-                    priceUpper, // Will be a number or null
+                    symbol,
+                    type,
                     triggered: false,
                     timestamp: new Date().toISOString()
                 };
+
+                // Only set fields relevant to the selected alert type.
+                if (type === 'single') {
+                    alert.condition = condition;
+                    alert.price = price;
+                } else { // range
+                    alert.priceLower = priceLower;
+                    alert.priceUpper = priceUpper;
+                };
+
 
                 this.priceAlerts.push(alert);
                 await this.saveData();
