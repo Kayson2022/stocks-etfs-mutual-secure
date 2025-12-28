@@ -1,5 +1,6 @@
 
 
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -4139,10 +4140,10 @@ renderPortfolioSummary() {
                                 <button class="add-btn transaction-btn" style="background-color: var(--color-positive); opacity: 0.8;" onclick="window.stockTracker.openTransactionModal('${item.id}', '${type}', 'dividend')">Record Dividend</button>
                             </div>
                             <div class="transaction-details">
-                                <div class="transaction-header">
+                                <div class="transaction-header collapsed">
                                     <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
                                 </div>
-                                <div class="transactions-container">
+                                <div class="transactions-container collapsed">
                                     ${this.renderTransactions(item.transactions, item.dividends, item.id, type)}
                                 </div>
                             </div>
@@ -4153,7 +4154,7 @@ renderPortfolioSummary() {
                                 <button class="add-btn transaction-btn buy-btn" data-id="${item.id}" data-type="${type}" style="background-color: var(--color-positive);">Re-open Position (Buy)</button>
                             </div>
                             <div class="transaction-details">
-                                <div class="transaction-header">
+                                <div class="transaction-header collapsed">
                                     <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
                                 </div>
                                 <div class="transactions-container collapsed">
@@ -5379,15 +5380,12 @@ getOldestTransactionDate(item) {
                 const uniquePlatforms = [...new Set((item.transactions || []).map(t => t.platform))].filter(p => p);
                 this.elements.editStockPlatform.value = uniquePlatforms.length === 1 ? uniquePlatforms[0] : (uniquePlatforms.length > 1 ? 'Multiple Platforms' : '');
 
-                // For simplicity, we disable editing core stats if multiple transactions exist
-                const canEditCore = (item.transactions || []).filter(t => t.type === 'buy').length <= 1;
-                this.elements.editStockShares.disabled = !canEditCore;
-                this.elements.editStockCost.disabled = !canEditCore;
-                this.elements.editStockDate.disabled = !canEditCore;
-                
-                if(!canEditCore) {
-                    this.showError("Cannot edit Shares/Cost/Date here. Use 'Buy/Sell' buttons to manage multiple transactions.");
-                }
+                // Allow editing Shares/Cost/Date even if there are multiple transactions.
+// When saved, we'll normalize the transaction log to match the edited core values.
+                this.elements.editStockShares.disabled = false;
+                this.elements.editStockCost.disabled = false;
+                this.elements.editStockDate.disabled = false;
+
             }
             closeEditStockModal() {
                  if (this.elements.editStockModal) this.elements.editStockModal.style.display = 'none';
@@ -5415,24 +5413,46 @@ getOldestTransactionDate(item) {
                     (item.transactions || []).forEach(t => t.platform = newPlatform);
                 }
 
-                // If user edits shares/cost/date and it was a single transaction, update that transaction (not recommended, but supported for initial entry simplicity)
-                const canEditCore = (item.transactions || []).filter(t => t.type === 'buy').length <= 1;
-                if (canEditCore && (item.transactions || []).length > 0) {
-                    const shares = parseFloat(this.elements.editStockShares ? this.elements.editStockShares.value : 0);
-                    const cost = parseFloat(this.elements.editStockCost ? this.elements.editStockCost.value : 0);
-                    const date = this.elements.editStockDate ? this.elements.editStockDate.value : '';
+                                // Allow editing Shares/Cost/Date even with multiple transactions.
+                // To keep totals and P/L consistent, we normalize the position to match the edited core values.
+                // This replaces the transaction log with a single BUY transaction representing the current holding.
+                // A backup of previous transactions is stored on the item as _transactionsBackup.
+                const shares = parseFloat(this.elements.editStockShares ? this.elements.editStockShares.value : 0);
+                const cost = parseFloat(this.elements.editStockCost ? this.elements.editStockCost.value : 0);
+                const date = this.elements.editStockDate ? this.elements.editStockDate.value : '';
 
-                    if (!isNaN(shares) && shares >= 0 && !isNaN(cost) && cost >= 0 && date) {
-                        const firstBuyIndex = item.transactions.findIndex(t => t.type === 'buy');
-                        if (firstBuyIndex > -1) {
-                            item.transactions[firstBuyIndex].shares = shares;
-                            item.transactions[firstBuyIndex].price = cost;
-                            item.transactions[firstBuyIndex].date = new Date(date).toISOString();
-                        }
+                const hasCoreInputs = !!(this.elements.editStockShares && this.elements.editStockCost && this.elements.editStockDate);
+                if (hasCoreInputs && date && !isNaN(shares) && shares >= 0 && !isNaN(cost) && cost >= 0) {
+                    const isoDate = `${date}T00:00:00.000Z`;
+                    const platformForTxn = (newPlatform && newPlatform !== 'Multiple Platforms')
+                        ? newPlatform
+                        : (((item.transactions || [])[0] && (item.transactions || [])[0].platform) ? (item.transactions || [])[0].platform : 'Uncategorized');
+
+                    // Backup existing transactions (so you can recover if needed)
+                    try {
+                        if (!item._transactionsBackup) item._transactionsBackup = [];
+                        item._transactionsBackup.push({
+                            savedAt: new Date().toISOString(),
+                            transactions: JSON.parse(JSON.stringify(item.transactions || []))
+                        });
+                    } catch (e) { /* ignore */ }
+
+                    if (shares === 0) {
+                        item.transactions = [];
+                    } else {
+                        item.transactions = [{
+                            id: `buy_${Date.now()}`,
+                            type: 'buy',
+                            shares: shares,
+                            price: cost,
+                            date: isoDate,
+                            platform: platformForTxn
+                        }];
                     }
                 }
 
-                await this.saveData();
+
+await this.saveData();
                 this.renderContent();
                 this.closeEditStockModal();
                 this.showSuccess(`✅ Details for ${item.symbol} saved.`);
