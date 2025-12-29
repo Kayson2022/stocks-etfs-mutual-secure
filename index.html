@@ -3745,7 +3745,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 // This badge will appear next to the % change
                 const sessionLabel = isAfterHours ? '<span style="font-size: 0.7em; opacity: 0.8; margin-left: 6px;">(After-Hours)</span>' : '';
 
-                let stats = \{ success: 0, gains: 0, losses: 0, unchanged: 0, failed: 0 \};
+                let stats = { success: 0, gains: 0, losses: 0, unchanged: 0, failed: 0 };
                 let needsGroupRerender = false; // if any item flips gain/loss during refresh
 
                 
