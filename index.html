@@ -1670,51 +1670,95 @@ button {
   } catch (e) {}
 </script>
 <style id="summary-panel-fixed-fix">
-/* --- FIX: Keep Today/1W/1M panel pinned to top WITHOUT overlapping the header or chart --- */
+/* --- FIX v4: Pin Today/1W/1M panel to top + prevent hiding any popups/banner on mobile/desktop --- */
 :root{
-  --summary-panel-h: 64px;
-  --summary-panel-gap: 12px;
-}
-/* push the page down by panel height */
-body{
-  padding-top: calc(var(--summary-panel-h) + 14px) !important;
+  --summary-panel-h: 64px;     /* JS will update to actual height */
+  --summary-panel-gap: 14px;
 }
 
-/* override any existing absolute positioning */
+/* Reserve space for the fixed summary panel so the header + banners never sit underneath it */
+body{
+  padding-top: calc(var(--summary-panel-h) + var(--summary-panel-gap)) !important;
+}
+
+/* Keep the panel fixed at the top (no DOM moves). Give it a stronger "neon" glow. */
 #chart-summary-panel{
   position: fixed !important;
   top: 10px !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
+  width: min(920px, calc(100% - 24px)) !important;
+  z-index: 5000 !important;
 
-  width: min(760px, calc(100% - 16px)) !important;
   display: flex !important;
-  gap: var(--summary-panel-gap) !important;
-  align-items: center !important;
+  gap: 12px !important;
   justify-content: center !important;
-  flex-wrap: wrap !important;
+  align-items: center !important;
 
   padding: 10px 12px !important;
-  border-radius: 16px !important;
-  z-index: 9999 !important;
+  border-radius: 18px !important;
 
-  /* subtle glass background so it reads on any section */
-  background: rgba(10, 14, 24, 0.55) !important;
-  border: 1px solid rgba(255,255,255,0.12) !important;
-  backdrop-filter: blur(10px) !important;
-  -webkit-backdrop-filter: blur(10px) !important;
+  /* glow */
+  background: linear-gradient(135deg, rgba(0,255,213,0.20), rgba(0,153,255,0.14)) !important;
+  border: 1px solid rgba(0,255,213,0.22) !important;
+  box-shadow:
+    0 10px 34px rgba(0,0,0,0.55),
+    0 0 22px rgba(0,255,213,0.18),
+    0 0 12px rgba(0,153,255,0.14),
+    inset 0 0 0 1px rgba(255,255,255,0.08) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
 }
 
-/* make pills a bit more compact on very small screens */
-@media (max-width: 480px){
-  #chart-summary-panel{ top: 8px !important; padding: 8px 10px !important; }
+/* Pills glow-up */
+#chart-summary-panel .summary-pill{
+  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.06)) !important;
+  border: 1px solid rgba(0,255,213,0.18) !important;
+  border-radius: 14px !important;
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.35),
+    0 0 14px rgba(0,255,213,0.14),
+    inset 0 0 0 1px rgba(255,255,255,0.06) !important;
+}
+
+/* Make sure fixed popups / status banners sit BELOW the summary panel (so they never hide behind it) */
+.loading, .error, .success, .refresh-status-popup, .alert-notification{
+  top: calc(var(--summary-panel-h) + var(--summary-panel-gap) + 6px) !important;
+  z-index: 5100 !important;
+}
+
+/* Small screens: allow wrapping and increase height safely */
+@media (max-width: 520px){
+  #chart-summary-panel{
+    top: 8px !important;
+    gap: 10px !important;
+    padding: 10px 10px !important;
+    flex-wrap: wrap !important;
+  }
   #chart-summary-panel .summary-pill{
-    min-width: 104px !important;
-    padding: 7px 10px !important;
-    font-size: 0.92rem !important;
+    min-width: 112px !important;
+    padding: 8px 10px !important;
+    font-size: 0.95rem !important;
   }
 }
 </style>
+
+<script>
+/* --- FIX v4 helper: measure the fixed summary panel and reserve the exact space (works even when pills wrap) --- */
+(function(){
+  function syncSummaryPanelHeight(){
+    const panel = document.getElementById('chart-summary-panel');
+    if(!panel) return;
+    // Use offsetHeight; add a tiny cushion to avoid any overlap on odd DPR devices
+    const h = Math.max(48, panel.offsetHeight || 64);
+    document.documentElement.style.setProperty('--summary-panel-h', (h + 2) + 'px');
+  }
+  window.addEventListener('load', syncSummaryPanelHeight);
+  window.addEventListener('resize', syncSummaryPanelHeight);
+  document.addEventListener('DOMContentLoaded', syncSummaryPanelHeight);
+})();
+</script>
+
 </head>
 <body>
 <!-- 
