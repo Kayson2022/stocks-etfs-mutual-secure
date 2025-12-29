@@ -2316,7 +2316,7 @@ body{
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
                 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, browserPopupRedirectResolver, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, serverTimestamp, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, serverTimestamp, deleteDoc, onSnapshot, query, where, limit } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
 
         const firebaseConfig = {
