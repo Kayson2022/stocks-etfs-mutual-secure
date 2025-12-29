@@ -2343,28 +2343,39 @@ body{
             // -----------------------------------------
             //  YAHOO FINANCE PRIMARY FETCH FUNCTIONS
             // -----------------------------------------
-            async fetchYahooQuote(symbol) {
+            
+async fetchYahooQuote(symbol) {
                 // Yahoo Quote for Stocks/ETFs/Funds
-                // Primary: v7/finance/quote via allorigins
-                // Fallback: v8/finance/chart meta via corsproxy (helps mutual funds when quote fields are missing)
+                // IMPORTANT: Mutual funds (typically end with 'X') are often flaky via the v7/finance/quote endpoint
+                // through public proxies (and can trigger noisy CORS/500 console errors).
+                // For mutual funds, we go straight to the v8/finance/chart meta path (more reliable + quiet).
+                const sym = (symbol || "").toUpperCase().trim();
+                // NOTE: Many mutual funds are 5-letter tickers ending in "X", but some STOCK tickers also end in "X" (e.g., WIX/STX).
+                // We do NOT classify mutual funds by this check; it only decides which Yahoo endpoint to use (chart-meta is quieter than public-quote proxies).
+                const endsWithX = sym.endsWith("X");
+
+                if (endsWithX) {
+                    const fromChart = await this._fetchYahooQuoteViaChartMeta(sym);
+                    fromChart.via = "chart";
+                    return fromChart;
+                }
+
+                // For stocks/ETFs, try quote endpoint first, then chart-meta fallback.
                 try {
-                    return await this._fetchYahooQuoteViaQuoteEndpoint(symbol);
+                    return await this._fetchYahooQuoteViaQuoteEndpoint(sym);
                 } catch (err) {
-                    // Try chart-meta fallback (often works for mutual funds/NAV)
                     try {
-                        const fromChart = await this._fetchYahooQuoteViaChartMeta(symbol);
-                        // annotate for debugging (non-breaking)
+                        const fromChart = await this._fetchYahooQuoteViaChartMeta(sym);
                         fromChart.via = "chart";
                         return fromChart;
                     } catch (err2) {
-                        console.warn(`Yahoo quote failed for ${symbol}`, err);
-                        // keep original error as the reason we "considered Yahoo failed"
-                        throw err;
+                        // Surface the more informative error if available
+                        console.warn(`Yahoo quote failed for ${sym}`, err2 || err);
+                        throw (err2 || err);
                     }
                 }
             }
-
-            async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
+async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
                 const url = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbol)}`;
                 const res = await fetch(url, { cache: "no-store" });
                 if (!res.ok) throw new Error(`Yahoo quote fetch failed (HTTP ${res.status})`);
