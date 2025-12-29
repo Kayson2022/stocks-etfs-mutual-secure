@@ -1741,6 +1741,58 @@ body{
     font-size: 0.95rem !important;
   }
 }
+
+
+/* --- UX v5: pulse on update --- */
+#chart-summary-panel{
+  transition: padding 180ms ease, top 180ms ease, box-shadow 180ms ease, background 180ms ease, transform 180ms ease !important;
+}
+#chart-summary-panel .summary-pill{
+  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease, padding 180ms ease, font-size 180ms ease !important;
+  will-change: transform;
+}
+
+/* Pulse states (applied via JS when text changes) */
+#chart-summary-panel .summary-pill.pulse-positive{ animation: summaryPulsePos 650ms ease-out both; }
+#chart-summary-panel .summary-pill.pulse-negative{ animation: summaryPulseNeg 650ms ease-out both; }
+#chart-summary-panel .summary-pill.pulse-neutral{  animation: summaryPulseNeu 650ms ease-out both; }
+
+@keyframes summaryPulsePos{
+  0%   { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.14), inset 0 0 0 1px rgba(255,255,255,0.06); }
+  45%  { transform: translateY(-1px) scale(1.03); box-shadow: 0 10px 22px rgba(0,0,0,0.45), 0 0 24px rgba(0,255,213,0.32), 0 0 14px rgba(0,153,255,0.18), inset 0 0 0 1px rgba(255,255,255,0.10); }
+  100% { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.14), inset 0 0 0 1px rgba(255,255,255,0.06); }
+}
+@keyframes summaryPulseNeg{
+  0%   { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.10), inset 0 0 0 1px rgba(255,255,255,0.06); }
+  45%  { transform: translateY(-1px) scale(1.03); box-shadow: 0 10px 22px rgba(0,0,0,0.45), 0 0 24px rgba(255,77,109,0.30), 0 0 14px rgba(255,0,102,0.14), inset 0 0 0 1px rgba(255,255,255,0.10); }
+  100% { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.10), inset 0 0 0 1px rgba(255,255,255,0.06); }
+}
+@keyframes summaryPulseNeu{
+  0%   { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.10), inset 0 0 0 1px rgba(255,255,255,0.06); }
+  45%  { transform: translateY(-1px) scale(1.03); box-shadow: 0 10px 22px rgba(0,0,0,0.45), 0 0 24px rgba(0,153,255,0.26), 0 0 14px rgba(0,255,213,0.18), inset 0 0 0 1px rgba(255,255,255,0.10); }
+  100% { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.10), inset 0 0 0 1px rgba(255,255,255,0.06); }
+}
+
+/* --- UX v5: smart collapse on scroll (adds more screen space) --- */
+#chart-summary-panel.is-collapsed{
+  top: 6px !important;
+  padding: 8px 10px !important;
+  border-radius: 18px !important;
+  box-shadow:
+    0 8px 22px rgba(0,0,0,0.48),
+    0 0 18px rgba(0,255,213,0.16),
+    inset 0 0 0 1px rgba(255,255,255,0.06) !important;
+}
+#chart-summary-panel.is-collapsed .summary-pill{
+  padding: 8px 10px !important;
+  font-size: 14px !important;
+  opacity: 0.98;
+}
+
+/* On very small screens, make collapse a bit stronger */
+@media (max-width: 420px){
+  #chart-summary-panel.is-collapsed .summary-pill{ font-size: 13px !important; padding: 7px 9px !important; }
+}
 </style>
 
 <script>
@@ -7049,5 +7101,108 @@ const container = this.elements.portfolioPerformanceContainer;
   setTimeout(apply, 50);
 })();
 </script>
+
+<script id="summary-panel-ux-v5">
+(function(){
+  const panel = document.getElementById('chart-summary-panel');
+  if(!panel) return;
+
+  const pills = Array.from(panel.querySelectorAll('.summary-pill'));
+  if(!pills.length) return;
+
+  function parseValue(txt){
+    // Pull first numeric token like -$966.74 or 0.00% or +123.45
+    const m = String(txt).match(/[-+]?\s*\$?\s*[\d,]+(?:\.\d+)?/);
+    if(!m) return 0;
+    const raw = m[0].replace(/\$/g,'').replace(/,/g,'').replace(/\s+/g,'');
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function classify(txt){
+    const n = parseValue(txt);
+    if(n < 0) return 'pulse-negative';
+    if(n > 0) return 'pulse-positive';
+    return 'pulse-neutral';
+  }
+
+  function pulse(el){
+    // restart animation reliably
+    el.classList.remove('pulse-positive','pulse-negative','pulse-neutral');
+    // force reflow
+    void el.offsetWidth;
+    el.classList.add(classify(el.textContent || ''));
+    el.addEventListener('animationend', function cleanup(){
+      el.classList.remove('pulse-positive','pulse-negative','pulse-neutral');
+      el.removeEventListener('animationend', cleanup);
+    }, { once: true });
+  }
+
+  // Observe text changes (works with any internal update logic)
+  const lastText = new Map();
+  pills.forEach(p => lastText.set(p, (p.textContent || '').trim()));
+
+  const obs = new MutationObserver((mutations) => {
+    const touched = new Set();
+    for(const mu of mutations){
+      const el = mu.target.nodeType === 3 ? mu.target.parentElement : mu.target;
+      const pill = el && el.closest ? el.closest('.summary-pill') : null;
+      if(pill) touched.add(pill);
+    }
+    touched.forEach(pill => {
+      const now = (pill.textContent || '').trim();
+      const prev = lastText.get(pill) || '';
+      if(now && now !== prev){
+        lastText.set(pill, now);
+        pulse(pill);
+      }
+    });
+  });
+
+  pills.forEach(pill => obs.observe(pill, { childList:true, characterData:true, subtree:true }));
+
+  // --- Smart collapse on scroll (down = collapse, up = expand) ---
+  let lastY = window.scrollY || 0;
+  let collapsed = false;
+
+  function updateReservedHeight(){
+    const h = Math.ceil(panel.getBoundingClientRect().height);
+    if(h > 0){
+      document.documentElement.style.setProperty('--summary-panel-h', h + 'px');
+    }
+  }
+
+  function setCollapsed(on){
+    if(on === collapsed) return;
+    collapsed = on;
+    panel.classList.toggle('is-collapsed', collapsed);
+    // allow layout to settle then update reserved padding
+    setTimeout(updateReservedHeight, 30);
+  }
+
+  function onScroll(){
+    const y = window.scrollY || 0;
+    const dy = y - lastY;
+
+    if(y < 8){
+      setCollapsed(false);
+    } else if(dy > 10){
+      setCollapsed(true);
+    } else if(dy < -10){
+      setCollapsed(false);
+    }
+    lastY = y;
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', () => setTimeout(updateReservedHeight, 60));
+  window.addEventListener('load', () => setTimeout(updateReservedHeight, 60), { once: true });
+
+  // initial
+  setTimeout(updateReservedHeight, 80);
+})();
+</script>
+
+
 </body>
 </html>
