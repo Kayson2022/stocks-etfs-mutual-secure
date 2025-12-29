@@ -1472,6 +1472,12 @@ button {
   font-size: 0.85rem;
 }
 
+
+/* Layout: summary pills sit above header */
+#chart-summary-panel{ max-width: 980px; }
+@media (min-width: 521px){
+  #chart-summary-panel{ margin-top: 6px; }
+}
 </style>
 
 <script>
@@ -1507,8 +1513,9 @@ button {
     </div>
     
     <div id="app-container" class="container">
-        <!-- New Header Structure -->
-        <header class="header">
+        <!-- New Header Structure --><div id="chart-summary-panel" aria-hidden="false">
+  <div class="summary-pill" id="summary-daily">Today: $0.00</div>
+  <header class="header">
             <h1>💰 Portfolio Tracker</h1>
             <div class="header-controls">
                 <div id="user-info" style="display: none;">
@@ -5758,12 +5765,13 @@ await this.saveData();
   gap:12px;
   align-items:center;
   justify-content:center;
-  position:absolute;
-  left:50%;
-  top:18px;
-  transform:translateX(-50%);
-  z-index:5;
+  position: relative;
+  margin: 10px auto 6px;
+  z-index: 10;
+  flex-wrap: wrap;
+  padding: 0 8px;
 }
+
 .summary-pill{
   background:var(--bg-tertiary);
   border:1px solid var(--border-color);
@@ -5800,24 +5808,9 @@ await this.saveData();
 }
 </style>
 
-<div id="chart-summary-panel" aria-hidden="false">
-  <div class="summary-pill" id="summary-daily">Today: $0.00</div>
-  <div class="summary-pill" id="summary-week">1W: 0.00%</div>
+<div class="summary-pill" id="summary-week">1W: 0.00%</div>
   <div class="summary-pill" id="summary-month">1M: 0.00%</div>
 </div>
-<script id="chart-summary-panel-rehome">
-(function(){
-  // Ensure the summary pills live inside the portfolio performance container,
-  // so they don't float over the page header on mobile.
-  const panel = document.getElementById('chart-summary-panel');
-  const container = document.getElementById('portfolio-performance-container');
-  if (panel && container && !container.contains(panel)) {
-    container.insertBefore(panel, container.firstChild);
-  }
-})();
-</script>
-
-
 <script>
 (function(){
   // utilities
