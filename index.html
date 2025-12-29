@@ -2345,18 +2345,67 @@ body{
             // -----------------------------------------
             async fetchYahooQuote(symbol) {
                 try {
+                    // Use allorigins as a simple CORS proxy for Yahoo's quote endpoint
                     const url = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbol)}`;
-                    const res = await fetch(url);
-                    if (!res.ok) throw new Error("Yahoo quote fetch failed");
-                    const data = await res.json();
-                    const q = data.quoteResponse?.result?.[0];
-                    if (!q) throw new Error("Invalid Yahoo quote response");
+                    const res = await fetch(url, { cache: "no-store" });
+                    if (!res.ok) throw new Error(`Yahoo quote fetch failed (HTTP ${res.status})`);
+
+                    // Some proxies return non-JSON content-types even when the body is JSON.
+                    let data;
+                    const ct = (res.headers.get("content-type") || "").toLowerCase();
+                    if (ct.includes("application/json")) {
+                        data = await res.json();
+                    } else {
+                        const txt = await res.text();
+                        try { data = JSON.parse(txt); } catch { throw new Error("Yahoo quote non-JSON response"); }
+                    }
+
+                    // allorigins can sometimes wrap response as { contents: "..." }
+                    if (data && typeof data === "object" && typeof data.contents === "string") {
+                        try { data = JSON.parse(data.contents); } catch { /* ignore */ }
+                    }
+
+                    const q =
+                        data?.quoteResponse?.result?.[0] ||
+                        data?.result?.[0] ||
+                        data?.quote?.[0] ||
+                        data?.quote ||
+                        null;
+
+                    const meta = data?.chart?.result?.[0]?.meta || null;
+
+                    const price =
+                        (q?.regularMarketPrice ?? q?.price ?? meta?.regularMarketPrice ?? data?.price ?? data?.regularMarketPrice);
+
+                    const previousClose =
+                        (q?.regularMarketPreviousClose ?? q?.previousClose ?? meta?.previousClose ?? data?.previousClose);
+
+                    const change =
+                        (q?.regularMarketChange ?? q?.change ??
+                         ((price != null && previousClose != null) ? (price - previousClose) : data?.change));
+
+                    let percentChange =
+                        (q?.regularMarketChangePercent ?? q?.changePercent ??
+                         ((change != null && previousClose) ? ((change / previousClose) * 100) : data?.percentChange));
+
+                    // Some APIs return { raw: number } structures
+                    if (percentChange && typeof percentChange === "object" && "raw" in percentChange) percentChange = percentChange.raw;
+
+                    if (typeof price !== "number" || !isFinite(price)) {
+                        const errMsg =
+                            data?.quoteResponse?.error?.description ||
+                            data?.quoteResponse?.error?.code ||
+                            data?.chart?.error?.description ||
+                            "";
+                        throw new Error(`Invalid Yahoo quote response${errMsg ? ": " + errMsg : ""}`);
+                    }
+
                     return {
                         source: "yahoo",
-                        price: q.regularMarketPrice,
-                        previousClose: q.regularMarketPreviousClose,
-                        change: q.regularMarketChange,
-                        percentChange: q.regularMarketChangePercent
+                        price: Number(price),
+                        previousClose: previousClose != null ? Number(previousClose) : null,
+                        change: change != null ? Number(change) : null,
+                        percentChange: percentChange != null ? Number(percentChange) : null
                     };
                 } catch (err) {
                     console.warn(`Yahoo quote failed for ${symbol}`, err);
