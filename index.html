@@ -2344,76 +2344,133 @@ body{
             //  YAHOO FINANCE PRIMARY FETCH FUNCTIONS
             // -----------------------------------------
             async fetchYahooQuote(symbol) {
+                // Yahoo Quote for Stocks/ETFs/Funds
+                // Primary: v7/finance/quote via allorigins
+                // Fallback: v8/finance/chart meta via corsproxy (helps mutual funds when quote fields are missing)
                 try {
-                    // Use allorigins as a simple CORS proxy for Yahoo's quote endpoint
-                    const url = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbol)}`;
-                    const res = await fetch(url, { cache: "no-store" });
-                    if (!res.ok) throw new Error(`Yahoo quote fetch failed (HTTP ${res.status})`);
-
-                    // Some proxies return non-JSON content-types even when the body is JSON.
-                    let data;
-                    const ct = (res.headers.get("content-type") || "").toLowerCase();
-                    if (ct.includes("application/json")) {
-                        data = await res.json();
-                    } else {
-                        const txt = await res.text();
-                        try { data = JSON.parse(txt); } catch { throw new Error("Yahoo quote non-JSON response"); }
-                    }
-
-                    // allorigins can sometimes wrap response as { contents: "..." }
-                    if (data && typeof data === "object" && typeof data.contents === "string") {
-                        try { data = JSON.parse(data.contents); } catch { /* ignore */ }
-                    }
-
-                    const q =
-                        data?.quoteResponse?.result?.[0] ||
-                        data?.result?.[0] ||
-                        data?.quote?.[0] ||
-                        data?.quote ||
-                        null;
-
-                    const meta = data?.chart?.result?.[0]?.meta || null;
-
-                    const price =
-                        (q?.regularMarketPrice ?? q?.price ?? meta?.regularMarketPrice ?? data?.price ?? data?.regularMarketPrice);
-
-                    const previousClose =
-                        (q?.regularMarketPreviousClose ?? q?.previousClose ?? meta?.previousClose ?? data?.previousClose);
-
-                    const change =
-                        (q?.regularMarketChange ?? q?.change ??
-                         ((price != null && previousClose != null) ? (price - previousClose) : data?.change));
-
-                    let percentChange =
-                        (q?.regularMarketChangePercent ?? q?.changePercent ??
-                         ((change != null && previousClose) ? ((change / previousClose) * 100) : data?.percentChange));
-
-                    // Some APIs return { raw: number } structures
-                    if (percentChange && typeof percentChange === "object" && "raw" in percentChange) percentChange = percentChange.raw;
-
-                    if (typeof price !== "number" || !isFinite(price)) {
-                        const errMsg =
-                            data?.quoteResponse?.error?.description ||
-                            data?.quoteResponse?.error?.code ||
-                            data?.chart?.error?.description ||
-                            "";
-                        throw new Error(`Invalid Yahoo quote response${errMsg ? ": " + errMsg : ""}`);
-                    }
-
-                    return {
-                        source: "yahoo",
-                        price: Number(price),
-                        previousClose: previousClose != null ? Number(previousClose) : null,
-                        change: change != null ? Number(change) : null,
-                        percentChange: percentChange != null ? Number(percentChange) : null
-                    };
+                    return await this._fetchYahooQuoteViaQuoteEndpoint(symbol);
                 } catch (err) {
-                    console.warn(`Yahoo quote failed for ${symbol}`, err);
-                    throw err;
+                    // Try chart-meta fallback (often works for mutual funds/NAV)
+                    try {
+                        const fromChart = await this._fetchYahooQuoteViaChartMeta(symbol);
+                        // annotate for debugging (non-breaking)
+                        fromChart.via = "chart";
+                        return fromChart;
+                    } catch (err2) {
+                        console.warn(`Yahoo quote failed for ${symbol}`, err);
+                        // keep original error as the reason we "considered Yahoo failed"
+                        throw err;
+                    }
                 }
             }
-            
-            
+
+            async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
+                const url = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbol)}`;
+                const res = await fetch(url, { cache: "no-store" });
+                if (!res.ok) throw new Error(`Yahoo quote fetch failed (HTTP ${res.status})`);
+
+                // Some proxies return non-JSON content-types even when the body is JSON.
+                let data;
+                const ct = (res.headers.get("content-type") || "").toLowerCase();
+                if (ct.includes("application/json")) {
+                    data = await res.json();
+                } else {
+                    const txt = await res.text();
+                    try { data = JSON.parse(txt); } catch { throw new Error("Yahoo quote non-JSON response"); }
+                }
+
+                // allorigins can sometimes wrap response as { contents: "..." }
+                if (data && typeof data === "object" && typeof data.contents === "string") {
+                    try { data = JSON.parse(data.contents); } catch { /* ignore */ }
+                }
+
+                const q =
+                    data?.quoteResponse?.result?.[0] ||
+                    data?.result?.[0] ||
+                    data?.quote?.[0] ||
+                    data?.quote ||
+                    null;
+
+                // Mutual funds sometimes expose NAV-like fields rather than regularMarketPrice
+                const priceCandidate =
+                    q?.regularMarketPrice ??
+                    q?.price ??
+                    q?.navPrice ??
+                    q?.regularMarketOpen ?? // last resort
+                    null;
+
+                const prevCandidate =
+                    q?.regularMarketPreviousClose ??
+                    q?.previousClose ??
+                    q?.regularMarketOpen ??
+                    null;
+
+                const price = (typeof priceCandidate === "number" && isFinite(priceCandidate)) ? priceCandidate : null;
+                const previousClose = (typeof prevCandidate === "number" && isFinite(prevCandidate)) ? prevCandidate : null;
+
+                let change =
+                    q?.regularMarketChange ??
+                    q?.change ??
+                    ((price != null && previousClose != null) ? (price - previousClose) : null);
+
+                let percentChange =
+                    q?.regularMarketChangePercent ??
+                    q?.changePercent ??
+                    ((change != null && previousClose) ? ((change / previousClose) * 100) : null);
+
+                // Some APIs return { raw: number } structures
+                if (percentChange && typeof percentChange === "object" && "raw" in percentChange) percentChange = percentChange.raw;
+
+                // If we still don't have a usable price, treat as invalid so callers can fallback.
+                if (price == null) {
+                    const errMsg =
+                        data?.quoteResponse?.error?.description ||
+                        data?.quoteResponse?.error?.code ||
+                        "";
+                    throw new Error(`Invalid Yahoo quote response${errMsg ? ": " + errMsg : ""}`);
+                }
+
+                return {
+                    source: "yahoo",
+                    price: Number(price),
+                    previousClose: previousClose != null ? Number(previousClose) : null,
+                    change: change != null ? Number(change) : null,
+                    percentChange: percentChange != null ? Number(percentChange) : null
+                };
+            }
+
+            async _fetchYahooQuoteViaChartMeta(symbol) {
+                const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+                const res = await fetch(url, { cache: "no-store" });
+                if (!res.ok) throw new Error(`Yahoo chart fetch failed (HTTP ${res.status})`);
+                const json = await res.json();
+
+                const meta = json?.chart?.result?.[0]?.meta;
+                if (!meta) {
+                    const errMsg = json?.chart?.error?.description || json?.chart?.error?.code || "";
+                    throw new Error(`Invalid Yahoo chart response${errMsg ? ": " + errMsg : ""}`);
+                }
+
+                const price = meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? null;
+                const previousClose = meta?.previousClose ?? meta?.chartPreviousClose ?? null;
+
+                if (typeof price !== "number" || !isFinite(price)) {
+                    throw new Error("Invalid Yahoo chart meta price");
+                }
+
+                const change = (previousClose != null && isFinite(previousClose)) ? (price - previousClose) : null;
+                const percentChange = (change != null && previousClose) ? ((change / previousClose) * 100) : null;
+
+                return {
+                    source: "yahoo",
+                    price: Number(price),
+                    previousClose: previousClose != null ? Number(previousClose) : null,
+                    change: change != null ? Number(change) : null,
+                    percentChange: percentChange != null ? Number(percentChange) : null
+                };
+            }
+
+
             // --- 2. ENRICHMENT: Yahoo (The "Extra Brain" for AH/Day Split) ---
             async fetchYahooEnrichment(symbol) {
                 try {
