@@ -5780,6 +5780,24 @@ await this.saveData();
 /* Crosshair style */
 .crosshair-line { position:absolute; pointer-events:none; z-index:10; }
 .event-icon { position:absolute; width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;box-shadow:0 4px 8px rgba(0,0,0,0.12);pointer-events:auto; }
+
+/* Mobile fix: keep summary pills from overlapping the main page header */
+@media (max-width: 520px){
+  #chart-summary-panel{
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    margin: 10px auto 12px !important;
+    flex-wrap: wrap;
+    padding: 0 8px;
+  }
+  .summary-pill{
+    min-width: 96px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+  }
+}
 </style>
 
 <div id="chart-summary-panel" aria-hidden="false">
@@ -5787,6 +5805,18 @@ await this.saveData();
   <div class="summary-pill" id="summary-week">1W: 0.00%</div>
   <div class="summary-pill" id="summary-month">1M: 0.00%</div>
 </div>
+<script id="chart-summary-panel-rehome">
+(function(){
+  // Ensure the summary pills live inside the portfolio performance container,
+  // so they don't float over the page header on mobile.
+  const panel = document.getElementById('chart-summary-panel');
+  const container = document.getElementById('portfolio-performance-container');
+  if (panel && container && !container.contains(panel)) {
+    container.insertBefore(panel, container.firstChild);
+  }
+})();
+</script>
+
 
 <script>
 (function(){
