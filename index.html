@@ -3745,7 +3745,9 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 // This badge will appear next to the % change
                 const sessionLabel = isAfterHours ? '<span style="font-size: 0.7em; opacity: 0.8; margin-left: 6px;">(After-Hours)</span>' : '';
 
-                let stats = { success: 0, gains: 0, losses: 0, unchanged: 0, failed: 0 };
+                let stats = \{ success: 0, gains: 0, losses: 0, unchanged: 0, failed: 0 \};
+                let needsGroupRerender = false; // if any item flips gain/loss during refresh
+
                 
                 for (const [i, item] of items.entries()) {
                     let result;
@@ -3756,7 +3758,14 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     }
                     
                     if (result.success) {
+                        const prevChangePercent = Number(item.changePercent) || 0;
                         Object.assign(item, result.data);
+                        const newChangePercent = Number(item.changePercent) || 0;
+
+                        // If an item crosses from gain->loss or loss->gain, we need to re-render grouped view
+                        if ((prevChangePercent >= 0 && newChangePercent < 0) || (prevChangePercent < 0 && newChangePercent >= 0)) {
+                            needsGroupRerender = true;
+                        }
                         stats.success++;
                         if ((result.data.change || 0) > 0) stats.gains++;
                         else if ((result.data.change || 0) < 0) stats.losses++;
@@ -3787,10 +3796,18 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 this.showLoading(false);
                 this.showRefreshStatus(type, stats);
                 await this.saveData();
-                
-                this.renderPortfolioSummary();
-                this.renderDiversificationChart();
-            }
+                const currentSortMode = this.elements.portfolioSort ? this.elements.portfolioSort.value : 'performance';
+                const tabMatchesType = (type === 'stock' && this.currentTab === 'stocks') || (type === 'fund' && this.currentTab === 'funds');
+
+                // If items flipped between gain/loss buckets while we're in the grouped "performance" view,
+                // re-render the grid so group membership stays correct.
+                if (needsGroupRerender && tabMatchesType && currentSortMode === 'performance') {
+                    this.renderContent();
+                } else {
+                    this.renderPortfolioSummary();
+                    this.renderDiversificationChart();
+                }
+}
 
             
                         
