@@ -2735,7 +2735,37 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 
                 // If it's explicitly a mutual fund (e.g., ends with X), skip Finnhub entirely
                 if (this.isMutualFund(symbol)) {
-                    // 1. Try Alpha Vantage FIRST (primary for mutual funds)
+                    // 0. Try Yahoo FIRST (best reliability for mutual funds)
+                    try {
+                        const y = await this.fetchYahooQuote(symbol);
+                        const price = parseFloat(y.price) || 0;
+                        const change = parseFloat(y.change ?? 0) || 0;
+                        const changePercent = parseFloat(y.percentChange ?? 0) || 0;
+                        const previousClose = parseFloat(y.previousClose ?? 0) || (price - change);
+
+                        if (price > 0) {
+                            console.log(`MF Source: YAHOO → ${symbol}`);
+                            return {
+                                success: true,
+                                data: {
+                                    symbol,
+                                    name: symbol,
+                                    price,
+                                    change,
+                                    changePercent,
+                                    open: previousClose,
+                                    high: price,
+                                    low: price,
+                                    previousClose,
+                                    industry: "Mutual Fund"
+                                }
+                            };
+                        }
+                    } catch (errYahooFund) {
+                        console.log(`Yahoo failed for mutual fund ${symbol}. Falling back...`, errYahooFund);
+                    }
+
+                    // 1. Try Alpha Vantage SECOND (fallback)
                     let result = await this.fetchAlphaVantageFundData(symbol);
                     if (result && result.success && result.data && result.data.price > 0) {
                         return result;
@@ -2743,7 +2773,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
 
                     console.log(`Alpha Vantage failed for ${symbol}. Falling back to FMP...`);
 
-                    // 2. Try FMP second
+                    // 2. Try FMP last
                     result = await this.fetchFmpFundData(symbol);
                     if (result && result.success && result.data && result.data.price > 0) {
                         return result;
