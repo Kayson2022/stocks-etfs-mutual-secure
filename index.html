@@ -6193,11 +6193,27 @@ await this.saveData();
 /* Crosshair style */
 .crosshair-line { position:absolute; pointer-events:none; z-index:10; }
 .event-icon { position:absolute; width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;box-shadow:0 4px 8px rgba(0,0,0,0.12);pointer-events:auto; }
+
+/* --- v9: Color the summary pill NUMBERS based on sign --- */
+#chart-summary-panel .summary-pill{
+  color: var(--text-primary, #0b1220) !important;
+}
+#chart-summary-panel .summary-pill .pill-label{
+  opacity: 0.88;
+}
+#chart-summary-panel .summary-pill .pill-value{
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+#chart-summary-panel .summary-pill .pill-value.positive{ color: var(--color-positive) !important; }
+#chart-summary-panel .summary-pill .pill-value.negative{ color: var(--color-negative) !important; }
+#chart-summary-panel .summary-pill .pill-value.neutral{  color: var(--text-primary, #0b1220) !important; }
+
 </style>
 <div aria-hidden="false" id="chart-summary-panel">
-<div class="summary-pill" id="summary-daily">Today: $0.00</div>
-<div class="summary-pill" id="summary-week">1W: 0.00%</div>
-<div class="summary-pill" id="summary-month">1M: 0.00%</div>
+<div class="summary-pill" id="summary-daily"><span class="pill-label">Today:</span> <span class="pill-value neutral">$0.00</span></div>
+<div class="summary-pill" id="summary-week"><span class="pill-label">1W:</span> <span class="pill-value neutral">0.00%</span></div>
+<div class="summary-pill" id="summary-month"><span class="pill-label">1M:</span> <span class="pill-value neutral">0.00%</span></div>
 </div>
 <script>
 (function(){
@@ -6398,9 +6414,42 @@ await this.saveData();
       const plToday = tracker.totalPLToday || tracker.total_pl_today || (tracker.getTotalPLToday && tracker.getTotalPLToday());
       const pct1w = tracker.weekPercent || (tracker.getWeekPercent && tracker.getWeekPercent && tracker.getWeekPercent());
       const pct1m = tracker.monthPercent || (tracker.getMonthPercent && tracker.getMonthPercent && tracker.getMonthPercent());
-      if (daily) daily.textContent = 'Today: ' + (plToday !== undefined ? formatCurrency(plToday) : '$0.00');
-      if (week) week.textContent = '1W: ' + (pct1w !== undefined ? (pct1w>0?'+':'')+Number(pct1w).toFixed(2)+'%' : '0.00%');
-      if (month) month.textContent = '1M: ' + (pct1m !== undefined ? (pct1m>0?'+':'')+Number(pct1m).toFixed(2)+'%' : '0.00%');
+      function fmtPillCurrency(v){
+  const n = Number(v);
+  if(!Number.isFinite(n)) return '$0.00';
+  const abs = Math.abs(n);
+  const base = '$' + abs.toFixed(2);
+  return n < 0 ? '-' + base : base;
+}
+
+function normalizeCurrencyDisplay(s, v){
+  let out = String(s || '');
+  // Normalize "$-123.45" => "-$123.45" for consistent parsing/color logic
+  out = out.replace(/^\$-\s*/,'-$').replace(/^\$\+\s*/,'+$');
+  if(!out.includes('$') && Number.isFinite(Number(v))){
+    out = fmtPillCurrency(v);
+  }
+  return out;
+}
+function setPill(el, label, value, display){
+  if(!el) return;
+  const n = Number(value);
+  const cls = (!Number.isFinite(n) || n === 0) ? 'neutral' : (n > 0 ? 'positive' : 'negative');
+  el.innerHTML = '<span class="pill-label">'+label+'</span> <span class="pill-value '+cls+'">'+display+'</span>';
+}
+
+// Today (currency)
+const todayDispRaw = (plToday !== undefined ? (window.stockTracker && window.stockTracker.formatCurrency ? window.stockTracker.formatCurrency(plToday) : fmtPillCurrency(plToday)) : '$0.00');
+      const todayDisp = normalizeCurrencyDisplay(todayDispRaw, plToday);
+      setPill(daily, 'Today:', plToday, todayDisp);
+
+// 1W / 1M (percent)
+const wNum = (pct1w !== undefined) ? Number(pct1w) : 0;
+const mNum = (pct1m !== undefined) ? Number(pct1m) : 0;
+const wTxt = (pct1w !== undefined) ? ((wNum>0?'+':'') + wNum.toFixed(2) + '%') : '0.00%';
+const mTxt = (pct1m !== undefined) ? ((mNum>0?'+':'') + mNum.toFixed(2) + '%') : '0.00%';
+setPill(week, '1W:', wNum, wTxt);
+setPill(month, '1M:', mNum, mTxt);
     } catch(e){}
   }
 
