@@ -1176,7 +1176,19 @@
              }
         }
         /* === END CHART STYLES === */
-    </style>
+    
+        /* --- FIX: Mobile <select> dropdown options visibility (Chrome/Android) --- */
+        select { color-scheme: dark; }
+        select option, select optgroup {
+            background-color: #0b1220 !important;
+            color: #e6eefc !important;
+        }
+        /* Some Android builds also need the control itself to be explicit */
+        select {
+            background-color: var(--bg-tertiary) !important;
+            color: var(--text-primary) !important;
+        }
+</style>
 <style id="neon-theme-overrides">
 /* ============================================================
    NEON THEME OVERRIDES (UI-only) — STEP A
