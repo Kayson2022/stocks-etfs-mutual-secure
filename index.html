@@ -1472,12 +1472,6 @@ button {
   font-size: 0.85rem;
 }
 
-
-/* Layout: summary pills sit above header */
-#chart-summary-panel{ max-width: 980px; }
-@media (min-width: 521px){
-  #chart-summary-panel{ margin-top: 6px; }
-}
 </style>
 
 <script>
@@ -1489,6 +1483,54 @@ button {
   } catch (e) {}
 </script>
 
+
+
+<style id="summary-panel-fixed-fix">
+/* --- FIX: Keep Today/1W/1M panel pinned to top WITHOUT overlapping the header or chart --- */
+:root{
+  --summary-panel-h: 64px;
+  --summary-panel-gap: 12px;
+}
+/* push the page down by panel height */
+body{
+  padding-top: calc(var(--summary-panel-h) + 14px) !important;
+}
+
+/* override any existing absolute positioning */
+#chart-summary-panel{
+  position: fixed !important;
+  top: 10px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+
+  width: min(760px, calc(100% - 16px)) !important;
+  display: flex !important;
+  gap: var(--summary-panel-gap) !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-wrap: wrap !important;
+
+  padding: 10px 12px !important;
+  border-radius: 16px !important;
+  z-index: 9999 !important;
+
+  /* subtle glass background so it reads on any section */
+  background: rgba(10, 14, 24, 0.55) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+/* make pills a bit more compact on very small screens */
+@media (max-width: 480px){
+  #chart-summary-panel{ top: 8px !important; padding: 8px 10px !important; }
+  #chart-summary-panel .summary-pill{
+    min-width: 104px !important;
+    padding: 7px 10px !important;
+    font-size: 0.92rem !important;
+  }
+}
+</style>
 
 </head>
 <body>
@@ -1513,9 +1555,8 @@ button {
     </div>
     
     <div id="app-container" class="container">
-        <!-- New Header Structure --><div id="chart-summary-panel" aria-hidden="false">
-  <div class="summary-pill" id="summary-daily">Today: $0.00</div>
-  <header class="header">
+        <!-- New Header Structure -->
+        <header class="header">
             <h1>💰 Portfolio Tracker</h1>
             <div class="header-controls">
                 <div id="user-info" style="display: none;">
@@ -5765,13 +5806,12 @@ await this.saveData();
   gap:12px;
   align-items:center;
   justify-content:center;
-  position: relative;
-  margin: 10px auto 6px;
-  z-index: 10;
-  flex-wrap: wrap;
-  padding: 0 8px;
+  position:absolute;
+  left:50%;
+  top:18px;
+  transform:translateX(-50%);
+  z-index:5;
 }
-
 .summary-pill{
   background:var(--bg-tertiary);
   border:1px solid var(--border-color);
@@ -5788,29 +5828,14 @@ await this.saveData();
 /* Crosshair style */
 .crosshair-line { position:absolute; pointer-events:none; z-index:10; }
 .event-icon { position:absolute; width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;box-shadow:0 4px 8px rgba(0,0,0,0.12);pointer-events:auto; }
-
-/* Mobile fix: keep summary pills from overlapping the main page header */
-@media (max-width: 520px){
-  #chart-summary-panel{
-    position: static !important;
-    left: auto !important;
-    top: auto !important;
-    transform: none !important;
-    margin: 10px auto 12px !important;
-    flex-wrap: wrap;
-    padding: 0 8px;
-  }
-  .summary-pill{
-    min-width: 96px;
-    padding: 6px 10px;
-    font-size: 0.85rem;
-  }
-}
 </style>
 
-<div class="summary-pill" id="summary-week">1W: 0.00%</div>
+<div id="chart-summary-panel" aria-hidden="false">
+  <div class="summary-pill" id="summary-daily">Today: $0.00</div>
+  <div class="summary-pill" id="summary-week">1W: 0.00%</div>
   <div class="summary-pill" id="summary-month">1M: 0.00%</div>
 </div>
+
 <script>
 (function(){
   // utilities
@@ -6822,6 +6847,30 @@ const container = this.elements.portfolioPerformanceContainer;
       setTimeout(installYahooBottomChart, 800);
     });
   }
+})();
+</script>
+
+
+<script id="summary-panel-height-js">
+(function(){
+  const panel = document.getElementById('chart-summary-panel');
+  if(!panel) return;
+
+  let t = null;
+  function apply(){
+    // Use actual rendered height (supports wrap to 2 lines)
+    const h = Math.ceil(panel.getBoundingClientRect().height);
+    if(h > 0){
+      document.documentElement.style.setProperty('--summary-panel-h', h + 'px');
+    }
+  }
+  window.addEventListener('load', apply, { once: true });
+  window.addEventListener('resize', function(){
+    clearTimeout(t);
+    t = setTimeout(apply, 120);
+  });
+  // also run soon in case data renders before 'load'
+  setTimeout(apply, 50);
 })();
 </script>
 
