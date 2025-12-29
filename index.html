@@ -1,15 +1,15 @@
 
 
-
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Stocks & Funds Tracker</title>
-    <link rel="icon" href="data:,">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Live Stocks &amp; Funds Tracker</title>
+<link href="data:," rel="icon"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
         // Safe Chart.js creator to avoid "Canvas is already in use" errors
         function createSafeChart(ctx, config) {
             try {
@@ -25,18 +25,17 @@
             return new Chart(ctx, config);
         }
     </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <!-- NEW: Chart.js Annotation Plugin for the horizontal reference line -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script> 
-    <!-- 
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<!-- NEW: Chart.js Annotation Plugin for the horizontal reference line -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+<!-- 
     ==================================================================
     ==      REVISED & IMPROVED STYLESHEET                           ==
     ==================================================================
     This stylesheet includes the fix for the chart color parsing issue
     and the final visual styles.
     -->
-    <style>
+<style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
         /* --- CSS Variables for Theming --- */
@@ -1472,8 +1471,184 @@ button {
   font-size: 0.85rem;
 }
 
-</style>
 
+
+/* ==== STEP: Prototype-style Portfolio Summary Banner (safe with JS className overwrites) ==== */
+#portfolio-summary.portfolio-summary{
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  padding: 18px 18px 16px;
+  margin: 14px 0 14px;
+  background:
+    radial-gradient(circle at top left, rgba(56,189,248,0.32), transparent 60%),
+    radial-gradient(circle at top right, rgba(34,197,94,0.28), transparent 60%),
+    radial-gradient(circle at bottom, rgba(59,130,246,0.35), rgba(15, 23, 42, 0.92) 70%);
+  border: 1px solid rgba(56,189,248,0.42);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+
+#portfolio-summary.portfolio-summary::before{
+  content:"";
+  position:absolute;
+  inset:-40%;
+  background: conic-gradient(from 180deg at 50% 50%,
+    rgba(56,189,248,0.00),
+    rgba(56,189,248,0.12),
+    rgba(34,197,94,0.10),
+    rgba(59,130,246,0.12),
+    rgba(56,189,248,0.00)
+  );
+  filter: blur(26px);
+  opacity: 0.9;
+  animation: ps-gradient-spin 18s linear infinite;
+  pointer-events:none;
+}
+
+@keyframes ps-gradient-spin{
+  from{ transform: rotate(0deg); }
+  to{ transform: rotate(360deg); }
+}
+
+#portfolio-summary .portfolio-inner{
+  position: relative;
+  z-index: 1;
+  display:flex;
+  gap: 16px;
+  align-items: stretch;
+  justify-content: space-between;
+}
+
+#portfolio-summary .summary-main{
+  flex: 1 1 340px;
+  min-width: 260px;
+}
+
+#portfolio-summary .summary-label{
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.78rem;
+  color: rgba(226,232,240,0.75);
+  margin-bottom: 6px;
+}
+
+#portfolio-summary .summary-total{
+  margin-bottom: 8px;
+}
+
+#portfolio-summary .summary-total .summary-value{
+  display: inline-block;
+  font-size: 2.25rem;
+  font-weight: 800;
+  line-height: 1.05;
+  color: rgba(248,250,252,0.98);
+  text-shadow: 0 8px 22px rgba(0,0,0,0.35);
+}
+
+#portfolio-summary .summary-subline{
+  font-size: 0.96rem;
+  color: rgba(226,232,240,0.85);
+  margin-bottom: 12px;
+}
+
+#portfolio-summary .summary-subline .summary-value{
+  font-weight: 800;
+}
+
+#portfolio-summary .summary-subline-tail{
+  opacity: 0.9;
+}
+
+#portfolio-summary .summary-badges{
+  display:flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items:center;
+}
+
+#portfolio-summary .summary-badge{
+  background: rgba(2, 6, 23, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: rgba(226,232,240,0.9);
+  backdrop-filter: blur(10px);
+}
+
+#portfolio-summary .summary-toggle{
+  margin-left: auto;
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(56,189,248,0.40);
+  color: rgba(248,250,252,0.95);
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  backdrop-filter: blur(10px);
+}
+
+#portfolio-summary .summary-toggle:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 3px rgba(56,189,248,0.14);
+  border-color: rgba(56,189,248,0.65);
+}
+
+#portfolio-summary .summary-grid{
+  flex: 1 1 560px;
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-content: start;
+}
+
+#portfolio-summary .summary-item{
+  background: rgba(2, 6, 23, 0.28);
+  border: 1px solid rgba(148,163,184,0.22);
+  border-radius: 16px;
+  padding: 10px 12px;
+  backdrop-filter: blur(10px);
+}
+
+#portfolio-summary .summary-item-label{
+  font-size: 0.76rem;
+  color: rgba(226,232,240,0.78);
+}
+
+#portfolio-summary .summary-item-value{
+  margin-top: 4px;
+}
+
+#portfolio-summary .summary-item-value .summary-value{
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: rgba(248,250,252,0.96);
+}
+
+/* Override old summary-value styles inside banner so it doesn't look like the old UI */
+#portfolio-summary .summary-value{
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Positive / Negative coloring (JS toggles these classes) */
+#portfolio-summary .summary-value.positive{ color: var(--color-positive) !important; }
+#portfolio-summary .summary-value.negative{ color: var(--color-negative) !important; }
+
+/* Responsive */
+@media (max-width: 900px){
+  #portfolio-summary .portfolio-inner{ flex-direction: column; }
+  #portfolio-summary .summary-toggle{ margin-left: 0; width: fit-content; }
+  #portfolio-summary .summary-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #portfolio-summary .summary-total .summary-value{ font-size: 1.95rem; }
+}
+@media (max-width: 520px){
+  #portfolio-summary .summary-grid{ grid-template-columns: 1fr; }
+}
+</style>
 <script>
   // Make Neon (dark) the default theme on first load (user can still toggle).
   try {
@@ -1482,9 +1657,6 @@ button {
     }
   } catch (e) {}
 </script>
-
-
-
 <style id="summary-panel-fixed-fix">
 /* --- FIX: Keep Today/1W/1M panel pinned to top WITHOUT overlapping the header or chart --- */
 :root{
@@ -1531,419 +1703,381 @@ body{
   }
 }
 </style>
-
 </head>
 <body>
-    <!-- 
+<!-- 
     The body content remains the same, but the header structure is slightly updated for the new design.
     The new styles will automatically apply to the existing HTML structure.
     -->
-    <div id="loading" class="loading" style="display: none;">Loading...</div>
-    <div id="error" class="error" style="display: none;"></div>
-    <div id="success" class="success" style="display: none;"></div>
-    <div id="refresh-status-popup" class="refresh-status-popup"></div>
-    <div id="alert-notification" class="alert-notification" style="display: none;"></div>
-
-    <div id="login-container" class="container">
-        <h1>💰 Live Portfolio Tracker</h1>
-        <p style="text-align: center; margin-bottom: 30px; font-size: 1.2rem; color: var(--text-secondary);">Sign in to continue</p>
-        <button id="google-signin-btn" class="add-btn" style="margin: 0 auto; display: flex; align-items: center; gap: 10px; width: auto;">
-            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="white"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/><path d="M1 1h22v22H1z" fill="none"/></svg>
+<div class="loading" id="loading" style="display: none;">Loading...</div>
+<div class="error" id="error" style="display: none;"></div>
+<div class="success" id="success" style="display: none;"></div>
+<div class="refresh-status-popup" id="refresh-status-popup"></div>
+<div class="alert-notification" id="alert-notification" style="display: none;"></div>
+<div class="container" id="login-container">
+<h1>💰 Live Portfolio Tracker</h1>
+<p style="text-align: center; margin-bottom: 30px; font-size: 1.2rem; color: var(--text-secondary);">Sign in to continue</p>
+<button class="add-btn" id="google-signin-btn" style="margin: 0 auto; display: flex; align-items: center; gap: 10px; width: auto;">
+<svg fill="white" height="24" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path><path d="M1 1h22v22H1z" fill="none"></path></svg>
             Sign in with Google
         </button>
-        <div id="firebase-auth-error" style="display: none;"></div>
-    </div>
-    
-    <div id="app-container" class="container">
-        <!-- New Header Structure -->
-        <header class="header">
-            <h1>💰 Portfolio Tracker</h1>
-            <div class="header-controls">
-                <div id="user-info" style="display: none;">
-                    <span id="user-name"></span>
-                    <button id="sign-out-btn">Sign Out</button>
-                </div>
-            </div>
-        </header>
-
-        <div id="header-countdown">Next update in: <span id="countdown">90</span>s</div>
-
-        <div class="tabs">
-            <button class="tab active" onclick="window.stockTracker.switchTab('stocks')">📊 Stocks & Portfolio</button>
-            <button class="tab" onclick="window.stockTracker.switchTab('funds')">🏛️ Mutual Funds</button>
-            <button class="tab" onclick="window.stockTracker.switchTab('watchlist')">👀 Watchlist</button>
-            <button class="tab" onclick="window.stockTracker.switchTab('news')">📰 News</button>
-        </div>
-
-        <div id="stocks-tab" class="tab-content active">
-            <div id="portfolio-summary" class="portfolio-summary" style="display: none;">
-                <h3>Your Portfolio at a Glance</h3>
-                <div style="text-align:center; margin-bottom:15px;">
-                    <button id="toggle-ah-btn" class="btn-secondary" style="padding: 4px 12px; font-size: 0.8rem; border-radius: 20px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4);">
-                        🌑 Show After-Hours
-                    </button>
-                </div>
-                <div class="summary-stats">
-                    <div class="summary-item">
-                        <span class="summary-label">Combined Total</span>
-                        <span id="combined-total-value" class="summary-value">$0.00</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Stocks Total Value</span>
-                        <span id="stocks-total-value" class="summary-value">$0.00</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Mutual Fund Value</span>
-                        <span id="mutual-fund-total-value" class="summary-value">$0.00</span>
-                    </div>
-
-                    <div class="summary-item">
-                        <span class="summary-label">Active Stocks</span>
-                        <span id="stock-count-value" class="summary-value">0</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Active Funds</span>
-                        <span id="fund-count-value" class="summary-value">0</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Total Contributions</span>
-                        <span id="total-contributions" class="summary-value total-contributions">$0.00</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Total Dividends</span>
-                        <span id="total-dividends" class="summary-value positive">$0.00</span>
-                    </div>
-                    <div class="summary-item">
-                        <span id="total-pl-today-label" class="summary-label">Total P/L Today</span>
-                        <span id="total-pl-today" class="summary-value positive">$0.00</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Total P/L % Today</span>
-                        <span id="total-pl-percent-today" class="summary-value positive">0.00%</span>
-                    </div>
-                    <div class="summary-item">
-                        <span class="summary-label">Unrealized P/L</span>
-                        <span id="total-pl-unrealized" class="summary-value positive">$0.00</span>
-                    </div>
-                     <div class="summary-item">
-                        <span class="summary-label">Realized P/L</span>
-                        <span id="total-pl-realized" class="summary-value positive">$0.00</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="search-section">
-                <div class="input-wrapper">
-                    <input type="text" class="search-input" id="stockInput" placeholder="Enter stock symbol (e.g., AAPL)">
-                    <span class="clear-input" data-target="stockInput">&times;</span>
-                </div>
-                <button class="add-btn" id="addBtn">Add Stock</button>
-            </div>
-
-            <div class="portfolio-controls">
-                <div class="input-wrapper">
-                    <input type="text" class="search-input" id="portfolioFilter" placeholder="🔎 Filter your portfolio...">
-                    <span class="clear-input" data-target="portfolioFilter">&times;</span>
-                </div>
-                <select id="platformFilter" class="search-input" style="display: none;"></select>
-                <select id="portfolioSort">
-                    <option value="performance">Sort by Performance</option>
-                    <option value="alphabetical">Sort Alphabetical (A-Z)</option>
-                    <option value="value">Sort by Total Value</option>
-                    <option value="pl_overall">Sort by Overall P/L ($)</option>
-                    <option value="platform">Sort by Platform</option>
-                </select>
-            </div>
-
-            <div class="utility-buttons-grid">
-                <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
-                <button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
-                <div class="import-wrapper">
-                    <button class="add-btn" id="exportBtn">📥 Export Data</button>
-                    <label for="importFile" class="add-btn" style="cursor: pointer;">📤 Import Data</label>
-                    <input type="file" id="importFile" accept=".json" style="display: none;">
-                </div>
-                <button class="add-btn" id="settingsBtn">⚙️ Settings</button>
-                <button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
-                <button class="add-btn" id="listAllBtn">📋 List All Stocks</button>
-                <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
-                 <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
-                <button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
-            </div>
-        </div>
-        
-        <div id="funds-tab" class="tab-content">
-             <div class="search-section">
-                <div class="input-wrapper">
-                    <input type="text" class="search-input" id="mutualFundInput" placeholder="Enter mutual fund symbol (e.g., VTIAX, FXNAX, SWPPX)">
-                    <span class="clear-input" data-target="mutualFundInput">&times;</span>
-                    </div>
-                <button class="add-btn" id="addFundBtn">Add Fund</button>
-                <button class="add-btn" id="quickLookupBtn">Quick Lookup</button>
-            </div>
-             <div class="funds-controls">
-                <button class="add-btn" id="updateAllFundsBtn">🔄 Update Funds</button>
-                <button class="add-btn" id="clearAllFundsBtn">🗑️ Clear All Funds</button>
-            </div>
-        </div>
-
-        <div id="watchlist-tab" class="tab-content">
-             <div class="search-section">
-                <div class="input-wrapper">
-                    <input type="text" class="search-input" id="watchlistInput" placeholder="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)">
-                    <span class="clear-input" data-target="watchlistInput">&times;</span>
-                </div>
-                <button class="add-btn" id="addWatchlistBtn">Add to Watchlist</button>
-            </div>
-             <div class="watchlist-controls">
-                <button class="add-btn" id="updateWatchlistBtn">🔄 Update Watchlist</button>
-                <button class="add-btn" id="clearWatchlistBtn">🗑️ Clear Watchlist</button>
-            </div>
-            <h3 class="watchlist-title"><span>Your Watchlist <span id="watchlist-count">(0)</span></span></h3>
-        </div>
-
-        <div id="news-tab" class="tab-content">
-            <h3 class="watchlist-title">📰 Top News for Your Stocks</h3>
-            <div id="news-articles-container"></div>
-        </div>
-
-        <div class="stocks-grid" id="stocksGrid"></div>
-
-        
+<div id="firebase-auth-error" style="display: none;"></div>
+</div>
+<div class="container" id="app-container">
+<!-- New Header Structure -->
+<header class="header">
+<h1>💰 Portfolio Tracker</h1>
+<div class="header-controls">
+<div id="user-info" style="display: none;">
+<span id="user-name"></span>
+<button id="sign-out-btn">Sign Out</button>
+</div>
+</div>
+</header>
+<div id="header-countdown">Next update in: <span id="countdown">90</span>s</div>
+<div class="tabs">
+<button class="tab active" onclick="window.stockTracker.switchTab('stocks')">📊 Stocks &amp; Portfolio</button>
+<button class="tab" onclick="window.stockTracker.switchTab('funds')">🏛️ Mutual Funds</button>
+<button class="tab" onclick="window.stockTracker.switchTab('watchlist')">👀 Watchlist</button>
+<button class="tab" onclick="window.stockTracker.switchTab('news')">📰 News</button>
+</div>
+<div class="tab-content active" id="stocks-tab">
+<div class="portfolio-summary" id="portfolio-summary" style="display: none;">
+<div class="portfolio-inner">
+<div class="summary-main">
+<div class="summary-label">Combined Total</div>
+<div class="summary-total"><span class="summary-value" id="combined-total-value">$0.00</span></div>
+<div class="summary-subline">
+<span class="summary-value" id="total-pl-today">$0.00</span>
+       · 
+      <span class="summary-value" id="total-pl-percent-today">0.00%</span>
+<span class="summary-subline-tail" id="total-pl-today-label"> today</span>
+</div>
+<div class="summary-badges">
+<div class="summary-badge">Unrealized P/L: <span class="summary-value" id="total-pl-unrealized">$0.00</span></div>
+<div class="summary-badge">Realized P/L: <span class="summary-value" id="total-pl-realized">$0.00</span></div>
+<button class="summary-toggle" id="toggle-ah-btn" type="button">🌑 Show After-Hours</button>
+</div>
+</div>
+<div class="summary-grid">
+<div class="summary-item">
+<div class="summary-item-label">Stocks Total Value</div>
+<div class="summary-item-value"><span class="summary-value" id="stocks-total-value">$0.00</span></div>
+</div>
+<div class="summary-item">
+<div class="summary-item-label">Mutual Fund Value</div>
+<div class="summary-item-value"><span class="summary-value" id="mutual-fund-total-value">$0.00</span></div>
+</div>
+<div class="summary-item">
+<div class="summary-item-label">Total Contributions</div>
+<div class="summary-item-value"><span class="summary-value" id="total-contributions">$0.00</span></div>
+</div>
+<div class="summary-item">
+<div class="summary-item-label">Total Dividends</div>
+<div class="summary-item-value"><span class="summary-value" id="total-dividends">$0.00</span></div>
+</div>
+<div class="summary-item">
+<div class="summary-item-label">Active Stocks</div>
+<div class="summary-item-value"><span class="summary-value" id="stock-count-value">0</span></div>
+</div>
+<div class="summary-item">
+<div class="summary-item-label">Active Funds</div>
+<div class="summary-item-value"><span class="summary-value" id="fund-count-value">0</span></div>
+</div>
+</div>
+</div>
+</div>
+<div class="search-section">
+<div class="input-wrapper">
+<input class="search-input" id="stockInput" placeholder="Enter stock symbol (e.g., AAPL)" type="text"/>
+<span class="clear-input" data-target="stockInput">×</span>
+</div>
+<button class="add-btn" id="addBtn">Add Stock</button>
+</div>
+<div class="portfolio-controls">
+<div class="input-wrapper">
+<input class="search-input" id="portfolioFilter" placeholder="🔎 Filter your portfolio..." type="text"/>
+<span class="clear-input" data-target="portfolioFilter">×</span>
+</div>
+<select class="search-input" id="platformFilter" style="display: none;"></select>
+<select id="portfolioSort">
+<option value="performance">Sort by Performance</option>
+<option value="alphabetical">Sort Alphabetical (A-Z)</option>
+<option value="value">Sort by Total Value</option>
+<option value="pl_overall">Sort by Overall P/L ($)</option>
+<option value="platform">Sort by Platform</option>
+</select>
+</div>
+<div class="utility-buttons-grid">
+<button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
+<button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
+<div class="import-wrapper">
+<button class="add-btn" id="exportBtn">📥 Export Data</button>
+<label class="add-btn" for="importFile" style="cursor: pointer;">📤 Import Data</label>
+<input accept=".json" id="importFile" style="display: none;" type="file"/>
+</div>
+<button class="add-btn" id="settingsBtn">⚙️ Settings</button>
+<button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
+<button class="add-btn" id="listAllBtn">📋 List All Stocks</button>
+<button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
+<button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
+<button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
+</div>
+</div>
+<div class="tab-content" id="funds-tab">
+<div class="search-section">
+<div class="input-wrapper">
+<input class="search-input" id="mutualFundInput" placeholder="Enter mutual fund symbol (e.g., VTIAX, FXNAX, SWPPX)" type="text"/>
+<span class="clear-input" data-target="mutualFundInput">×</span>
+</div>
+<button class="add-btn" id="addFundBtn">Add Fund</button>
+<button class="add-btn" id="quickLookupBtn">Quick Lookup</button>
+</div>
+<div class="funds-controls">
+<button class="add-btn" id="updateAllFundsBtn">🔄 Update Funds</button>
+<button class="add-btn" id="clearAllFundsBtn">🗑️ Clear All Funds</button>
+</div>
+</div>
+<div class="tab-content" id="watchlist-tab">
+<div class="search-section">
+<div class="input-wrapper">
+<input class="search-input" id="watchlistInput" placeholder="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)" type="text"/>
+<span class="clear-input" data-target="watchlistInput">×</span>
+</div>
+<button class="add-btn" id="addWatchlistBtn">Add to Watchlist</button>
+</div>
+<div class="watchlist-controls">
+<button class="add-btn" id="updateWatchlistBtn">🔄 Update Watchlist</button>
+<button class="add-btn" id="clearWatchlistBtn">🗑️ Clear Watchlist</button>
+</div>
+<h3 class="watchlist-title"><span>Your Watchlist <span id="watchlist-count">(0)</span></span></h3>
+</div>
+<div class="tab-content" id="news-tab">
+<h3 class="watchlist-title">📰 Top News for Your Stocks</h3>
+<div id="news-articles-container"></div>
+</div>
+<div class="stocks-grid" id="stocksGrid"></div>
 <!-- 
 ==================================================================
 ==      TOTALLY REDESIGNED PORTFOLIO CHART CONTAINER            ==
 ==================================================================
 -->
-<div id="portfolio-performance-container" class="chart-container">
-    <div class="chart-header">
-        <div class="chart-title-group">
-            <h4 id="portfolio-chart-title">Portfolio Performance</h4>
-            <!-- New Dynamic Value Display -->
-            <div class="chart-big-value" id="chart-current-value">$0.00</div>
-        </div>
-        
-        <div id="performance-chart-controls" class="chart-controls">
-            <div class="top-movers-control" style="margin-top: 8px; text-align:center;">
-                <label for="top-movers-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 4px;">
+<div class="chart-container" id="portfolio-performance-container">
+<div class="chart-header">
+<div class="chart-title-group">
+<h4 id="portfolio-chart-title">Portfolio Performance</h4>
+<!-- New Dynamic Value Display -->
+<div class="chart-big-value" id="chart-current-value">$0.00</div>
+</div>
+<div class="chart-controls" id="performance-chart-controls">
+<div class="top-movers-control" style="margin-top: 8px; text-align:center;">
+<label for="top-movers-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 4px;">
                     Top movers:
                 </label>
-                <select id="top-movers-count" style="padding: 2px 6px; border-radius: 6px;">
-                    <option value="5">5</option>
-                    <option value="10" selected>10</option>
-                    <option value="15">15</option>
-                    <option value="20">20</option>
-                </select>
-            </div>
-            <button class="chart-range-btn active" data-range="BAR_TODAY">Today</button>
-            <button class="chart-range-btn" data-range="1W">1W</button>
-            <button class="chart-range-btn" data-range="1M">1M</button>
-            <button class="chart-range-btn" data-range="6M">6M</button>
-            <button class="chart-range-btn" data-range="YTD">YTD</button>
-            <button class="chart-range-btn" data-range="1Y">1Y</button>
-            <button class="chart-range-btn" data-range="3Y">3Y</button>
-            <button class="chart-range-btn" data-range="5Y">5Y</button>
-            <button class="chart-range-btn" data-range="ALL">All</button>
-        </div>
-    </div>
-
-    <!-- Historical Line Chart Wrapper (Default View) -->
-    <div class="canvas-wrapper" id="historical-chart-wrapper" style="height: 400px;">
-        <canvas id="portfolioPerformanceChart"></canvas>
-    </div>
-
-    <!-- Today's Performance Bar Chart Wrapper (Hidden by default) -->
-    <div class="canvas-wrapper" id="bar-chart-wrapper" style="display: none; height: 400px;">
-        <canvas id="portfolioPerformanceBarChart"></canvas>
-    </div>
+<select id="top-movers-count" style="padding: 2px 6px; border-radius: 6px;">
+<option value="5">5</option>
+<option selected="" value="10">10</option>
+<option value="15">15</option>
+<option value="20">20</option>
+</select>
+</div>
+<button class="chart-range-btn active" data-range="BAR_TODAY">Today</button>
+<button class="chart-range-btn" data-range="1W">1W</button>
+<button class="chart-range-btn" data-range="1M">1M</button>
+<button class="chart-range-btn" data-range="6M">6M</button>
+<button class="chart-range-btn" data-range="YTD">YTD</button>
+<button class="chart-range-btn" data-range="1Y">1Y</button>
+<button class="chart-range-btn" data-range="3Y">3Y</button>
+<button class="chart-range-btn" data-range="5Y">5Y</button>
+<button class="chart-range-btn" data-range="ALL">All</button>
+</div>
+</div>
+<!-- Historical Line Chart Wrapper (Default View) -->
+<div class="canvas-wrapper" id="historical-chart-wrapper" style="height: 400px;">
+<canvas id="portfolioPerformanceChart"></canvas>
+</div>
+<!-- Today's Performance Bar Chart Wrapper (Hidden by default) -->
+<div class="canvas-wrapper" id="bar-chart-wrapper" style="display: none; height: 400px;">
+<canvas id="portfolioPerformanceBarChart"></canvas>
+</div>
 </div>
 <!-- END REDESIGNED CHART CONTAINER -->
-
-
-<div id="diversification-chart-container" class="chart-container" style="display: none;">
-             <div class="canvas-wrapper">
-                <canvas id="diversificationChart"></canvas>
-            </div>
-        </div>
-    </div>
-    
-    <div class="small-countdown" id="small-countdown-container">Next update: <span id="smallCountdown">90s</span></div>
-    
-    <!-- All Modals -->
-    <div id="editStockModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <button class="close-modal-btn" id="closeEditStockBtn">&times;</button>
-            <h3 class="modal-title">Edit Stock: <span id="edit-stock-symbol-display"></span></h3>
-            <div class="transaction-input-group">
-                <label for="edit-stock-symbol">Symbol:</label>
-                <input type="text" class="search-input" id="edit-stock-symbol" placeholder="Stock Symbol (e.g., AAPL)">
-            </div>
-            <div class="transaction-input-group">
-                <label for="edit-stock-name">Name:</label>
-                <input type="text" class="search-input" id="edit-stock-name" placeholder="Company Name">
-            </div>
-            <div class="transaction-input-group">
-                <label for="edit-stock-shares">Shares (Initial Buy):</label>
-                <input type="number" class="search-input" id="edit-stock-shares" placeholder="Total Shares (First Buy)">
-            </div>
-            <div class="transaction-input-group">
-                <label for="edit-stock-cost">Average Cost (Initial Buy):</label>
-                <input type="number" class="search-input" id="edit-stock-cost" placeholder="Average Cost Basis">
-            </div>
-            <div class="transaction-input-group">
-                <label for="edit-stock-date">Initial Buy Date (Initial Buy):</label>
-                <input type="date" class="search-input" id="edit-stock-date">
-            </div>
-            <div class="transaction-input-group">
-                <label for="edit-stock-platform">Platform:</label>
-                <input type="text" class="search-input" id="edit-stock-platform" placeholder="e.g., Fidelity, Robinhood">
-            </div>
-            <button class="add-btn" id="save-stock-edit-btn">Save All Details</button>
-        </div>
-    </div>
-    <div id="transactionModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <button class="close-modal-btn" onclick="window.stockTracker.closeTransactionModal()">&times;</button>
-            <h3 class="modal-title"><span id="modal-title-action">Add</span> Transaction for <span id="modal-symbol"></span></h3>
-            <div class="transaction-input-group">
-                <label for="modal-shares">Shares:</label>
-                <input type="number" class="search-input" id="modal-shares" placeholder="Number of shares" min="0">
-            </div>
-            <div class="transaction-input-group">
-                <label for="modal-price">Price:</label>
-                <input type="number" class="search-input" id="modal-price" placeholder="Price per share" min="0">
-            </div>
-            <div class="transaction-input-group">
-                <label for="modal-date">Transaction Date:</label>
-                <input type="date" class="search-input" id="modal-date" required>
-            </div>
-            <div class="transaction-input-group">
-                <label for="modal-platform">Platform:</label>
-                <select class="search-input" id="modal-platform"></select>
-            </div>
-            <div class="transaction-input-group">
-                <label for="modal-note">Note:</label>
-                <input type="text" class="search-input" id="modal-note" placeholder="Optional notes">
-            </div>
-             <div class="transaction-input-group" id="modal-dividend-fields" style="display: none;">
-                <label for="modal-dividend-amount">Dividend Amount (per share):</label>
-                <input type="number" class="search-input" id="modal-dividend-amount" placeholder="e.g., 0.50" min="0">
-            </div>
-            <button class="add-btn" id="modal-save-btn">Save Transaction</button>
-        </div>
-    </div>
-    <div id="settingsModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <button class="close-modal-btn" id="closeSettingsBtn">&times;</button>
-            <h3 class="modal-title">Settings</h3>
-            <div class="transaction-input-group">
-                <label for="modal-finnhub-key">Finnhub API Key:</label>
-                <input type="text" class="search-input" id="modal-finnhub-key" placeholder="Enter your Finnhub API Key">
-            </div>
-            <div class="transaction-input-group">
-                <label for="modal-alpha-vantage-key">Alpha Vantage API Key (Primary for Mutual Funds & History):</label>
-                <input type="text" class="search-input" id="modal-alpha-vantage-key" placeholder="Enter your Alpha Vantage API Key">
-            </div>
-
-            
-            <div class="transaction-input-group">
-                <label for="modal-fmp-key">FMP API Key (Used for News):</label>
-                <input type="text" class="search-input" id="modal-fmp-key" placeholder="Enter your Financial Modeling Prep API Key">
-            </div>
-            <div class="transaction-input-group">
-                <label for="modal-refresh-interval">Auto-Refresh Interval (seconds):</label>
-                <input type="number" class="search-input" id="modal-refresh-interval" placeholder="e.g., 60" min="10">
-            </div>
-             <div class="transaction-input-group">
-                <label for="enable-push-notifications-btn">Enable Push Notifications:</label>
-                <button class="add-btn" id="enable-push-notifications-btn">🔔 Enable Notifications</button>
-            </div>
-            <div class="transaction-input-group">
-                <label for="sign-out-other-sessions-btn">Security:</label>
-                <button class="add-btn btn-danger" id="sign-out-other-sessions-btn">🔒 Sign Out on All Other Devices</button>
-            </div>
-            <button class="add-btn" id="modal-save-settings-btn">Save Settings</button>
-        </div>
-    </div>
-    <div id="confirmModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <button class="close-modal-btn" id="closeConfirmModalBtn" onclick="window.stockTracker.closeConfirmModal()">&times;</button>
-            <h3 class="modal-title">Are you sure?</h3>
-            <p id="confirm-modal-text" style="text-align: center; margin-bottom: 20px;"></p>
-            <div class="modal-actions">
-                <button class="add-btn" id="confirm-modal-cancel-btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Cancel</button>
-                <button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: var(--color-negative);">Confirm Delete</button>
-            </div>
-        </div>
-    </div>
-    <div id="priceAlertModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <button class="close-modal-btn" onclick="window.stockTracker.closePriceAlertModal()">&times;</button>
-            <h3 class="modal-title">Set Price Alert for <span id="alert-symbol"></span></h3>
-            <!-- NEW: Alert Type Selection -->
-            <div class="transaction-input-group">
-                <label for="alert-type">Alert Type:</label>
-                <select id="alert-type">
-                    <option value="single">Single Price</option>
-                    <option value="range">Price Range</option>
-                </select>
-            </div>
-
-            <!-- NEW: Container for Single Price Inputs -->
-            <div id="single-price-inputs">
-                <div class="transaction-input-group">
-                    <label for="alert-condition">Condition:</label>
-                    <select id="alert-condition">
-                        <option value="above">Price is above</option>
-                        <option value="below">Price is below</option>
-                    </select>
-                </div>
-                <div class="transaction-input-group">
-                    <label for="alert-price">Target Price:</label>
-                    <input type="number" class="search-input" id="alert-price" placeholder="e.g., 150.50" min="0">
-                </div>
-            </div>
-
-            <!-- NEW: Container for Price Range Inputs -->
-            <div id="price-range-inputs">
-                <div class="transaction-input-group">
-                    <label for="alert-price-lower">Lower Bound:</label>
-                    <input type="number" class="search-input" id="alert-price-lower" placeholder="e.g., 100" min="0">
-                </div>
-                <span>-</span>
-                <div class="transaction-input-group">
-                    <label for="alert-price-upper">Upper Bound:</label>
-                    <input type="number" class="search-input" id="alert-price-upper" placeholder="e.g., 105.75" min="0">
-                </div>
-            </div>
-            
-            <button class="add-btn" id="save-alert-btn">Save Alert</button>
-        </div>
-    </div>
-    <div id="alertsSummaryModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <button class="close-modal-btn" id="closeAlertsSummaryBtn">&times;</button>
-            <h3 class="modal-title">📋 Active Price Alerts</h3>
-            <div id="alerts-summary-content" style="max-height: 300px; overflow-y: auto; text-align: left;">
-            </div>
-        </div>
-    </div>
-    <div id="listAllModal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <button class="close-modal-btn" id="closeListAllBtn">&times;</button>
-            <h3 class="modal-title">All Saved Symbols</h3>
-            <div id="list-all-content" style="max-height: 60vh; overflow-y: auto;"></div>
-        </div>
-    </div>
-
-    <!-- 
+<div class="chart-container" id="diversification-chart-container" style="display: none;">
+<div class="canvas-wrapper">
+<canvas id="diversificationChart"></canvas>
+</div>
+</div>
+</div>
+<div class="small-countdown" id="small-countdown-container">Next update: <span id="smallCountdown">90s</span></div>
+<!-- All Modals -->
+<div class="modal" id="editStockModal" style="display: none;">
+<div class="modal-content">
+<button class="close-modal-btn" id="closeEditStockBtn">×</button>
+<h3 class="modal-title">Edit Stock: <span id="edit-stock-symbol-display"></span></h3>
+<div class="transaction-input-group">
+<label for="edit-stock-symbol">Symbol:</label>
+<input class="search-input" id="edit-stock-symbol" placeholder="Stock Symbol (e.g., AAPL)" type="text"/>
+</div>
+<div class="transaction-input-group">
+<label for="edit-stock-name">Name:</label>
+<input class="search-input" id="edit-stock-name" placeholder="Company Name" type="text"/>
+</div>
+<div class="transaction-input-group">
+<label for="edit-stock-shares">Shares (Initial Buy):</label>
+<input class="search-input" id="edit-stock-shares" placeholder="Total Shares (First Buy)" type="number"/>
+</div>
+<div class="transaction-input-group">
+<label for="edit-stock-cost">Average Cost (Initial Buy):</label>
+<input class="search-input" id="edit-stock-cost" placeholder="Average Cost Basis" type="number"/>
+</div>
+<div class="transaction-input-group">
+<label for="edit-stock-date">Initial Buy Date (Initial Buy):</label>
+<input class="search-input" id="edit-stock-date" type="date"/>
+</div>
+<div class="transaction-input-group">
+<label for="edit-stock-platform">Platform:</label>
+<input class="search-input" id="edit-stock-platform" placeholder="e.g., Fidelity, Robinhood" type="text"/>
+</div>
+<button class="add-btn" id="save-stock-edit-btn">Save All Details</button>
+</div>
+</div>
+<div class="modal" id="transactionModal" style="display: none;">
+<div class="modal-content">
+<button class="close-modal-btn" onclick="window.stockTracker.closeTransactionModal()">×</button>
+<h3 class="modal-title"><span id="modal-title-action">Add</span> Transaction for <span id="modal-symbol"></span></h3>
+<div class="transaction-input-group">
+<label for="modal-shares">Shares:</label>
+<input class="search-input" id="modal-shares" min="0" placeholder="Number of shares" type="number"/>
+</div>
+<div class="transaction-input-group">
+<label for="modal-price">Price:</label>
+<input class="search-input" id="modal-price" min="0" placeholder="Price per share" type="number"/>
+</div>
+<div class="transaction-input-group">
+<label for="modal-date">Transaction Date:</label>
+<input class="search-input" id="modal-date" required="" type="date"/>
+</div>
+<div class="transaction-input-group">
+<label for="modal-platform">Platform:</label>
+<select class="search-input" id="modal-platform"></select>
+</div>
+<div class="transaction-input-group">
+<label for="modal-note">Note:</label>
+<input class="search-input" id="modal-note" placeholder="Optional notes" type="text"/>
+</div>
+<div class="transaction-input-group" id="modal-dividend-fields" style="display: none;">
+<label for="modal-dividend-amount">Dividend Amount (per share):</label>
+<input class="search-input" id="modal-dividend-amount" min="0" placeholder="e.g., 0.50" type="number"/>
+</div>
+<button class="add-btn" id="modal-save-btn">Save Transaction</button>
+</div>
+</div>
+<div class="modal" id="settingsModal" style="display: none;">
+<div class="modal-content">
+<button class="close-modal-btn" id="closeSettingsBtn">×</button>
+<h3 class="modal-title">Settings</h3>
+<div class="transaction-input-group">
+<label for="modal-finnhub-key">Finnhub API Key:</label>
+<input class="search-input" id="modal-finnhub-key" placeholder="Enter your Finnhub API Key" type="text"/>
+</div>
+<div class="transaction-input-group">
+<label for="modal-alpha-vantage-key">Alpha Vantage API Key (Primary for Mutual Funds &amp; History):</label>
+<input class="search-input" id="modal-alpha-vantage-key" placeholder="Enter your Alpha Vantage API Key" type="text"/>
+</div>
+<div class="transaction-input-group">
+<label for="modal-fmp-key">FMP API Key (Used for News):</label>
+<input class="search-input" id="modal-fmp-key" placeholder="Enter your Financial Modeling Prep API Key" type="text"/>
+</div>
+<div class="transaction-input-group">
+<label for="modal-refresh-interval">Auto-Refresh Interval (seconds):</label>
+<input class="search-input" id="modal-refresh-interval" min="10" placeholder="e.g., 60" type="number"/>
+</div>
+<div class="transaction-input-group">
+<label for="enable-push-notifications-btn">Enable Push Notifications:</label>
+<button class="add-btn" id="enable-push-notifications-btn">🔔 Enable Notifications</button>
+</div>
+<div class="transaction-input-group">
+<label for="sign-out-other-sessions-btn">Security:</label>
+<button class="add-btn btn-danger" id="sign-out-other-sessions-btn">🔒 Sign Out on All Other Devices</button>
+</div>
+<button class="add-btn" id="modal-save-settings-btn">Save Settings</button>
+</div>
+</div>
+<div class="modal" id="confirmModal" style="display: none;">
+<div class="modal-content">
+<button class="close-modal-btn" id="closeConfirmModalBtn" onclick="window.stockTracker.closeConfirmModal()">×</button>
+<h3 class="modal-title">Are you sure?</h3>
+<p id="confirm-modal-text" style="text-align: center; margin-bottom: 20px;"></p>
+<div class="modal-actions">
+<button class="add-btn" id="confirm-modal-cancel-btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Cancel</button>
+<button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: var(--color-negative);">Confirm Delete</button>
+</div>
+</div>
+</div>
+<div class="modal" id="priceAlertModal" style="display: none;">
+<div class="modal-content">
+<button class="close-modal-btn" onclick="window.stockTracker.closePriceAlertModal()">×</button>
+<h3 class="modal-title">Set Price Alert for <span id="alert-symbol"></span></h3>
+<!-- NEW: Alert Type Selection -->
+<div class="transaction-input-group">
+<label for="alert-type">Alert Type:</label>
+<select id="alert-type">
+<option value="single">Single Price</option>
+<option value="range">Price Range</option>
+</select>
+</div>
+<!-- NEW: Container for Single Price Inputs -->
+<div id="single-price-inputs">
+<div class="transaction-input-group">
+<label for="alert-condition">Condition:</label>
+<select id="alert-condition">
+<option value="above">Price is above</option>
+<option value="below">Price is below</option>
+</select>
+</div>
+<div class="transaction-input-group">
+<label for="alert-price">Target Price:</label>
+<input class="search-input" id="alert-price" min="0" placeholder="e.g., 150.50" type="number"/>
+</div>
+</div>
+<!-- NEW: Container for Price Range Inputs -->
+<div id="price-range-inputs">
+<div class="transaction-input-group">
+<label for="alert-price-lower">Lower Bound:</label>
+<input class="search-input" id="alert-price-lower" min="0" placeholder="e.g., 100" type="number"/>
+</div>
+<span>-</span>
+<div class="transaction-input-group">
+<label for="alert-price-upper">Upper Bound:</label>
+<input class="search-input" id="alert-price-upper" min="0" placeholder="e.g., 105.75" type="number"/>
+</div>
+</div>
+<button class="add-btn" id="save-alert-btn">Save Alert</button>
+</div>
+</div>
+<div class="modal" id="alertsSummaryModal" style="display: none;">
+<div class="modal-content">
+<button class="close-modal-btn" id="closeAlertsSummaryBtn">×</button>
+<h3 class="modal-title">📋 Active Price Alerts</h3>
+<div id="alerts-summary-content" style="max-height: 300px; overflow-y: auto; text-align: left;">
+</div>
+</div>
+</div>
+<div class="modal" id="listAllModal" style="display: none;">
+<div class="modal-content">
+<button class="close-modal-btn" id="closeListAllBtn">×</button>
+<h3 class="modal-title">All Saved Symbols</h3>
+<div id="list-all-content" style="max-height: 60vh; overflow-y: auto;"></div>
+</div>
+</div>
+<!-- 
     ==================================================================
     ==      YOUR JAVASCRIPT WITH IMPROVEMENTS                     ==
     ==================================================================
     This is your full JavaScript block with the Firebase library
     version updated for better performance and stability.
     -->
-    <script type="module">
+<script type="module">
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
                 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, browserPopupRedirectResolver, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
@@ -5786,10 +5920,6 @@ await this.saveData();
         window.stockTracker = new StockTracker();
 
     </script>
-
-
-
-
 <!-- START: Upgrades - TradingView style candles, improved line, events, summary, smoother switching -->
 <style>
 /* Modern UI tweaks for the chart area */
@@ -5829,13 +5959,11 @@ await this.saveData();
 .crosshair-line { position:absolute; pointer-events:none; z-index:10; }
 .event-icon { position:absolute; width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;box-shadow:0 4px 8px rgba(0,0,0,0.12);pointer-events:auto; }
 </style>
-
-<div id="chart-summary-panel" aria-hidden="false">
-  <div class="summary-pill" id="summary-daily">Today: $0.00</div>
-  <div class="summary-pill" id="summary-week">1W: 0.00%</div>
-  <div class="summary-pill" id="summary-month">1M: 0.00%</div>
+<div aria-hidden="false" id="chart-summary-panel">
+<div class="summary-pill" id="summary-daily">Today: $0.00</div>
+<div class="summary-pill" id="summary-week">1W: 0.00%</div>
+<div class="summary-pill" id="summary-month">1M: 0.00%</div>
 </div>
-
 <script>
 (function(){
   // utilities
@@ -6098,8 +6226,6 @@ await this.saveData();
 })();
 </script>
 <!-- END: Upgrades -->
-
-
 <!-- STEP3A: TODAY chart fix (Top Movers using current portfolio data) -->
 <script>
 (function() {
@@ -6317,8 +6443,6 @@ const container = this.elements.portfolioPerformanceContainer;
     }
 })();
 </script>
-
-
 <script>
 // STEP3A-TODAY-PORTFOLIO-PT-FIXED
 (function() {
@@ -6537,8 +6661,6 @@ const container = this.elements.portfolioPerformanceContainer;
   }
 })();
 </script>
-
-
 <script>
 // YAHOO-STYLE BOTTOM PORTFOLIO CHART (safe override)
 (function() {
@@ -6849,8 +6971,6 @@ const container = this.elements.portfolioPerformanceContainer;
   }
 })();
 </script>
-
-
 <script id="summary-panel-height-js">
 (function(){
   const panel = document.getElementById('chart-summary-panel');
@@ -6873,6 +6993,5 @@ const container = this.elements.portfolioPerformanceContainer;
   setTimeout(apply, 50);
 })();
 </script>
-
 </body>
 </html>
