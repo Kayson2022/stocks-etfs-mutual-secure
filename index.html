@@ -1195,39 +1195,110 @@
    Purpose: Modernize UI without touching app logic.
    ============================================================ */
 
-:root,
-body.dark-mode {
-  --bg-primary: #050712;
-  --bg-secondary: rgba(255, 255, 255, 0.045);
-  --bg-tertiary: rgba(255, 255, 255, 0.065);
+:root{
+  /* Light (Day) Theme — brighter + clearly different from Night */
+  --bg-primary: #f6fbff;
+  --bg-secondary: rgba(7, 20, 39, 0.055);
+  --bg-tertiary: rgba(7, 20, 39, 0.075);
 
-  --text-primary: #eaf2ff;
-  --text-secondary: rgba(234, 242, 255, 0.72);
+  --text-primary: #071427;
+  --text-secondary: rgba(7, 20, 39, 0.72);
 
-  --border-color: rgba(122, 162, 247, 0.18);
+  --border-color: rgba(7, 20, 39, 0.16);
 
-  /* Neon accents */
-  --accent-primary: #00d4ff;
-  --accent-primary-hover: #00ffc6;
+  /* Day accents (more sky/teal, less neon) */
+  --accent-primary: #00a3ff;
+  --accent-primary-hover: #0086d6;
 
-  --color-positive: #27f2a0;
-  --color-negative: #ff4d6d;
+  --color-positive: #0aa86b;
+  --color-negative: #d81b60;
 
   /* Chart fill colors (JS expects rgb ints) */
-  --chart-positive-fill-color-rgb: 39, 242, 160;
-  --chart-negative-fill-color-rgb: 255, 77, 109;
+  --chart-positive-fill-color-rgb: 10, 168, 107;
+  --chart-negative-fill-color-rgb: 216, 27, 96;
 }
 
-/* Default to neon (dark) on first load */
-body {
+body.dark-mode{
+  /* Night Theme — neon */
+
+  --bg-primary: #050712;
+    --bg-secondary: rgba(255, 255, 255, 0.045);
+    --bg-tertiary: rgba(255, 255, 255, 0.065);
+  
+    --text-primary: #eaf2ff;
+    --text-secondary: rgba(234, 242, 255, 0.72);
+  
+    --border-color: rgba(122, 162, 247, 0.18);
+  
+    /* Neon accents */
+    --accent-primary: #00d4ff;
+    --accent-primary-hover: #00ffc6;
+  
+    --color-positive: #27f2a0;
+    --color-negative: #ff4d6d;
+  
+    /* Chart fill colors (JS expects rgb ints) */
+    --chart-positive-fill-color-rgb: 39, 242, 160;
+    --chart-negative-fill-color-rgb: 255, 77, 109;
+}
+
+/* Backgrounds */
+body{
   font-family: var(--font-family);
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  min-height: 100vh;
+}
+
+body.dark-mode{
   background:
     radial-gradient(1200px 900px at 15% 0%, rgba(0, 212, 255, 0.16), transparent 60%),
     radial-gradient(900px 700px at 85% 10%, rgba(0, 255, 198, 0.12), transparent 55%),
     radial-gradient(900px 700px at 45% 120%, rgba(167, 139, 250, 0.10), transparent 60%),
-    linear-gradient(180deg, #040611 0%, #060a14 45%, #040611 100%);
-  color: var(--text-primary);
+    linear-gradient(180deg, #040611 0%, #060a14 45%, #070b1a 100%);
+  background-attachment: fixed;
 }
+
+body:not(.dark-mode){
+  background:
+    radial-gradient(1200px 900px at 18% 0%, rgba(0, 163, 255, 0.18), transparent 62%),
+    radial-gradient(900px 700px at 86% 10%, rgba(0, 214, 182, 0.14), transparent 58%),
+    radial-gradient(900px 700px at 45% 120%, rgba(167, 139, 250, 0.10), transparent 60%),
+    linear-gradient(180deg, #f6fbff 0%, #eef7ff 55%, #f9fbff 100%);
+  background-attachment: fixed;
+}
+
+/* Light mode polish: brighter glass + softer glow */
+body:not(.dark-mode) .card,
+body:not(.dark-mode) .stock-card,
+body:not(.dark-mode) .modal-content,
+body:not(.dark-mode) .panel,
+body:not(.dark-mode) #portfolio-summary,
+body:not(.dark-mode) #portfolio-summary .summary-total,
+body:not(.dark-mode) #portfolio-summary .summary-box{
+  background: rgba(255,255,255,0.72) !important;
+  border-color: rgba(7,20,39,0.12) !important;
+  box-shadow: 0 12px 34px rgba(7,20,39,0.10) !important;
+}
+
+body:not(.dark-mode) #chart-summary-panel{
+  background: rgba(255,255,255,0.70) !important;
+  border-color: rgba(0,163,255,0.24) !important;
+  box-shadow:
+    0 14px 38px rgba(0,163,255,0.14),
+    0 12px 28px rgba(7,20,39,0.12) !important;
+}
+
+body:not(.dark-mode) #chart-summary-panel .summary-pill{
+  background: rgba(255,255,255,0.85) !important;
+  border-color: rgba(0,163,255,0.28) !important;
+  color: var(--text-primary) !important;
+  box-shadow:
+    0 0 0 1px rgba(0,163,255,0.08) inset,
+    0 0 18px rgba(0,163,255,0.16) !important;
+}
+
+
 
 /* Global surfaces */
 .header,
