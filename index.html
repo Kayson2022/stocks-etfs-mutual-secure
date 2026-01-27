@@ -237,19 +237,23 @@
             cursor: not-allowed;
             transform: none;
         }
-        #sign-out-btn {
+        #sign-out-btn, #sign-out-other-btn {
             padding: 8px 16px;
             font-size: 0.9rem;
             background-color: var(--bg-tertiary);
             color: var(--text-secondary);
             border: 1px solid var(--border-color);
         }
-        #sign-out-btn:hover {
+        #sign-out-btn:hover, #sign-out-other-btn:hover {
              background-color: var(--border-color);
              color: var(--text-primary);
         }
-
-        /* --- Tabs --- */
+        /* Make the "other devices" action slightly more prominent */
+        #sign-out-other-btn {
+            margin-left: 8px;
+            border-style: dashed;
+        }
+/* --- Tabs --- */
         .tabs {
             display: flex;
             gap: 8px;
@@ -1968,7 +1972,7 @@ body{
 <div id="user-info" style="display: none;">
 <span id="user-name"></span>
 <button id="sign-out-btn">Sign Out</button>
-<button class="add-btn btn-danger" id="sign-out-other-sessions-top-btn" title="Signs out all other devices, keeps this one">🔒 Sign Out Other Devices</button>
+<button id="sign-out-other-btn" title="Signs out other devices but keeps this session active">Sign Out Other Devices</button>
 </div>
 </div>
 </header>
@@ -3268,7 +3272,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     userInfo: document.getElementById('user-info'),
                     userName: document.getElementById('user-name'),
                     signOutBtn: document.getElementById('sign-out-btn'),
-                    signOutOtherSessionsTopBtn: document.getElementById('sign-out-other-sessions-top-btn'),
+                    signOutOtherBtn: document.getElementById('sign-out-other-btn'),
                     stocksGrid: document.getElementById('stocksGrid'), loadingDiv: document.getElementById('loading'), errorDiv: document.getElementById('error'), successDiv: document.getElementById('success'),
                     stockInput: document.getElementById('stockInput'), addBtn: document.getElementById('addBtn'),
                     liveUpdateBtn: document.getElementById('liveUpdateBtn'), toggleLiveUpdateBtn: document.getElementById('toggleLiveUpdateBtn'), clearAllBtn: document.getElementById('clearAllBtn'),
@@ -3363,7 +3367,9 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             setupEventListeners() {
                 if (this.elements.googleSignInBtn) this.elements.googleSignInBtn.addEventListener('click', () => this.signIn());
                 if (this.elements.signOutBtn) this.elements.signOutBtn.addEventListener('click', () => this.signOut());
-                if (this.elements.addBtn) this.elements.addBtn.addEventListener('click', () => this.addItemFromInput('stock'));
+                
+                if (this.elements.signOutOtherBtn) this.elements.signOutOtherBtn.addEventListener('click', () => this.signOutOtherSessions());
+if (this.elements.addBtn) this.elements.addBtn.addEventListener('click', () => this.addItemFromInput('stock'));
                 if (this.elements.stockInput) this.elements.stockInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('stock'); });
                 if (this.elements.liveUpdateBtn) this.elements.liveUpdateBtn.addEventListener('click', () => this.refreshCurrentTab());
                 if (this.elements.clearAllBtn) this.elements.clearAllBtn.addEventListener('click', () => this.clearAllItems('stock'));
@@ -3384,7 +3390,6 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 if (this.elements.modalSaveSettingsBtn) this.elements.modalSaveSettingsBtn.addEventListener('click', () => this.saveSettings());
                 if (this.elements.enablePushNotificationsBtn) this.elements.enablePushNotificationsBtn.addEventListener('click', () => this.enablePushNotifications());
                 if (this.elements.signOutOtherSessionsBtn) this.elements.signOutOtherSessionsBtn.addEventListener('click', () => this.signOutOtherSessions());
-                if (this.elements.signOutOtherSessionsTopBtn) this.elements.signOutOtherSessionsTopBtn.addEventListener('click', () => this.signOutOtherSessions());
                 if (this.elements.confirmModalCancelBtn) this.elements.confirmModalCancelBtn.addEventListener('click', () => this.closeConfirmModal(true));
                 if (this.elements.confirmModalConfirmBtn) this.elements.confirmModalConfirmBtn.addEventListener('click', () => this.handleConfirmAction());
                 if (this.elements.listAllBtn) this.elements.listAllBtn.addEventListener('click', () => this.openListAllModal());
@@ -6203,45 +6208,47 @@ await this.saveData();
                 const sessionDocRef = doc(db, "sessions", this.userId);
 
                 // IMPORTANT:
-                // We do NOT enforce "single active session" on login anymore.
-                // The session doc is only used for the "Sign Out Other Devices" feature.
+                // We do NOT overwrite activeSession on every login anymore (that creates "single-session" behavior and race-condition sign-outs).
+                // We only keep a lightweight heartbeat and rely on forceSignOut + activeSession when the user explicitly clicks "Sign Out Other Devices".
                 try {
                     setDoc(sessionDocRef, {
                         lastLogin: serverTimestamp(),
-                        lastSeen: serverTimestamp(),
                         userId: this.userId
                     }, { merge: true }).catch(err => console.error("Error writing session doc:", err));
                 } catch (err) {
                     console.error("Error setting initial session doc (check rules):", err);
                 }
 
-                // Baseline the current forceSignOut value so an OLD value doesn't immediately sign this session out.
-                if (typeof this._forceSignOutBaseline === 'undefined') this._forceSignOutBaseline = null;
+                // Track the latest forceSignOut we've observed so existing values don't instantly boot this session.
+                this._sessionListenerInitialized = false;
+                this._lastForceSignOutSeen = 0;
 
-                // Listen for explicit remote sign-out events (triggered by signOutOtherSessions()).
                 try {
-                    this.sessionUnsubscribe = onSnapshot(sessionDocRef, (snap) => {
-                        if (!snap.exists()) return;
+                    this.sessionUnsubscribe = onSnapshot(sessionDocRef, (docSnap) => {
+                        if (!docSnap.exists()) return;
 
-                        const data = snap.data() || {};
-                        const force = Number(data.forceSignOut || 0);
-                        const activeSession = data.activeSession || null;
+                        const data = docSnap.data() || {};
+                        const force = typeof data.forceSignOut === 'number' ? data.forceSignOut : 0;
+                        const active = data.activeSession || null;
 
-                        // First snapshot: set baseline only.
-                        if (this._forceSignOutBaseline === null) {
-                            this._forceSignOutBaseline = force;
+                        // First snapshot: just prime our baseline and do nothing.
+                        if (!this._sessionListenerInitialized) {
+                            this._lastForceSignOutSeen = force;
+                            this._sessionListenerInitialized = true;
                             return;
                         }
 
-                        // Only sign out when forceSignOut increases AND this session is NOT the chosen activeSession.
-                        if (force > this._forceSignOutBaseline && activeSession && activeSession !== this.sessionId) {
+                        // Only sign out if:
+                        // 1) forceSignOut changed, AND
+                        // 2) this session is NOT the activeSession chosen by the user action
+                        if (force > this._lastForceSignOutSeen && active && active !== this.sessionId) {
                             this.showError("You have been signed out because you chose to sign out other devices.");
                             this.signOut();
                             return;
                         }
 
-                        // Update baseline so we don't repeatedly trigger.
-                        this._forceSignOutBaseline = force;
+                        // Advance baseline
+                        this._lastForceSignOutSeen = force;
                     }, (error) => {
                         console.error("Error listening to session document:", error);
                     });
@@ -6249,13 +6256,17 @@ await this.saveData();
                     console.error("Error setting up session listener (check rules):", err);
                 }
             }
+
             async signOutOtherSessions() {
                 if (!this.userId) return;
                  this.openConfirmModal("Are you sure you want to sign out all other devices? This session will remain active.", async () => {
                     const sessionDocRef = doc(db, "sessions", this.userId);
                     // Update the activeSession ID to the current one, which invalidates all others (as they are watching for a mismatch)
                     try {
-                        await setDoc(sessionDocRef, { activeSession: this.sessionId, forceSignOut: Date.now() }, { merge: true });
+                        const now = Date.now();
+                        await setDoc(sessionDocRef, { activeSession: this.sessionId, forceSignOut: now }, { merge: true });
+                        // Prevent this session from reacting to its own write
+                        this._lastForceSignOutSeen = now;
                         this.showSuccess("All other sessions have been signed out.");
                     } catch (err) {
                          this.showError(`Failed to sign out other sessions. Check Firebase permissions.`);
