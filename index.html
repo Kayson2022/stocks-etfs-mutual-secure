@@ -248,7 +248,30 @@
              background-color: var(--border-color);
              color: var(--text-primary);
         }
-        /* Make the "other devices" action slightly more prominent */
+        
+        /* Session conflict / grace banner */
+        #session-conflict-banner {
+            margin: 10px auto 0 auto;
+            max-width: 1400px;
+            padding: 0 16px;
+        }
+        .session-conflict-inner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: rgba(231, 76, 60, 0.10);
+            border: 1px solid rgba(231, 76, 60, 0.35);
+            color: var(--text-primary);
+            border-radius: var(--radius-md);
+            padding: 10px 12px;
+            box-shadow: var(--shadow-sm);
+        }
+        body.dark-mode .session-conflict-inner {
+            background: rgba(231, 76, 60, 0.12);
+            border: 1px solid rgba(231, 76, 60, 0.40);
+        }
+/* Make the "other devices" action slightly more prominent */
         #sign-out-other-btn {
             margin-left: 8px;
             border-style: dashed;
@@ -1977,6 +2000,12 @@ body{
 </div>
 </header>
 <div id="header-countdown">Next update in: <span id="countdown">90</span>s</div>
+<div id="session-conflict-banner" style="display:none;">
+  <div class="session-conflict-inner">
+    <span>⚠️ Another device is already signed in. You have <b><span id="session-grace-countdown">10</span>s</b> to click <b>“Sign Out Other Devices”</b> to keep this session.</span>
+  </div>
+</div>
+
 <div class="tabs">
 <button class="tab active" onclick="window.stockTracker.switchTab('stocks')">📊 Stocks &amp; Portfolio</button>
 <button class="tab" onclick="window.stockTracker.switchTab('funds')">🏛️ Mutual Funds</button>
@@ -3157,6 +3186,14 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                  onAuthStateChanged(auth, async user => {
                     if (user) {
                         this.userId = user.uid;
+                        // Session grace window: allow this new session to stay signed in briefly even if another device is active.
+                        this._loginAt = Date.now();
+                        this._graceDeadline = null;
+                        this._graceTimer = null;
+                        this._graceInterval = null;
+                        this._activeSessionCached = null;
+                        this._claimedThisSession = false;
+
                         if(this.elements.loginContainer) this.elements.loginContainer.style.display = 'none';
                         if(this.elements.appContainer) this.elements.appContainer.style.display = 'block';
                         if(this.elements.userInfo) this.elements.userInfo.style.display = 'flex';
@@ -3273,6 +3310,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     userName: document.getElementById('user-name'),
                     signOutBtn: document.getElementById('sign-out-btn'),
                     signOutOtherBtn: document.getElementById('sign-out-other-btn'),
+                    sessionConflictBanner: document.getElementById('session-conflict-banner'),
+                    sessionGraceCountdown: document.getElementById('session-grace-countdown'),
                     stocksGrid: document.getElementById('stocksGrid'), loadingDiv: document.getElementById('loading'), errorDiv: document.getElementById('error'), successDiv: document.getElementById('success'),
                     stockInput: document.getElementById('stockInput'), addBtn: document.getElementById('addBtn'),
                     liveUpdateBtn: document.getElementById('liveUpdateBtn'), toggleLiveUpdateBtn: document.getElementById('toggleLiveUpdateBtn'), clearAllBtn: document.getElementById('clearAllBtn'),
@@ -6207,9 +6246,7 @@ await this.saveData();
                 if (!this.userId) return;
                 const sessionDocRef = doc(db, "sessions", this.userId);
 
-                // IMPORTANT:
-                // We do NOT overwrite activeSession on every login anymore (that creates "single-session" behavior and race-condition sign-outs).
-                // We only keep a lightweight heartbeat and rely on forceSignOut + activeSession when the user explicitly clicks "Sign Out Other Devices".
+                // Heartbeat / presence (does NOT claim activeSession automatically)
                 try {
                     setDoc(sessionDocRef, {
                         lastLogin: serverTimestamp(),
@@ -6219,9 +6256,72 @@ await this.saveData();
                     console.error("Error setting initial session doc (check rules):", err);
                 }
 
-                // Track the latest forceSignOut we've observed so existing values don't instantly boot this session.
+                // Grace window settings: give a new login 10 seconds to take over by clicking "Sign Out Other Devices"
+                const GRACE_MS = 10_000;
+
+                // Reset per-listener state
                 this._sessionListenerInitialized = false;
                 this._lastForceSignOutSeen = 0;
+                this._activeSessionCached = null;
+                this._claimedThisSession = false;
+
+                const showConflictBanner = () => {
+                    if (!this.elements || !this.elements.sessionConflictBanner) return;
+                    this.elements.sessionConflictBanner.style.display = 'block';
+                };
+
+                const hideConflictBanner = () => {
+                    if (this.elements && this.elements.sessionConflictBanner) {
+                        this.elements.sessionConflictBanner.style.display = 'none';
+                    }
+                    if (this._graceInterval) {
+                        clearInterval(this._graceInterval);
+                        this._graceInterval = null;
+                    }
+                };
+
+                const clearGrace = () => {
+                    if (this._graceTimer) {
+                        clearTimeout(this._graceTimer);
+                        this._graceTimer = null;
+                    }
+                    this._graceDeadline = null;
+                    hideConflictBanner();
+                };
+
+                const startGraceCountdown = () => {
+                    // Already counting down
+                    if (this._graceTimer || this._graceDeadline) return;
+
+                    this._graceDeadline = Date.now() + GRACE_MS;
+                    showConflictBanner();
+
+                    const tick = () => {
+                        if (!this.elements || !this.elements.sessionGraceCountdown) return;
+                        const remainMs = Math.max(0, (this._graceDeadline || 0) - Date.now());
+                        const remainSec = Math.ceil(remainMs / 1000);
+                        this.elements.sessionGraceCountdown.textContent = String(remainSec);
+                    };
+
+                    tick();
+                    this._graceInterval = setInterval(tick, 250);
+
+                    this._graceTimer = setTimeout(() => {
+                        this._graceTimer = null;
+
+                        const active = this._activeSessionCached;
+
+                        // If we became active (or user claimed), do nothing.
+                        if (this._claimedThisSession || !active || active === this.sessionId) {
+                            clearGrace();
+                            return;
+                        }
+
+                        clearGrace();
+                        this.showError("Another device session is active. To continue here, click “Sign Out Other Devices” within 10 seconds after signing in.");
+                        this.signOut();
+                    }, GRACE_MS);
+                };
 
                 try {
                     this.sessionUnsubscribe = onSnapshot(sessionDocRef, (docSnap) => {
@@ -6231,20 +6331,39 @@ await this.saveData();
                         const force = typeof data.forceSignOut === 'number' ? data.forceSignOut : 0;
                         const active = data.activeSession || null;
 
-                        // First snapshot: just prime our baseline and do nothing.
+                        this._activeSessionCached = active;
+
+                        // First snapshot: prime baseline so existing forceSignOut doesn't instantly boot this session.
                         if (!this._sessionListenerInitialized) {
                             this._lastForceSignOutSeen = force;
                             this._sessionListenerInitialized = true;
+
+                            // If no activeSession has been set yet, claim this session as active.
+                            if (!active) {
+                                setDoc(sessionDocRef, { activeSession: this.sessionId }, { merge: true })
+                                    .catch(err => console.error("Error claiming initial activeSession:", err));
+                                clearGrace();
+                            } else if (active !== this.sessionId) {
+                                // Another device is active; start 10-second grace window for this new login.
+                                startGraceCountdown();
+                            } else {
+                                clearGrace();
+                            }
                             return;
                         }
 
-                        // Only sign out if:
-                        // 1) forceSignOut changed, AND
-                        // 2) this session is NOT the activeSession chosen by the user action
+                        // If another device explicitly chose to "sign out other devices" and this session is NOT active, sign out immediately.
                         if (force > this._lastForceSignOutSeen && active && active !== this.sessionId) {
-                            this.showError("You have been signed out because you chose to sign out other devices.");
+                            this.showError("You have been signed out because another device signed out other sessions.");
                             this.signOut();
                             return;
+                        }
+
+                        // If activeSession indicates we're not active, start/continue grace.
+                        if (active && active !== this.sessionId) {
+                            startGraceCountdown();
+                        } else {
+                            clearGrace();
                         }
 
                         // Advance baseline
@@ -6257,7 +6376,7 @@ await this.saveData();
                 }
             }
 
-            async signOutOtherSessions() {
+async signOutOtherSessions() {
                 if (!this.userId) return;
                  this.openConfirmModal("Are you sure you want to sign out all other devices? This session will remain active.", async () => {
                     const sessionDocRef = doc(db, "sessions", this.userId);
@@ -6265,6 +6384,13 @@ await this.saveData();
                     try {
                         const now = Date.now();
                         await setDoc(sessionDocRef, { activeSession: this.sessionId, forceSignOut: now }, { merge: true });
+                        // Mark this session as claimed and stop any pending grace sign-out
+                        this._claimedThisSession = true;
+                        if (this._graceTimer) { clearTimeout(this._graceTimer); this._graceTimer = null; }
+                        if (this._graceInterval) { clearInterval(this._graceInterval); this._graceInterval = null; }
+                        this._graceDeadline = null;
+                        if (this.elements && this.elements.sessionConflictBanner) this.elements.sessionConflictBanner.style.display = 'none';
+
                         // Prevent this session from reacting to its own write
                         this._lastForceSignOutSeen = now;
                         this.showSuccess("All other sessions have been signed out.");
