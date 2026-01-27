@@ -1,6 +1,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -1967,6 +1968,7 @@ body{
 <div id="user-info" style="display: none;">
 <span id="user-name"></span>
 <button id="sign-out-btn">Sign Out</button>
+<button class="add-btn btn-danger" id="sign-out-other-sessions-top-btn" title="Signs out all other devices, keeps this one">🔒 Sign Out Other Devices</button>
 </div>
 </div>
 </header>
@@ -3266,6 +3268,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     userInfo: document.getElementById('user-info'),
                     userName: document.getElementById('user-name'),
                     signOutBtn: document.getElementById('sign-out-btn'),
+                    signOutOtherSessionsTopBtn: document.getElementById('sign-out-other-sessions-top-btn'),
                     stocksGrid: document.getElementById('stocksGrid'), loadingDiv: document.getElementById('loading'), errorDiv: document.getElementById('error'), successDiv: document.getElementById('success'),
                     stockInput: document.getElementById('stockInput'), addBtn: document.getElementById('addBtn'),
                     liveUpdateBtn: document.getElementById('liveUpdateBtn'), toggleLiveUpdateBtn: document.getElementById('toggleLiveUpdateBtn'), clearAllBtn: document.getElementById('clearAllBtn'),
@@ -3381,6 +3384,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 if (this.elements.modalSaveSettingsBtn) this.elements.modalSaveSettingsBtn.addEventListener('click', () => this.saveSettings());
                 if (this.elements.enablePushNotificationsBtn) this.elements.enablePushNotificationsBtn.addEventListener('click', () => this.enablePushNotifications());
                 if (this.elements.signOutOtherSessionsBtn) this.elements.signOutOtherSessionsBtn.addEventListener('click', () => this.signOutOtherSessions());
+                if (this.elements.signOutOtherSessionsTopBtn) this.elements.signOutOtherSessionsTopBtn.addEventListener('click', () => this.signOutOtherSessions());
                 if (this.elements.confirmModalCancelBtn) this.elements.confirmModalCancelBtn.addEventListener('click', () => this.closeConfirmModal(true));
                 if (this.elements.confirmModalConfirmBtn) this.elements.confirmModalConfirmBtn.addEventListener('click', () => this.handleConfirmAction());
                 if (this.elements.listAllBtn) this.elements.listAllBtn.addEventListener('click', () => this.openListAllModal());
@@ -6197,26 +6201,47 @@ await this.saveData();
             setupSessionListener() {
                 if (!this.userId) return;
                 const sessionDocRef = doc(db, "sessions", this.userId);
-                
-                // Set the current session ID on login (used for multi-device sign-out)
+
+                // IMPORTANT:
+                // We do NOT enforce "single active session" on login anymore.
+                // The session doc is only used for the "Sign Out Other Devices" feature.
                 try {
-                    setDoc(sessionDocRef, { 
+                    setDoc(sessionDocRef, {
                         lastLogin: serverTimestamp(),
-                        activeSession: this.sessionId,
+                        lastSeen: serverTimestamp(),
                         userId: this.userId
-                    }, { merge: true }).catch(err => console.error("Error writing session ID:", err));
+                    }, { merge: true }).catch(err => console.error("Error writing session doc:", err));
                 } catch (err) {
                     console.error("Error setting initial session doc (check rules):", err);
                 }
 
-                // Listen for changes to the activeSession field
+                // Baseline the current forceSignOut value so an OLD value doesn't immediately sign this session out.
+                if (typeof this._forceSignOutBaseline === 'undefined') this._forceSignOutBaseline = null;
+
+                // Listen for explicit remote sign-out events (triggered by signOutOtherSessions()).
                 try {
-                    this.sessionUnsubscribe = onSnapshot(sessionDocRef, (doc) => {
-                        if (doc.exists() && doc.data().activeSession !== this.sessionId) {
-                            // A different session has become the 'active' one (i.e., this session was signed out remotely)
-                            this.showError("You have been signed out because a new session was started or an admin action was taken.");
-                            this.signOut();
+                    this.sessionUnsubscribe = onSnapshot(sessionDocRef, (snap) => {
+                        if (!snap.exists()) return;
+
+                        const data = snap.data() || {};
+                        const force = Number(data.forceSignOut || 0);
+                        const activeSession = data.activeSession || null;
+
+                        // First snapshot: set baseline only.
+                        if (this._forceSignOutBaseline === null) {
+                            this._forceSignOutBaseline = force;
+                            return;
                         }
+
+                        // Only sign out when forceSignOut increases AND this session is NOT the chosen activeSession.
+                        if (force > this._forceSignOutBaseline && activeSession && activeSession !== this.sessionId) {
+                            this.showError("You have been signed out because you chose to sign out other devices.");
+                            this.signOut();
+                            return;
+                        }
+
+                        // Update baseline so we don't repeatedly trigger.
+                        this._forceSignOutBaseline = force;
                     }, (error) => {
                         console.error("Error listening to session document:", error);
                     });
