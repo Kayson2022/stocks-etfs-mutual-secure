@@ -6240,27 +6240,75 @@ await this.saveData();
             // --- Session/Security Logic ---
             setupSessionListener() {
                 if (!this.userId) return;
+
                 const sessionDocRef = doc(db, "sessions", this.userId);
-                
-                // Set the current session ID on login (used for multi-device sign-out)
+                if (!this._session) this._session = {};
+
+                // IMPORTANT:
+                // We do NOT auto-overwrite activeSession on login anymore.
+                // We only claim if there is no activeSession, OR if the user explicitly clicks
+                // "Sign Out Other Devices" during the 10s grace window.
                 try {
-                    setDoc(sessionDocRef, { 
+                    setDoc(sessionDocRef, {
                         lastLogin: serverTimestamp(),
-                        activeSession: this.sessionId,
-                        userId: this.userId
-                    }, { merge: true }).catch(err => console.error("Error writing session ID:", err));
+                        userId: this.userId,
+                        lastSeenSession: this.sessionId
+                    }, { merge: true }).catch(err => console.error("Error writing session metadata:", err));
                 } catch (err) {
                     console.error("Error setting initial session doc (check rules):", err);
                 }
 
-                // Listen for changes to the activeSession field
+                // If no active session exists, claim it automatically (first login / cleared doc).
+                // Use a transaction so two simultaneous logins don't stomp each other.
+                this.ensureActiveSessionIfNone(sessionDocRef).catch(err => {
+                    console.error("Error ensuring active session:", err);
+                });
+
+                // Listen for changes to activeSession (single-session enforcement)
                 try {
-                    this.sessionUnsubscribe = onSnapshot(sessionDocRef, (doc) => {
-                        if (doc.exists() && doc.data().activeSession !== this.sessionId) {
-                            // A different session has become the 'active' one (i.e., this session was signed out remotely)
-                            this.showError("You have been signed out because a new session was started or an admin action was taken.");
-                            this.signOut();
+                    this.sessionUnsubscribe = onSnapshot(sessionDocRef, (snap) => {
+                        if (!snap.exists()) return;
+
+                        const data = snap.data() || {};
+                        const active = data.activeSession || null;
+                        const now = Date.now();
+
+                        if (!this._session) this._session = {};
+
+                        // If we're temporarily suppressing kicks (e.g., while claiming), only clear grace if we became active.
+                        if (this._session.suppressKickUntil && now < this._session.suppressKickUntil) {
+                            if (active === this.sessionId) this._clearGraceWindow();
+                            return;
                         }
+
+                        // If we are the active session, clear any grace UI/timers and stay signed in.
+                        if (active === this.sessionId) {
+                            this._clearGraceWindow();
+                            return;
+                        }
+
+                        // If there is no active session, try to claim it silently.
+                        if (!active) {
+                            this.ensureActiveSessionIfNone(sessionDocRef).catch(() => {});
+                            return;
+                        }
+
+                        // At this point, some OTHER session is active.
+
+                        // If we just claimed, tolerate brief "stale write" conflicts by re-claiming once.
+                        // This prevents the common case where another tab has a pending offline write that momentarily flips activeSession back.
+                        if (this._session.claimedAt && (now - this._session.claimedAt) < 15000 && !this._session.reclaimAttempted) {
+                            this._session.reclaimAttempted = true;
+                            this._session.suppressKickUntil = now + 5000;
+                            this.claimSessionAndSignOutOthers({ showToast: false });
+                            return;
+                        }
+
+                        // If we're already in a grace window, let the timers decide whether to kick.
+                        if (this._session.graceActive) return;
+
+                        // Start the 10-second grace window for THIS new session.
+                        this._startGraceWindow(active);
                     }, (error) => {
                         console.error("Error listening to session document:", error);
                     });
@@ -6268,9 +6316,98 @@ await this.saveData();
                     console.error("Error setting up session listener (check rules):", err);
                 }
             }
+
+            async ensureActiveSessionIfNone(sessionDocRef) {
+                if (!this.userId) return;
+
+                const now = Date.now();
+                try {
+                    await runTransaction(db, async (tx) => {
+                        const snap = await tx.get(sessionDocRef);
+                        const data = snap.exists() ? (snap.data() || {}) : {};
+                        if (!data.activeSession) {
+                            tx.set(sessionDocRef, {
+                                userId: this.userId,
+                                activeSession: this.sessionId,
+                                activeSince: now
+                            }, { merge: true });
+                        }
+                    });
+
+                    if (!this._session) this._session = {};
+                    // Avoid reacting to our own claim write during propagation.
+                    this._session.suppressKickUntil = Date.now() + 3000;
+                } catch (err) {
+                    console.error("ensureActiveSessionIfNone failed:", err);
+                }
+            }
+
+            _startGraceWindow(currentActiveSessionId) {
+                if (!this._session) this._session = {};
+                this._session.graceActive = true;
+                this._session.graceDeadline = Date.now() + 10000;
+
+                // Show banner with countdown (user can click header "Sign Out Other Devices" any time)
+                const banner = this.elements.sessionGraceBanner;
+                if (banner) {
+                    banner.style.display = 'block';
+                    banner.innerHTML = `
+                        <div class="row">
+                          <div>
+                            <b>Another device is already signed in.</b><br/>
+                            You have <span class="count" id="session-grace-count">10</span>s to click <b>Sign Out Other Devices</b> to keep this session.
+                          </div>
+                          <div class="actions">
+                            <button class="btn btn-danger" id="session-grace-claim-btn" type="button">Sign Out Other Devices</button>
+                          </div>
+                        </div>
+                    `;
+
+                    // Wire the banner button to the same fast action.
+                    const claimBtn = banner.querySelector('#session-grace-claim-btn');
+                    if (claimBtn) {
+                        claimBtn.addEventListener('click', () => this.signOutOtherSessionsFast());
+                    }
+                }
+
+                // Update countdown UI
+                if (this._session.countdownTimer) clearInterval(this._session.countdownTimer);
+                this._session.countdownTimer = setInterval(() => {
+                    const leftMs = (this._session.graceDeadline || 0) - Date.now();
+                    const left = Math.max(0, Math.ceil(leftMs / 1000));
+                    const el = document.getElementById('session-grace-count');
+                    if (el) el.textContent = String(left);
+                    if (left <= 0) {
+                        clearInterval(this._session.countdownTimer);
+                        this._session.countdownTimer = null;
+                    }
+                }, 200);
+
+                // Kick after 10 seconds if we are still not the active session.
+                if (this._session.kickTimer) clearTimeout(this._session.kickTimer);
+                this._session.kickTimer = setTimeout(() => {
+                    this._session.kickTimer = null;
+                    // If user claimed during the window, _clearGraceWindow() will have cleared graceActive.
+                    if (this._session && this._session.graceActive) {
+                        this._session.graceActive = false;
+                        if (this.elements.sessionGraceBanner) this.elements.sessionGraceBanner.style.display = 'none';
+                        this.showError("You were signed out because another device already had an active session.");
+                        this.signOut();
+                    }
+                }, 10000);
+            }
+
+            _clearGraceWindow() {
+                if (!this._session) this._session = {};
+                this._session.graceActive = false;
+                if (this._session.kickTimer) { clearTimeout(this._session.kickTimer); this._session.kickTimer = null; }
+                if (this._session.countdownTimer) { clearInterval(this._session.countdownTimer); this._session.countdownTimer = null; }
+                if (this.elements.sessionGraceBanner) this.elements.sessionGraceBanner.style.display = 'none';
+            }
+
             async signOutOtherSessionsFast() {
-                // Fast path: no confirm dialog so user can click immediately during the 10s grace window.
-                this.claimSessionAndSignOutOthers({ showToast: true });
+                // Fast path: user can click immediately during the grace window.
+                await this.claimSessionAndSignOutOthers({ showToast: true });
             }
 
             async claimSessionAndSignOutOthers({ showToast = true } = {}) {
@@ -6278,46 +6415,42 @@ await this.saveData();
                 const sessionDocRef = doc(db, "sessions", this.userId);
 
                 // Stop any grace kick timers immediately so we can't be kicked while claiming.
-                if (this._session && this._session.kickTimer) { clearTimeout(this._session.kickTimer); this._session.kickTimer = null; }
-                if (this._session && this._session.countdownTimer) { clearInterval(this._session.countdownTimer); this._session.countdownTimer = null; }
-                if (this.elements.sessionGraceBanner) this.elements.sessionGraceBanner.style.display = 'none';
+                if (!this._session) this._session = {};
+                this._clearGraceWindow();
 
                 const now = Date.now();
+                this._session.claimInFlight = true;
+                this._session.claimedAt = now;
+                this._session.reclaimAttempted = false;
+
+                // While claiming, ignore mismatch snapshots briefly.
+                this._session.suppressKickUntil = now + 5000;
 
                 try {
-                    if (!this._session) this._session = {};
-                    this._session.claimInFlight = true;
-
                     // Atomic claim: set this session as active and bump forceSignOut, recording who initiated.
                     await runTransaction(db, async (tx) => {
                         const snap = await tx.get(sessionDocRef);
-                        if (!snap.exists()) {
-                            tx.set(sessionDocRef, {
-                                userId: this.userId,
-                                activeSession: this.sessionId,
-                                forceSignOut: now,
-                                lastSignOutAllBy: this.sessionId,
-                                lastLogin: serverTimestamp()
-                            }, { merge: true });
-                        } else {
-                            tx.set(sessionDocRef, {
-                                activeSession: this.sessionId,
-                                forceSignOut: now,
-                                lastSignOutAllBy: this.sessionId,
-                                lastLogin: serverTimestamp()
-                            }, { merge: true });
-                        }
+                        const base = snap.exists() ? (snap.data() || {}) : {};
+                        const next = {
+                            userId: this.userId,
+                            activeSession: this.sessionId,
+                            activeSince: now,
+                            forceSignOut: now,
+                            lastSignOutAllBy: this.sessionId
+                        };
+                        // merge-style set
+                        tx.set(sessionDocRef, { ...base, ...next }, { merge: true });
                     });
 
-                    // Prime baseline to our own forceSignOut bump so we don't react to it locally.
-                    if (this._session) this._session.baselineForce = now;
+                    // Extend suppression a bit to ride out network propagation and any stale offline writes elsewhere.
+                    this._session.suppressKickUntil = Date.now() + 6000;
 
                     if (showToast) this.showSuccess("All other sessions have been signed out. This session is now active.");
                 } catch (err) {
                     console.error("Error signing out other sessions:", err);
                     this.showError("Failed to sign out other sessions. Check Firebase permissions.");
                 } finally {
-                    if (this._session) this._session.claimInFlight = false;
+                    this._session.claimInFlight = false;
                 }
             }
 
@@ -6328,7 +6461,8 @@ await this.saveData();
                     async () => { await this.claimSessionAndSignOutOthers({ showToast: true }); }
                 );
             }
-            
+
+
             // --- News Fetch ---
             async fetchAndRenderNews() {
                 const container = this.elements.newsArticlesContainer;
