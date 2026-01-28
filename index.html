@@ -1,17 +1,14 @@
 
 
-
-
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Live Stocks &amp; Funds Tracker</title>
-<link href="data:," rel="icon"/>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Stocks & Funds Tracker</title>
+    <link rel="icon" href="data:,">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
         // Safe Chart.js creator to avoid "Canvas is already in use" errors
         function createSafeChart(ctx, config) {
             try {
@@ -27,17 +24,18 @@
             return new Chart(ctx, config);
         }
     </script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-<!-- NEW: Chart.js Annotation Plugin for the horizontal reference line -->
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
-<!-- 
+
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!-- NEW: Chart.js Annotation Plugin for the horizontal reference line -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script> 
+    <!-- 
     ==================================================================
     ==      REVISED & IMPROVED STYLESHEET                           ==
     ==================================================================
     This stylesheet includes the fix for the chart color parsing issue
     and the final visual styles.
     -->
-<style>
+    <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
         /* --- CSS Variables for Theming --- */
@@ -1178,1163 +1176,423 @@
              }
         }
         /* === END CHART STYLES === */
-    
-        /* --- FIX: Mobile <select> dropdown options visibility (Chrome/Android) --- */
-        select { color-scheme: dark; }
-        select option, select optgroup {
-            background-color: #0b1220 !important;
-            color: #e6eefc !important;
-        }
-        /* Some Android builds also need the control itself to be explicit */
-        select {
-            background-color: var(--bg-tertiary) !important;
-            color: var(--text-primary) !important;
-        }
-
-/* Session conflict UI */
-.session-warning{margin:10px auto; max-width:1100px; display:flex; gap:12px; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid rgba(220,38,38,.35); background:rgba(220,38,38,.08); border-radius:12px;}
-.session-warning-text{font-size:14px; line-height:1.25;}
-button.danger{background:#dc2626; color:white; border:none; padding:8px 10px; border-radius:10px; cursor:pointer;}
-button.danger-outline{background:transparent; color:#dc2626; border:1px solid rgba(220,38,38,.6); padding:8px 10px; border-radius:10px; cursor:pointer; margin-left:8px;}
-button.danger:hover{filter:brightness(0.95);}
-button.danger-outline:hover{background:rgba(220,38,38,.08);}
-
-</style>
-<style id="neon-theme-overrides">
-/* ============================================================
-   NEON THEME OVERRIDES (UI-only) — STEP A
-   Purpose: Modernize UI without touching app logic.
-   ============================================================ */
-
-:root{
-  /* Light (Day) Theme — brighter + clearly different from Night */
-  --bg-primary: #f6fbff;
-  --bg-secondary: rgba(7, 20, 39, 0.055);
-  --bg-tertiary: rgba(7, 20, 39, 0.075);
-
-  --text-primary: #071427;
-  --text-secondary: rgba(7, 20, 39, 0.72);
-
-  --border-color: rgba(7, 20, 39, 0.16);
-
-  /* Day accents (more sky/teal, less neon) */
-  --accent-primary: #00a3ff;
-  --accent-primary-hover: #0086d6;
-
-  --color-positive: #0aa86b;
-  --color-negative: #d81b60;
-
-  /* Chart fill colors (JS expects rgb ints) */
-  --chart-positive-fill-color-rgb: 10, 168, 107;
-  --chart-negative-fill-color-rgb: 216, 27, 96;
-}
-
-body.dark-mode{
-  /* Night Theme — neon */
-
-  --bg-primary: #050712;
-    --bg-secondary: rgba(255, 255, 255, 0.045);
-    --bg-tertiary: rgba(255, 255, 255, 0.065);
-  
-    --text-primary: #eaf2ff;
-    --text-secondary: rgba(234, 242, 255, 0.72);
-  
-    --border-color: rgba(122, 162, 247, 0.18);
-  
-    /* Neon accents */
-    --accent-primary: #00d4ff;
-    --accent-primary-hover: #00ffc6;
-  
-    --color-positive: #27f2a0;
-    --color-negative: #ff4d6d;
-  
-    /* Chart fill colors (JS expects rgb ints) */
-    --chart-positive-fill-color-rgb: 39, 242, 160;
-    --chart-negative-fill-color-rgb: 255, 77, 109;
-}
-
-/* Backgrounds */
-body{
-  font-family: var(--font-family);
-  color: var(--text-primary);
-  background-color: var(--bg-primary);
-  min-height: 100vh;
-}
-
-body.dark-mode{
-  background:
-    radial-gradient(1200px 900px at 15% 0%, rgba(0, 212, 255, 0.16), transparent 60%),
-    radial-gradient(900px 700px at 85% 10%, rgba(0, 255, 198, 0.12), transparent 55%),
-    radial-gradient(900px 700px at 45% 120%, rgba(167, 139, 250, 0.10), transparent 60%),
-    linear-gradient(180deg, #040611 0%, #060a14 45%, #070b1a 100%);
-  background-attachment: fixed;
-}
-
-body:not(.dark-mode){
-  /* Day mode (tuned): still clearly lighter than night, but less bright */
-  background:
-    radial-gradient(1200px 900px at 18% 0%, rgba(0, 163, 255, 0.12), transparent 62%),
-    radial-gradient(900px 700px at 86% 10%, rgba(0, 214, 182, 0.10), transparent 58%),
-    radial-gradient(900px 700px at 45% 120%, rgba(167, 139, 250, 0.07), transparent 60%),
-    linear-gradient(180deg, #edf5ff 0%, #e2efff 55%, #f1f6ff 100%);
-  background-attachment: fixed;
-}
-
-/* Light mode polish: brighter glass + softer glow */
-body:not(.dark-mode) .card,
-body:not(.dark-mode) .stock-card,
-body:not(.dark-mode) .modal-content,
-body:not(.dark-mode) .panel,
-body:not(.dark-mode) #portfolio-summary,
-body:not(.dark-mode) #portfolio-summary .summary-total,
-body:not(.dark-mode) #portfolio-summary .summary-box{
-  background: rgba(248,250,255,0.66) !important;
-  border-color: rgba(7,20,39,0.12) !important;
-  box-shadow: 0 12px 34px rgba(7,20,39,0.10) !important;
-}
-
-body:not(.dark-mode) #chart-summary-panel{
-  background: rgba(246,249,255,0.64) !important;
-  border-color: rgba(0,163,255,0.24) !important;
-  box-shadow:
-    0 14px 38px rgba(0,163,255,0.10),
-    0 12px 28px rgba(7,20,39,0.12) !important;
-}
-
-body:not(.dark-mode) #chart-summary-panel .summary-pill{
-  background: rgba(248,250,255,0.78) !important;
-  border-color: rgba(0,163,255,0.28) !important;
-  color: var(--text-primary) !important;
-  box-shadow:
-    0 0 0 1px rgba(0,163,255,0.08) inset,
-    0 0 18px rgba(0,163,255,0.16) !important;
-}
-
-
-
-/* Global surfaces */
-.header,
-.container,
-section,
-.card,
-.modal-content,
-.settings-modal .modal-content,
-.price-alert-modal .modal-content {
-  background-color: transparent;
-}
-
-.main-content,
-.portfolio-summary,
-.card,
-.stock-card,
-.fund-card,
-.watchlist-card,
-.modal-content,
-.settings-modal .modal-content,
-.price-alert-modal .modal-content {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
-  border: 1px solid var(--border-color);
-  backdrop-filter: blur(10px);
-}
-
-/* Tabs / top controls */
-.tabs-container,
-.tabs {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(122, 162, 247, 0.16);
-  backdrop-filter: blur(10px);
-  border-radius: 999px;
-}
-
-.tab,
-.tab-btn,
-.tabs button {
-  background: transparent !important;
-  color: var(--text-secondary) !important;
-  border: 1px solid transparent !important;
-  border-radius: 999px !important;
-  transition: var(--transition);
-}
-
-.tab:hover,
-.tab-btn:hover,
-.tabs button:hover {
-  color: var(--text-primary) !important;
-  border-color: rgba(0, 212, 255, 0.22) !important;
-}
-
-.tab.active,
-.tab-btn.active,
-.tabs button.active {
-  color: var(--text-primary) !important;
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.16), rgba(0, 255, 198, 0.12)) !important;
-  border-color: rgba(0, 212, 255, 0.32) !important;
-  box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.12) inset, 0 12px 30px rgba(0,0,0,0.35);
-}
-
-/* Inputs */
-input, select, textarea {
-  background: rgba(255, 255, 255, 0.04) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid rgba(122, 162, 247, 0.18) !important;
-}
-
-input::placeholder, textarea::placeholder {
-  color: rgba(234, 242, 255, 0.45) !important;
-}
-
-/* === Cards (Stocks / Funds / Watchlist) === */
-.stock-card,
-.fund-card,
-.watchlist-card {
-  border-radius: 18px !important;
-  box-shadow: 0 14px 40px rgba(0,0,0,0.48);
-  position: relative;
-  overflow: hidden;
-  transform: translateZ(0);
-}
-
-.stock-card::before,
-.fund-card::before,
-.watchlist-card::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  background: radial-gradient(600px 220px at 10% 0%, rgba(0, 212, 255, 0.14), transparent 60%),
-              radial-gradient(520px 200px at 90% 15%, rgba(0, 255, 198, 0.10), transparent 55%);
-  pointer-events: none;
-}
-
-.stock-card:hover,
-.fund-card:hover,
-.watchlist-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(0, 212, 255, 0.30) !important;
-  box-shadow: 0 18px 55px rgba(0,0,0,0.55);
-}
-
-.stock-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(122, 162, 247, 0.14);
-  position: relative;
-  z-index: 1;
-}
-
-.stock-symbol {
-  font-weight: 900 !important;
-  letter-spacing: 0.5px;
-  font-size: 1.05rem !important;
-  background: linear-gradient(90deg, var(--accent-primary), var(--accent-primary-hover));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent !important;
-}
-
-.stock-price {
-  font-size: 2.1rem !important;
-  font-weight: 900 !important;
-  letter-spacing: -0.02em;
-  margin-top: 10px;
-  position: relative;
-  z-index: 1;
-}
-
-.stock-change {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-weight: 800;
-  font-size: 0.95rem;
-  border: 1px solid rgba(122, 162, 247, 0.18);
-  background: rgba(255, 255, 255, 0.04);
-  position: relative;
-  z-index: 1;
-}
-
-.stock-change.positive {
-  color: var(--color-positive) !important;
-  border-color: rgba(39, 242, 160, 0.30);
-  background: rgba(39, 242, 160, 0.10);
-}
-.stock-change.negative {
-  color: var(--color-negative) !important;
-  border-color: rgba(255, 77, 109, 0.30);
-  background: rgba(255, 77, 109, 0.10);
-}
-
-.stock-info {
-  margin-top: 14px !important;
-  padding-top: 14px !important;
-  border-top: 1px dashed rgba(122, 162, 247, 0.18) !important;
-  position: relative;
-  z-index: 1;
-}
-
-.info-row {
-  padding: 8px 0 !important;
-  border-bottom: 1px solid rgba(122, 162, 247, 0.10);
-}
-.info-row:last-child { border-bottom: none; }
-
-.info-label { color: rgba(234, 242, 255, 0.62) !important; }
-.info-value { color: var(--text-primary) !important; }
-
-.total-pl,
-.total-pl-today {
-  border-top: 1px solid rgba(122, 162, 247, 0.14) !important;
-  padding-top: 12px !important;
-  margin-top: 12px !important;
-  position: relative;
-  z-index: 1;
-}
-
-/* Buttons */
-.add-btn,
-.transaction-btn,
-.btn,
-button {
-  border-radius: 14px !important;
-}
-
-.add-btn,
-.btn-primary,
-.transaction-btn {
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.22), rgba(0, 255, 198, 0.16)) !important;
-  border: 1px solid rgba(0, 212, 255, 0.28) !important;
-  color: var(--text-primary) !important;
-  box-shadow: 0 10px 26px rgba(0,0,0,0.35);
-}
-
-.add-btn:hover,
-.btn-primary:hover,
-.transaction-btn:hover {
-  transform: translateY(-1px);
-  border-color: rgba(0, 255, 198, 0.35) !important;
-}
-
-.transaction-btn.buy-btn {
-  background: linear-gradient(135deg, rgba(39, 242, 160, 0.22), rgba(0, 212, 255, 0.14)) !important;
-  border-color: rgba(39, 242, 160, 0.28) !important;
-}
-.transaction-btn.sell-btn {
-  background: linear-gradient(135deg, rgba(255, 77, 109, 0.22), rgba(167, 139, 250, 0.14)) !important;
-  border-color: rgba(255, 77, 109, 0.28) !important;
-}
-
-.remove-btn {
-  background: rgba(255, 255, 255, 0.04) !important;
-  color: rgba(234, 242, 255, 0.8) !important;
-  border: 1px solid rgba(122, 162, 247, 0.18) !important;
-  width: 32px !important;
-  height: 32px !important;
-  border-radius: 10px !important;
-}
-.remove-btn:hover {
-  border-color: rgba(255, 77, 109, 0.35) !important;
-  color: #ffd2da !important;
-}
-
-/* Collapsible transactions */
-.transaction-details {
-  background: rgba(255, 255, 255, 0.03) !important;
-  border: 1px solid rgba(122, 162, 247, 0.14) !important;
-  border-radius: 14px !important;
-}
-
-.transaction-header {
-  border-bottom: 1px solid rgba(122, 162, 247, 0.12) !important;
-}
-
-/* Small “chips” (used in a few places) */
-.pill, .badge, .chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(122, 162, 247, 0.16);
-  background: rgba(255,255,255,0.04);
-  color: rgba(234, 242, 255, 0.75);
-  font-weight: 700;
-  font-size: 0.85rem;
-}
-
-
-
-/* ==== STEP: Prototype-style Portfolio Summary Banner (safe with JS className overwrites) ==== */
-#portfolio-summary.portfolio-summary{
-  position: relative;
-  overflow: hidden;
-  border-radius: 22px;
-  padding: 18px 18px 16px;
-  margin: 14px 0 14px;
-  background:
-    radial-gradient(circle at top left, rgba(56,189,248,0.32), transparent 60%),
-    radial-gradient(circle at top right, rgba(34,197,94,0.28), transparent 60%),
-    radial-gradient(circle at bottom, rgba(59,130,246,0.35), rgba(15, 23, 42, 0.92) 70%);
-  border: 1px solid rgba(56,189,248,0.42);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-}
-
-#portfolio-summary.portfolio-summary::before{
-  content:"";
-  position:absolute;
-  inset:-40%;
-  background: conic-gradient(from 180deg at 50% 50%,
-    rgba(56,189,248,0.00),
-    rgba(56,189,248,0.12),
-    rgba(34,197,94,0.10),
-    rgba(59,130,246,0.12),
-    rgba(56,189,248,0.00)
-  );
-  filter: blur(26px);
-  opacity: 0.9;
-  animation: ps-gradient-spin 18s linear infinite;
-  pointer-events:none;
-}
-
-@keyframes ps-gradient-spin{
-  from{ transform: rotate(0deg); }
-  to{ transform: rotate(360deg); }
-}
-
-#portfolio-summary .portfolio-inner{
-  position: relative;
-  z-index: 1;
-  display:flex;
-  gap: 16px;
-  align-items: stretch;
-  justify-content: space-between;
-}
-
-#portfolio-summary .summary-main{
-  flex: 1 1 340px;
-  min-width: 260px;
-}
-
-#portfolio-summary .summary-label{
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.78rem;
-  color: rgba(226,232,240,0.75);
-  margin-bottom: 6px;
-}
-
-#portfolio-summary .summary-total{
-  margin-bottom: 8px;
-}
-
-#portfolio-summary .summary-total .summary-value{
-  display: inline-block;
-  font-size: 2.25rem;
-  font-weight: 800;
-  line-height: 1.05;
-  color: rgba(248,250,252,0.98);
-  text-shadow: 0 8px 22px rgba(0,0,0,0.35);
-}
-
-#portfolio-summary .summary-subline{
-  font-size: 0.96rem;
-  color: rgba(226,232,240,0.85);
-  margin-bottom: 12px;
-}
-
-#portfolio-summary .summary-subline .summary-value{
-  font-weight: 800;
-}
-
-#portfolio-summary .summary-subline-tail{
-  opacity: 0.9;
-}
-
-#portfolio-summary .summary-badges{
-  display:flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items:center;
-}
-
-#portfolio-summary .summary-badge{
-  background: rgba(2, 6, 23, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  color: rgba(226,232,240,0.9);
-  backdrop-filter: blur(10px);
-}
-
-#portfolio-summary .summary-toggle{
-  margin-left: auto;
-  background: rgba(2, 6, 23, 0.28);
-  border: 1px solid rgba(56,189,248,0.40);
-  color: rgba(248,250,252,0.95);
-  padding: 7px 12px;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
-  backdrop-filter: blur(10px);
-}
-
-#portfolio-summary .summary-toggle:hover{
-  transform: translateY(-1px);
-  box-shadow: 0 0 0 3px rgba(56,189,248,0.14);
-  border-color: rgba(56,189,248,0.65);
-}
-
-#portfolio-summary .summary-grid{
-  flex: 1 1 560px;
-  display:grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  align-content: start;
-}
-
-#portfolio-summary .summary-item{
-  background: rgba(2, 6, 23, 0.28);
-  border: 1px solid rgba(148,163,184,0.22);
-  border-radius: 16px;
-  padding: 10px 12px;
-  backdrop-filter: blur(10px);
-}
-
-#portfolio-summary .summary-item-label{
-  font-size: 0.76rem;
-  color: rgba(226,232,240,0.78);
-}
-
-#portfolio-summary .summary-item-value{
-  margin-top: 4px;
-}
-
-#portfolio-summary .summary-item-value .summary-value{
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: rgba(248,250,252,0.96);
-}
-
-/* Override old summary-value styles inside banner so it doesn't look like the old UI */
-#portfolio-summary .summary-value{
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  box-shadow: none !important;
-}
-
-/* Positive / Negative coloring (JS toggles these classes) */
-#portfolio-summary .summary-value.positive{ color: var(--color-positive) !important; }
-#portfolio-summary .summary-value.negative{ color: var(--color-negative) !important; }
-
-/* Responsive */
-@media (max-width: 900px){
-  #portfolio-summary .portfolio-inner{ flex-direction: column; }
-  #portfolio-summary .summary-toggle{ margin-left: 0; width: fit-content; }
-  #portfolio-summary .summary-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  #portfolio-summary .summary-total .summary-value{ font-size: 1.95rem; }
-}
-@media (max-width: 520px){
-  #portfolio-summary .summary-grid{ grid-template-columns: 1fr; }
-}
-</style>
-<script>
-  // Make Neon (dark) the default theme on first load (user can still toggle).
-  try {
-    if (localStorage.getItem('darkMode') === null) {
-      localStorage.setItem('darkMode', 'enabled');
-    }
-  } catch (e) {}
-</script>
-<style id="summary-panel-fixed-fix">
-/* --- FIX v4: Pin Today/1W/1M panel to top + prevent hiding any popups/banner on mobile/desktop --- */
-:root{
-  --summary-panel-h: 64px;     /* JS will update to actual height */
-  --summary-panel-gap: 14px;
-}
-
-/* Reserve space for the fixed summary panel so the header + banners never sit underneath it */
-body{
-  padding-top: calc(var(--summary-panel-h) + var(--summary-panel-gap)) !important;
-}
-
-/* Keep the panel fixed at the top (no DOM moves). Give it a stronger "neon" glow. */
-#chart-summary-panel{
-  position: fixed !important;
-  isolation: isolate !important;
-  
-  top: 10px !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  width: min(920px, calc(100% - 24px)) !important;
-  z-index: 5000 !important;
-
-  display: flex !important;
-  gap: 12px !important;
-  justify-content: center !important;
-  align-items: center !important;
-
-  padding: 10px 12px !important;
-  border-radius: 18px !important;
-
-  /* glow */
-  background: linear-gradient(135deg, rgba(0,255,213,0.20), rgba(0,153,255,0.14)) !important;
-  border: 1px solid rgba(0,255,213,0.22) !important;
-  box-shadow:
-    0 12px 40px rgba(0,0,0,0.58),
-    0 0 36px rgba(0,255,213,0.32),
-    0 0 22px rgba(0,153,255,0.24),
-    0 0 14px rgba(255,255,255,0.10),
-    inset 0 0 0 1px rgba(255,255,255,0.10) !important;
-  backdrop-filter: blur(14px) !important;
-  -webkit-backdrop-filter: blur(14px) !important;
-}
-
-/* Pills glow-up */
-#chart-summary-panel .summary-pill{
-  background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.06)) !important;
-  border: 1px solid rgba(0,255,213,0.18) !important;
-  border-radius: 14px !important;
-  box-shadow:
-    0 10px 22px rgba(0,0,0,0.42),
-    0 0 24px rgba(0,255,213,0.26),
-    0 0 14px rgba(0,153,255,0.18),
-    inset 0 0 0 1px rgba(255,255,255,0.08) !important;
-}
-
-
-
-/* Extra Glow v6 (doesn't interfere with pulse animations) */
-#chart-summary-panel::before{
-  content: "";
-  position: absolute;
-  inset: -10px;
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at 20% 30%, rgba(0,255,213,0.55), transparent 60%),
-    radial-gradient(circle at 80% 50%, rgba(0,153,255,0.45), transparent 65%),
-    radial-gradient(circle at 55% 90%, rgba(180,255,255,0.22), transparent 60%);
-  filter: blur(18px);
-  opacity: 0.48;
-  z-index: -1;
-  pointer-events: none;
-  animation: panelGlowBreath 4.2s ease-in-out infinite;
-}
-
-#chart-summary-panel .summary-pill{
-  position: relative;
-  overflow: hidden;
-}
-#chart-summary-panel .summary-pill::after{
-  content: "";
-  position: absolute;
-  inset: -14px;
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 30% 35%, rgba(0,255,213,0.60), transparent 62%),
-    radial-gradient(circle at 75% 55%, rgba(0,153,255,0.50), transparent 68%);
-  filter: blur(18px);
-  opacity: 0.30;
-  z-index: -1;
-  pointer-events: none;
-  animation: pillGlowBreath 4.8s ease-in-out infinite;
-}
-
-@keyframes panelGlowBreath{
-  0%, 100% { opacity: 0.42; transform: scale(1); }
-  50%      { opacity: 0.70; transform: scale(1.03); }
-}
-@keyframes pillGlowBreath{
-  0%, 100% { opacity: 0.26; transform: scale(1); }
-  50%      { opacity: 0.52; transform: scale(1.02); }
-}
-
-/* Keep glow but slightly calmer when collapsed */
-#chart-summary-panel.is-collapsed::before{ opacity: 0.34; filter: blur(16px); }
-#chart-summary-panel.is-collapsed .summary-pill::after{ opacity: 0.22; filter: blur(16px); }
-
-/* Make sure fixed popups / status banners sit BELOW the summary panel (so they never hide behind it) */
-.loading, .error, .success, .refresh-status-popup, .alert-notification{
-  top: calc(var(--summary-panel-h) + var(--summary-panel-gap) + 6px) !important;
-  z-index: 5100 !important;
-}
-
-/* Small screens: allow wrapping and increase height safely */
-@media (max-width: 520px){
-  #chart-summary-panel{
-    top: 8px !important;
-    gap: 10px !important;
-    padding: 10px 10px !important;
-    flex-wrap: wrap !important;
-  }
-  #chart-summary-panel .summary-pill{
-    min-width: 112px !important;
-    padding: 8px 10px !important;
-    font-size: 0.95rem !important;
-  }
-}
-
-
-/* --- UX v5: pulse on update --- */
-#chart-summary-panel{
-  transition: padding 180ms ease, top 180ms ease, box-shadow 180ms ease, background 180ms ease, transform 180ms ease !important;
-}
-#chart-summary-panel .summary-pill{
-  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease, padding 180ms ease, font-size 180ms ease !important;
-  will-change: transform;
-}
-
-/* Pulse states (applied via JS when text changes) */
-#chart-summary-panel .summary-pill.pulse-positive{ animation: summaryPulsePos 650ms ease-out both; }
-#chart-summary-panel .summary-pill.pulse-negative{ animation: summaryPulseNeg 650ms ease-out both; }
-#chart-summary-panel .summary-pill.pulse-neutral{  animation: summaryPulseNeu 650ms ease-out both; }
-
-@keyframes summaryPulsePos{
-  0%   { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.14), inset 0 0 0 1px rgba(255,255,255,0.06); }
-  45%  { transform: translateY(-1px) scale(1.03); box-shadow: 0 10px 22px rgba(0,0,0,0.45), 0 0 24px rgba(0,255,213,0.32), 0 0 14px rgba(0,153,255,0.18), inset 0 0 0 1px rgba(255,255,255,0.10); }
-  100% { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.14), inset 0 0 0 1px rgba(255,255,255,0.06); }
-}
-@keyframes summaryPulseNeg{
-  0%   { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.10), inset 0 0 0 1px rgba(255,255,255,0.06); }
-  45%  { transform: translateY(-1px) scale(1.03); box-shadow: 0 10px 22px rgba(0,0,0,0.45), 0 0 24px rgba(255,77,109,0.30), 0 0 14px rgba(255,0,102,0.14), inset 0 0 0 1px rgba(255,255,255,0.10); }
-  100% { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.10), inset 0 0 0 1px rgba(255,255,255,0.06); }
-}
-@keyframes summaryPulseNeu{
-  0%   { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.10), inset 0 0 0 1px rgba(255,255,255,0.06); }
-  45%  { transform: translateY(-1px) scale(1.03); box-shadow: 0 10px 22px rgba(0,0,0,0.45), 0 0 24px rgba(0,153,255,0.26), 0 0 14px rgba(0,255,213,0.18), inset 0 0 0 1px rgba(255,255,255,0.10); }
-  100% { transform: translateY(0) scale(1);   box-shadow: 0 8px 18px rgba(0,0,0,0.35), 0 0 14px rgba(0,255,213,0.10), inset 0 0 0 1px rgba(255,255,255,0.06); }
-}
-
-/* --- UX v5: smart collapse on scroll (adds more screen space) --- */
-#chart-summary-panel.is-collapsed{
-  top: 6px !important;
-  padding: 8px 10px !important;
-  border-radius: 18px !important;
-  box-shadow:
-    0 8px 22px rgba(0,0,0,0.48),
-    0 0 18px rgba(0,255,213,0.16),
-    inset 0 0 0 1px rgba(255,255,255,0.06) !important;
-}
-#chart-summary-panel.is-collapsed .summary-pill{
-  padding: 8px 10px !important;
-  font-size: 14px !important;
-  opacity: 0.98;
-}
-
-/* On very small screens, make collapse a bit stronger */
-@media (max-width: 420px){
-  #chart-summary-panel.is-collapsed .summary-pill{ font-size: 13px !important; padding: 7px 9px !important; }
-}
-</style>
-
-<script>
-/* --- FIX v4 helper: measure the fixed summary panel and reserve the exact space (works even when pills wrap) --- */
-(function(){
-  function syncSummaryPanelHeight(){
-    const panel = document.getElementById('chart-summary-panel');
-    if(!panel) return;
-    // Use offsetHeight; add a tiny cushion to avoid any overlap on odd DPR devices
-    const h = Math.max(48, panel.offsetHeight || 64);
-    document.documentElement.style.setProperty('--summary-panel-h', (h + 2) + 'px');
-  }
-  window.addEventListener('load', syncSummaryPanelHeight);
-  window.addEventListener('resize', syncSummaryPanelHeight);
-  document.addEventListener('DOMContentLoaded', syncSummaryPanelHeight);
-})();
-</script>
-
+    </style>
 </head>
 <body>
-<!-- 
+    <!-- 
     The body content remains the same, but the header structure is slightly updated for the new design.
     The new styles will automatically apply to the existing HTML structure.
     -->
-<div class="loading" id="loading" style="display: none;">Loading...</div>
-<div class="error" id="error" style="display: none;"></div>
-<div class="success" id="success" style="display: none;"></div>
-<div class="refresh-status-popup" id="refresh-status-popup"></div>
-<div class="alert-notification" id="alert-notification" style="display: none;"></div>
-<div class="container" id="login-container">
-<h1>💰 Live Portfolio Tracker</h1>
-<p style="text-align: center; margin-bottom: 30px; font-size: 1.2rem; color: var(--text-secondary);">Sign in to continue</p>
-<button class="add-btn" id="google-signin-btn" style="margin: 0 auto; display: flex; align-items: center; gap: 10px; width: auto;">
-<svg fill="white" height="24" viewbox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"></path><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path><path d="M1 1h22v22H1z" fill="none"></path></svg>
+    <div id="loading" class="loading" style="display: none;">Loading...</div>
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="success" class="success" style="display: none;"></div>
+    <div id="refresh-status-popup" class="refresh-status-popup"></div>
+    <div id="alert-notification" class="alert-notification" style="display: none;"></div>
+
+    <div id="login-container" class="container">
+        <h1>💰 Live Portfolio Tracker</h1>
+        <p style="text-align: center; margin-bottom: 30px; font-size: 1.2rem; color: var(--text-secondary);">Sign in to continue</p>
+        <button id="google-signin-btn" class="add-btn" style="margin: 0 auto; display: flex; align-items: center; gap: 10px; width: auto;">
+            <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="white"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/><path d="M1 1h22v22H1z" fill="none"/></svg>
             Sign in with Google
         </button>
-<div id="firebase-auth-error" style="display: none;"></div>
-</div>
-<div class="container" id="app-container">
-<!-- New Header Structure -->
-<header class="header">
-<h1>💰 Portfolio Tracker</h1>
-<div class="header-controls">
-<div id="user-info" style="display: none;">
-<span id="user-name"></span>
-<button id="sign-out-btn">Sign Out</button>
-<button id="sign-out-others-btn" class="danger-outline" title="Keep this session signed in, sign out other devices">Sign Out Other Devices</button>
-</div>
-</div>
-</header>
-<div id="session-warning" style="display:none;" class="session-warning">
-  <div class="session-warning-text">
-    <b>Another device is currently active.</b> You have <span id="session-grace-seconds">10</span>s to click <b>Sign Out Other Devices</b> to keep this session.
-  </div>
-  <button id="session-claim-btn" class="danger">Sign Out Other Devices</button>
-</div>
-<div id="header-countdown">Next update in: <span id="countdown">90</span>s</div>
-<div class="tabs">
-<button class="tab active" onclick="window.stockTracker.switchTab('stocks')">📊 Stocks &amp; Portfolio</button>
-<button class="tab" onclick="window.stockTracker.switchTab('funds')">🏛️ Mutual Funds</button>
-<button class="tab" onclick="window.stockTracker.switchTab('watchlist')">👀 Watchlist</button>
-<button class="tab" onclick="window.stockTracker.switchTab('news')">📰 News</button>
-</div>
-<div class="tab-content active" id="stocks-tab">
-<div class="portfolio-summary" id="portfolio-summary" style="display: none;">
-<div class="portfolio-inner">
-<div class="summary-main">
-<div class="summary-label">Combined Total</div>
-<div class="summary-total"><span class="summary-value" id="combined-total-value">$0.00</span></div>
-<div class="summary-subline">
-<span class="summary-value" id="total-pl-today">$0.00</span>
-       · 
-      <span class="summary-value" id="total-pl-percent-today">0.00%</span>
-<span class="summary-subline-tail" id="total-pl-today-label"> today</span>
-</div>
-<div class="summary-badges">
-<div class="summary-badge">Unrealized P/L: <span class="summary-value" id="total-pl-unrealized">$0.00</span></div>
-<div class="summary-badge">Realized P/L: <span class="summary-value" id="total-pl-realized">$0.00</span></div>
-<button class="summary-toggle" id="toggle-ah-btn" type="button">🌑 Show After-Hours</button>
-</div>
-</div>
-<div class="summary-grid">
-<div class="summary-item">
-<div class="summary-item-label">Stocks Total Value</div>
-<div class="summary-item-value"><span class="summary-value" id="stocks-total-value">$0.00</span></div>
-</div>
-<div class="summary-item">
-<div class="summary-item-label">Mutual Fund Value</div>
-<div class="summary-item-value"><span class="summary-value" id="mutual-fund-total-value">$0.00</span></div>
-</div>
-<div class="summary-item">
-<div class="summary-item-label">Total Contributions</div>
-<div class="summary-item-value"><span class="summary-value" id="total-contributions">$0.00</span></div>
-</div>
-<div class="summary-item">
-<div class="summary-item-label">Total Dividends</div>
-<div class="summary-item-value"><span class="summary-value" id="total-dividends">$0.00</span></div>
-</div>
-<div class="summary-item">
-<div class="summary-item-label">Active Stocks</div>
-<div class="summary-item-value"><span class="summary-value" id="stock-count-value">0</span></div>
-</div>
-<div class="summary-item">
-<div class="summary-item-label">Active Funds</div>
-<div class="summary-item-value"><span class="summary-value" id="fund-count-value">0</span></div>
-</div>
-</div>
-</div>
-</div>
-<div class="search-section">
-<div class="input-wrapper">
-<input class="search-input" id="stockInput" placeholder="Enter stock symbol (e.g., AAPL)" type="text"/>
-<span class="clear-input" data-target="stockInput">×</span>
-</div>
-<button class="add-btn" id="addBtn">Add Stock</button>
-</div>
-<div class="portfolio-controls">
-<div class="input-wrapper">
-<input class="search-input" id="portfolioFilter" placeholder="🔎 Filter your portfolio..." type="text"/>
-<span class="clear-input" data-target="portfolioFilter">×</span>
-</div>
-<select class="search-input" id="platformFilter" style="display: none;"></select>
-<select id="portfolioSort">
-<option value="performance">Sort by Performance</option>
-<option value="alphabetical">Sort Alphabetical (A-Z)</option>
-<option value="value">Sort by Total Value</option>
-<option value="pl_overall">Sort by Overall P/L ($)</option>
-<option value="platform">Sort by Platform</option>
-</select>
-</div>
-<div class="utility-buttons-grid">
-<button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
-<button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
-<div class="import-wrapper">
-<button class="add-btn" id="exportBtn">📥 Export Data</button>
-<label class="add-btn" for="importFile" style="cursor: pointer;">📤 Import Data</label>
-<input accept=".json" id="importFile" style="display: none;" type="file"/>
-</div>
-<button class="add-btn" id="settingsBtn">⚙️ Settings</button>
-<button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
-<button class="add-btn" id="listAllBtn">📋 List All Stocks</button>
-<button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
-<button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
-<button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
-</div>
-</div>
-<div class="tab-content" id="funds-tab">
-<div class="search-section">
-<div class="input-wrapper">
-<input class="search-input" id="mutualFundInput" placeholder="Enter mutual fund symbol (e.g., VTIAX, FXNAX, SWPPX)" type="text"/>
-<span class="clear-input" data-target="mutualFundInput">×</span>
-</div>
-<button class="add-btn" id="addFundBtn">Add Fund</button>
-<button class="add-btn" id="quickLookupBtn">Quick Lookup</button>
-</div>
-<div class="funds-controls">
-<button class="add-btn" id="updateAllFundsBtn">🔄 Update Funds</button>
-<button class="add-btn" id="clearAllFundsBtn">🗑️ Clear All Funds</button>
-</div>
-</div>
-<div class="tab-content" id="watchlist-tab">
-<div class="search-section">
-<div class="input-wrapper">
-<input class="search-input" id="watchlistInput" placeholder="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)" type="text"/>
-<span class="clear-input" data-target="watchlistInput">×</span>
-</div>
-<button class="add-btn" id="addWatchlistBtn">Add to Watchlist</button>
-</div>
-<div class="watchlist-controls">
-<button class="add-btn" id="updateWatchlistBtn">🔄 Update Watchlist</button>
-<button class="add-btn" id="clearWatchlistBtn">🗑️ Clear Watchlist</button>
-</div>
-<h3 class="watchlist-title"><span>Your Watchlist <span id="watchlist-count">(0)</span></span></h3>
-</div>
-<div class="tab-content" id="news-tab">
-<h3 class="watchlist-title">📰 Top News for Your Stocks</h3>
-<div id="news-articles-container"></div>
-</div>
-<div class="stocks-grid" id="stocksGrid"></div>
+        <div id="firebase-auth-error" style="display: none;"></div>
+    </div>
+    
+    <div id="app-container" class="container">
+        <!-- New Header Structure -->
+        <header class="header">
+            <h1>💰 Portfolio Tracker</h1>
+            <div class="header-controls">
+                <div id="user-info" style="display: none;">
+                    <span id="user-name"></span>
+                    <button id="sign-out-btn">Sign Out</button>
+                </div>
+            </div>
+        </header>
+
+        <div id="header-countdown">Next update in: <span id="countdown">90</span>s</div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="window.stockTracker.switchTab('stocks')">📊 Stocks & Portfolio</button>
+            <button class="tab" onclick="window.stockTracker.switchTab('funds')">🏛️ Mutual Funds</button>
+            <button class="tab" onclick="window.stockTracker.switchTab('watchlist')">👀 Watchlist</button>
+            <button class="tab" onclick="window.stockTracker.switchTab('news')">📰 News</button>
+        </div>
+
+        <div id="stocks-tab" class="tab-content active">
+            <div id="portfolio-summary" class="portfolio-summary" style="display: none;">
+                <h3>Your Portfolio at a Glance</h3>
+                <div style="text-align:center; margin-bottom:15px;">
+                    <button id="toggle-ah-btn" class="btn-secondary" style="padding: 4px 12px; font-size: 0.8rem; border-radius: 20px; background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4);">
+                        🌑 Show After-Hours
+                    </button>
+                </div>
+                <div class="summary-stats">
+                    <div class="summary-item">
+                        <span class="summary-label">Combined Total</span>
+                        <span id="combined-total-value" class="summary-value">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Stocks Total Value</span>
+                        <span id="stocks-total-value" class="summary-value">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Mutual Fund Value</span>
+                        <span id="mutual-fund-total-value" class="summary-value">$0.00</span>
+                    </div>
+
+                    <div class="summary-item">
+                        <span class="summary-label">Active Stocks</span>
+                        <span id="stock-count-value" class="summary-value">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Active Funds</span>
+                        <span id="fund-count-value" class="summary-value">0</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Contributions</span>
+                        <span id="total-contributions" class="summary-value total-contributions">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total Dividends</span>
+                        <span id="total-dividends" class="summary-value positive">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span id="total-pl-today-label" class="summary-label">Total P/L Today</span>
+                        <span id="total-pl-today" class="summary-value positive">$0.00</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Total P/L % Today</span>
+                        <span id="total-pl-percent-today" class="summary-value positive">0.00%</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Unrealized P/L</span>
+                        <span id="total-pl-unrealized" class="summary-value positive">$0.00</span>
+                    </div>
+                     <div class="summary-item">
+                        <span class="summary-label">Realized P/L</span>
+                        <span id="total-pl-realized" class="summary-value positive">$0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="search-section">
+                <div class="input-wrapper">
+                    <input type="text" class="search-input" id="stockInput" placeholder="Enter stock symbol (e.g., AAPL)">
+                    <span class="clear-input" data-target="stockInput">&times;</span>
+                </div>
+                <button class="add-btn" id="addBtn">Add Stock</button>
+            </div>
+
+            <div class="portfolio-controls">
+                <div class="input-wrapper">
+                    <input type="text" class="search-input" id="portfolioFilter" placeholder="🔎 Filter your portfolio...">
+                    <span class="clear-input" data-target="portfolioFilter">&times;</span>
+                </div>
+                <select id="platformFilter" class="search-input" style="display: none;"></select>
+                <select id="portfolioSort">
+                    <option value="performance">Sort by Performance</option>
+                    <option value="alphabetical">Sort Alphabetical (A-Z)</option>
+                    <option value="value">Sort by Total Value</option>
+                    <option value="pl_overall">Sort by Overall P/L ($)</option>
+                    <option value="platform">Sort by Platform</option>
+                </select>
+            </div>
+
+            <div class="utility-buttons-grid">
+                <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
+                <button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
+                <div class="import-wrapper">
+                    <button class="add-btn" id="exportBtn">📥 Export Data</button>
+                    <label for="importFile" class="add-btn" style="cursor: pointer;">📤 Import Data</label>
+                    <input type="file" id="importFile" accept=".json" style="display: none;">
+                </div>
+                <button class="add-btn" id="settingsBtn">⚙️ Settings</button>
+                <button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
+                <button class="add-btn" id="listAllBtn">📋 List All Stocks</button>
+                <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
+                 <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
+                <button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
+            </div>
+        </div>
+        
+        <div id="funds-tab" class="tab-content">
+             <div class="search-section">
+                <div class="input-wrapper">
+                    <input type="text" class="search-input" id="mutualFundInput" placeholder="Enter mutual fund symbol (e.g., VTIAX, FXNAX, SWPPX)">
+                    <span class="clear-input" data-target="mutualFundInput">&times;</span>
+                    </div>
+                <button class="add-btn" id="addFundBtn">Add Fund</button>
+                <button class="add-btn" id="quickLookupBtn">Quick Lookup</button>
+            </div>
+             <div class="funds-controls">
+                <button class="add-btn" id="updateAllFundsBtn">🔄 Update Funds</button>
+                <button class="add-btn" id="clearAllFundsBtn">🗑️ Clear All Funds</button>
+            </div>
+        </div>
+
+        <div id="watchlist-tab" class="tab-content">
+             <div class="search-section">
+                <div class="input-wrapper">
+                    <input type="text" class="search-input" id="watchlistInput" placeholder="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)">
+                    <span class="clear-input" data-target="watchlistInput">&times;</span>
+                </div>
+                <button class="add-btn" id="addWatchlistBtn">Add to Watchlist</button>
+            </div>
+             <div class="watchlist-controls">
+                <button class="add-btn" id="updateWatchlistBtn">🔄 Update Watchlist</button>
+                <button class="add-btn" id="clearWatchlistBtn">🗑️ Clear Watchlist</button>
+            </div>
+            <h3 class="watchlist-title"><span>Your Watchlist <span id="watchlist-count">(0)</span></span></h3>
+        </div>
+
+        <div id="news-tab" class="tab-content">
+            <h3 class="watchlist-title">📰 Top News for Your Stocks</h3>
+            <div id="news-articles-container"></div>
+        </div>
+
+        <div class="stocks-grid" id="stocksGrid"></div>
+
+        
 <!-- 
 ==================================================================
 ==      TOTALLY REDESIGNED PORTFOLIO CHART CONTAINER            ==
 ==================================================================
 -->
-<div class="chart-container" id="portfolio-performance-container">
-<div class="chart-header">
-<div class="chart-title-group">
-<h4 id="portfolio-chart-title">Portfolio Performance</h4>
-<!-- New Dynamic Value Display -->
-<div class="chart-big-value" id="chart-current-value">$0.00</div>
-</div>
-<div class="chart-controls" id="performance-chart-controls">
-<div class="top-movers-control" style="margin-top: 8px; text-align:center;">
-<label for="top-movers-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 4px;">
+<div id="portfolio-performance-container" class="chart-container">
+    <div class="chart-header">
+        <div class="chart-title-group">
+            <h4 id="portfolio-chart-title">Portfolio Performance</h4>
+            <!-- New Dynamic Value Display -->
+            <div class="chart-big-value" id="chart-current-value">$0.00</div>
+        </div>
+        
+        <div id="performance-chart-controls" class="chart-controls">
+            <div class="top-movers-control" style="margin-top: 8px; text-align:center;">
+                <label for="top-movers-count" style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 4px;">
                     Top movers:
                 </label>
-<select id="top-movers-count" style="padding: 2px 6px; border-radius: 6px;">
-<option value="5">5</option>
-<option selected="" value="10">10</option>
-<option value="15">15</option>
-<option value="20">20</option>
-</select>
-</div>
-<button class="chart-range-btn active" data-range="BAR_TODAY">Today</button>
-<button class="chart-range-btn" data-range="1W">1W</button>
-<button class="chart-range-btn" data-range="1M">1M</button>
-<button class="chart-range-btn" data-range="6M">6M</button>
-<button class="chart-range-btn" data-range="YTD">YTD</button>
-<button class="chart-range-btn" data-range="1Y">1Y</button>
-<button class="chart-range-btn" data-range="3Y">3Y</button>
-<button class="chart-range-btn" data-range="5Y">5Y</button>
-<button class="chart-range-btn" data-range="ALL">All</button>
-</div>
-</div>
-<!-- Historical Line Chart Wrapper (Default View) -->
-<div class="canvas-wrapper" id="historical-chart-wrapper" style="height: 400px;">
-<canvas id="portfolioPerformanceChart"></canvas>
-</div>
-<!-- Today's Performance Bar Chart Wrapper (Hidden by default) -->
-<div class="canvas-wrapper" id="bar-chart-wrapper" style="display: none; height: 400px;">
-<canvas id="portfolioPerformanceBarChart"></canvas>
-</div>
+                <select id="top-movers-count" style="padding: 2px 6px; border-radius: 6px;">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="15">15</option>
+                    <option value="20">20</option>
+                </select>
+            </div>
+            <button class="chart-range-btn active" data-range="BAR_TODAY">Today</button>
+            <button class="chart-range-btn" data-range="1W">1W</button>
+            <button class="chart-range-btn" data-range="1M">1M</button>
+            <button class="chart-range-btn" data-range="6M">6M</button>
+            <button class="chart-range-btn" data-range="YTD">YTD</button>
+            <button class="chart-range-btn" data-range="1Y">1Y</button>
+            <button class="chart-range-btn" data-range="3Y">3Y</button>
+            <button class="chart-range-btn" data-range="5Y">5Y</button>
+            <button class="chart-range-btn" data-range="ALL">All</button>
+        </div>
+    </div>
+
+    <!-- Historical Line Chart Wrapper (Default View) -->
+    <div class="canvas-wrapper" id="historical-chart-wrapper" style="height: 400px;">
+        <canvas id="portfolioPerformanceChart"></canvas>
+    </div>
+
+    <!-- Today's Performance Bar Chart Wrapper (Hidden by default) -->
+    <div class="canvas-wrapper" id="bar-chart-wrapper" style="display: none; height: 400px;">
+        <canvas id="portfolioPerformanceBarChart"></canvas>
+    </div>
 </div>
 <!-- END REDESIGNED CHART CONTAINER -->
-<div class="chart-container" id="diversification-chart-container" style="display: none;">
-<div class="canvas-wrapper">
-<canvas id="diversificationChart"></canvas>
-</div>
-</div>
-</div>
-<div class="small-countdown" id="small-countdown-container">Next update: <span id="smallCountdown">90s</span></div>
-<!-- All Modals -->
-<div class="modal" id="editStockModal" style="display: none;">
-<div class="modal-content">
-<button class="close-modal-btn" id="closeEditStockBtn">×</button>
-<h3 class="modal-title">Edit Stock: <span id="edit-stock-symbol-display"></span></h3>
-<div class="transaction-input-group">
-<label for="edit-stock-symbol">Symbol:</label>
-<input class="search-input" id="edit-stock-symbol" placeholder="Stock Symbol (e.g., AAPL)" type="text"/>
-</div>
-<div class="transaction-input-group">
-<label for="edit-stock-name">Name:</label>
-<input class="search-input" id="edit-stock-name" placeholder="Company Name" type="text"/>
-</div>
-<div class="transaction-input-group">
-<label for="edit-stock-shares">Shares (Initial Buy):</label>
-<input class="search-input" id="edit-stock-shares" placeholder="Total Shares (First Buy)" type="number"/>
-</div>
-<div class="transaction-input-group">
-<label for="edit-stock-cost">Average Cost (Initial Buy):</label>
-<input class="search-input" id="edit-stock-cost" placeholder="Average Cost Basis" type="number"/>
-</div>
-<div class="transaction-input-group">
-<label for="edit-stock-date">Initial Buy Date (Initial Buy):</label>
-<input class="search-input" id="edit-stock-date" type="date"/>
-</div>
-<div class="transaction-input-group">
-<label for="edit-stock-platform">Platform:</label>
-<input class="search-input" id="edit-stock-platform" placeholder="e.g., Fidelity, Robinhood" type="text"/>
-</div>
-<button class="add-btn" id="save-stock-edit-btn">Save All Details</button>
-</div>
-</div>
-<div class="modal" id="transactionModal" style="display: none;">
-<div class="modal-content">
-<button class="close-modal-btn" onclick="window.stockTracker.closeTransactionModal()">×</button>
-<h3 class="modal-title"><span id="modal-title-action">Add</span> Transaction for <span id="modal-symbol"></span></h3>
-<div class="transaction-input-group">
-<label for="modal-shares">Shares:</label>
-<input class="search-input" id="modal-shares" min="0" placeholder="Number of shares" type="number"/>
-</div>
-<div class="transaction-input-group">
-<label for="modal-price">Price:</label>
-<input class="search-input" id="modal-price" min="0" placeholder="Price per share" type="number"/>
-</div>
-<div class="transaction-input-group">
-<label for="modal-date">Transaction Date:</label>
-<input class="search-input" id="modal-date" required="" type="date"/>
-</div>
-<div class="transaction-input-group">
-<label for="modal-platform">Platform:</label>
-<select class="search-input" id="modal-platform"></select>
-</div>
-<div class="transaction-input-group">
-<label for="modal-note">Note:</label>
-<input class="search-input" id="modal-note" placeholder="Optional notes" type="text"/>
-</div>
-<div class="transaction-input-group" id="modal-dividend-fields" style="display: none;">
-<label for="modal-dividend-amount">Dividend Amount (per share):</label>
-<input class="search-input" id="modal-dividend-amount" min="0" placeholder="e.g., 0.50" type="number"/>
-</div>
-<button class="add-btn" id="modal-save-btn">Save Transaction</button>
-</div>
-</div>
-<div class="modal" id="settingsModal" style="display: none;">
-<div class="modal-content">
-<button class="close-modal-btn" id="closeSettingsBtn">×</button>
-<h3 class="modal-title">Settings</h3>
-<div class="transaction-input-group">
-<label for="modal-finnhub-key">Finnhub API Key:</label>
-<input class="search-input" id="modal-finnhub-key" placeholder="Enter your Finnhub API Key" type="text"/>
-</div>
-<div class="transaction-input-group">
-<label for="modal-alpha-vantage-key">Alpha Vantage API Key (Primary for Mutual Funds &amp; History):</label>
-<input class="search-input" id="modal-alpha-vantage-key" placeholder="Enter your Alpha Vantage API Key" type="text"/>
-</div>
-<div class="transaction-input-group">
-<label for="modal-fmp-key">FMP API Key (Used for News):</label>
-<input class="search-input" id="modal-fmp-key" placeholder="Enter your Financial Modeling Prep API Key" type="text"/>
-</div>
-<div class="transaction-input-group">
-<label for="modal-refresh-interval">Auto-Refresh Interval (seconds):</label>
-<input class="search-input" id="modal-refresh-interval" min="10" placeholder="e.g., 60" type="number"/>
-</div>
-<div class="transaction-input-group">
-<label for="enable-push-notifications-btn">Enable Push Notifications:</label>
-<button class="add-btn" id="enable-push-notifications-btn">🔔 Enable Notifications</button>
-</div>
-<div class="transaction-input-group">
-<label for="sign-out-other-sessions-btn">Security:</label>
-<button class="add-btn btn-danger" id="sign-out-other-sessions-btn">🔒 Sign Out on All Other Devices</button>
-</div>
-<button class="add-btn" id="modal-save-settings-btn">Save Settings</button>
-</div>
-</div>
-<div class="modal" id="confirmModal" style="display: none;">
-<div class="modal-content">
-<button class="close-modal-btn" id="closeConfirmModalBtn" onclick="window.stockTracker.closeConfirmModal()">×</button>
-<h3 class="modal-title">Are you sure?</h3>
-<p id="confirm-modal-text" style="text-align: center; margin-bottom: 20px;"></p>
-<div class="modal-actions">
-<button class="add-btn" id="confirm-modal-cancel-btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Cancel</button>
-<button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: var(--color-negative);">Confirm Delete</button>
-</div>
-</div>
-</div>
-<div class="modal" id="priceAlertModal" style="display: none;">
-<div class="modal-content">
-<button class="close-modal-btn" onclick="window.stockTracker.closePriceAlertModal()">×</button>
-<h3 class="modal-title">Set Price Alert for <span id="alert-symbol"></span></h3>
-<!-- NEW: Alert Type Selection -->
-<div class="transaction-input-group">
-<label for="alert-type">Alert Type:</label>
-<select id="alert-type">
-<option value="single">Single Price</option>
-<option value="range">Price Range</option>
-</select>
-</div>
-<!-- NEW: Container for Single Price Inputs -->
-<div id="single-price-inputs">
-<div class="transaction-input-group">
-<label for="alert-condition">Condition:</label>
-<select id="alert-condition">
-<option value="above">Price is above</option>
-<option value="below">Price is below</option>
-</select>
-</div>
-<div class="transaction-input-group">
-<label for="alert-price">Target Price:</label>
-<input class="search-input" id="alert-price" min="0" placeholder="e.g., 150.50" type="number"/>
-</div>
-</div>
-<!-- NEW: Container for Price Range Inputs -->
-<div id="price-range-inputs">
-<div class="transaction-input-group">
-<label for="alert-price-lower">Lower Bound:</label>
-<input class="search-input" id="alert-price-lower" min="0" placeholder="e.g., 100" type="number"/>
-</div>
-<span>-</span>
-<div class="transaction-input-group">
-<label for="alert-price-upper">Upper Bound:</label>
-<input class="search-input" id="alert-price-upper" min="0" placeholder="e.g., 105.75" type="number"/>
-</div>
-</div>
-<button class="add-btn" id="save-alert-btn">Save Alert</button>
-</div>
-</div>
-<div class="modal" id="alertsSummaryModal" style="display: none;">
-<div class="modal-content">
-<button class="close-modal-btn" id="closeAlertsSummaryBtn">×</button>
-<h3 class="modal-title">📋 Active Price Alerts</h3>
-<div id="alerts-summary-content" style="max-height: 300px; overflow-y: auto; text-align: left;">
-</div>
-</div>
-</div>
-<div class="modal" id="listAllModal" style="display: none;">
-<div class="modal-content">
-<button class="close-modal-btn" id="closeListAllBtn">×</button>
-<h3 class="modal-title">All Saved Symbols</h3>
-<div id="list-all-content" style="max-height: 60vh; overflow-y: auto;"></div>
-</div>
-</div>
-<!-- 
+
+
+<div id="diversification-chart-container" class="chart-container" style="display: none;">
+             <div class="canvas-wrapper">
+                <canvas id="diversificationChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="small-countdown" id="small-countdown-container">Next update: <span id="smallCountdown">90s</span></div>
+    
+    <!-- All Modals -->
+    <div id="editStockModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" id="closeEditStockBtn">&times;</button>
+            <h3 class="modal-title">Edit Stock: <span id="edit-stock-symbol-display"></span></h3>
+            <div class="transaction-input-group">
+                <label for="edit-stock-symbol">Symbol:</label>
+                <input type="text" class="search-input" id="edit-stock-symbol" placeholder="Stock Symbol (e.g., AAPL)">
+            </div>
+            <div class="transaction-input-group">
+                <label for="edit-stock-name">Name:</label>
+                <input type="text" class="search-input" id="edit-stock-name" placeholder="Company Name">
+            </div>
+            <div class="transaction-input-group">
+                <label for="edit-stock-shares">Shares (Initial Buy):</label>
+                <input type="number" class="search-input" id="edit-stock-shares" placeholder="Total Shares (First Buy)">
+            </div>
+            <div class="transaction-input-group">
+                <label for="edit-stock-cost">Average Cost (Initial Buy):</label>
+                <input type="number" class="search-input" id="edit-stock-cost" placeholder="Average Cost Basis">
+            </div>
+            <div class="transaction-input-group">
+                <label for="edit-stock-date">Initial Buy Date (Initial Buy):</label>
+                <input type="date" class="search-input" id="edit-stock-date">
+            </div>
+            <div class="transaction-input-group">
+                <label for="edit-stock-platform">Platform:</label>
+                <input type="text" class="search-input" id="edit-stock-platform" placeholder="e.g., Fidelity, Robinhood">
+            </div>
+            <button class="add-btn" id="save-stock-edit-btn">Save All Details</button>
+        </div>
+    </div>
+    <div id="transactionModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" onclick="window.stockTracker.closeTransactionModal()">&times;</button>
+            <h3 class="modal-title"><span id="modal-title-action">Add</span> Transaction for <span id="modal-symbol"></span></h3>
+            <div class="transaction-input-group">
+                <label for="modal-shares">Shares:</label>
+                <input type="number" class="search-input" id="modal-shares" placeholder="Number of shares" min="0">
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-price">Price:</label>
+                <input type="number" class="search-input" id="modal-price" placeholder="Price per share" min="0">
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-date">Transaction Date:</label>
+                <input type="date" class="search-input" id="modal-date" required>
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-platform">Platform:</label>
+                <select class="search-input" id="modal-platform"></select>
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-note">Note:</label>
+                <input type="text" class="search-input" id="modal-note" placeholder="Optional notes">
+            </div>
+             <div class="transaction-input-group" id="modal-dividend-fields" style="display: none;">
+                <label for="modal-dividend-amount">Dividend Amount (per share):</label>
+                <input type="number" class="search-input" id="modal-dividend-amount" placeholder="e.g., 0.50" min="0">
+            </div>
+            <button class="add-btn" id="modal-save-btn">Save Transaction</button>
+        </div>
+    </div>
+    <div id="settingsModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" id="closeSettingsBtn">&times;</button>
+            <h3 class="modal-title">Settings</h3>
+            <div class="transaction-input-group">
+                <label for="modal-finnhub-key">Finnhub API Key:</label>
+                <input type="text" class="search-input" id="modal-finnhub-key" placeholder="Enter your Finnhub API Key">
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-alpha-vantage-key">Alpha Vantage API Key (Primary for Mutual Funds & History):</label>
+                <input type="text" class="search-input" id="modal-alpha-vantage-key" placeholder="Enter your Alpha Vantage API Key">
+            </div>
+
+            
+            <div class="transaction-input-group">
+                <label for="modal-fmp-key">FMP API Key (Used for News):</label>
+                <input type="text" class="search-input" id="modal-fmp-key" placeholder="Enter your Financial Modeling Prep API Key">
+            </div>
+            <div class="transaction-input-group">
+                <label for="modal-refresh-interval">Auto-Refresh Interval (seconds):</label>
+                <input type="number" class="search-input" id="modal-refresh-interval" placeholder="e.g., 60" min="10">
+            </div>
+             <div class="transaction-input-group">
+                <label for="enable-push-notifications-btn">Enable Push Notifications:</label>
+                <button class="add-btn" id="enable-push-notifications-btn">🔔 Enable Notifications</button>
+            </div>
+            <div class="transaction-input-group">
+                <label for="sign-out-other-sessions-btn">Security:</label>
+                <button class="add-btn btn-danger" id="sign-out-other-sessions-btn">🔒 Sign Out on All Other Devices</button>
+            </div>
+            <button class="add-btn" id="modal-save-settings-btn">Save Settings</button>
+        </div>
+    </div>
+    <div id="confirmModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" id="closeConfirmModalBtn" onclick="window.stockTracker.closeConfirmModal()">&times;</button>
+            <h3 class="modal-title">Are you sure?</h3>
+            <p id="confirm-modal-text" style="text-align: center; margin-bottom: 20px;"></p>
+            <div class="modal-actions">
+                <button class="add-btn" id="confirm-modal-cancel-btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Cancel</button>
+                <button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: var(--color-negative);">Confirm Delete</button>
+            </div>
+        </div>
+    </div>
+    <div id="priceAlertModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" onclick="window.stockTracker.closePriceAlertModal()">&times;</button>
+            <h3 class="modal-title">Set Price Alert for <span id="alert-symbol"></span></h3>
+            <!-- NEW: Alert Type Selection -->
+            <div class="transaction-input-group">
+                <label for="alert-type">Alert Type:</label>
+                <select id="alert-type">
+                    <option value="single">Single Price</option>
+                    <option value="range">Price Range</option>
+                </select>
+            </div>
+
+            <!-- NEW: Container for Single Price Inputs -->
+            <div id="single-price-inputs">
+                <div class="transaction-input-group">
+                    <label for="alert-condition">Condition:</label>
+                    <select id="alert-condition">
+                        <option value="above">Price is above</option>
+                        <option value="below">Price is below</option>
+                    </select>
+                </div>
+                <div class="transaction-input-group">
+                    <label for="alert-price">Target Price:</label>
+                    <input type="number" class="search-input" id="alert-price" placeholder="e.g., 150.50" min="0">
+                </div>
+            </div>
+
+            <!-- NEW: Container for Price Range Inputs -->
+            <div id="price-range-inputs">
+                <div class="transaction-input-group">
+                    <label for="alert-price-lower">Lower Bound:</label>
+                    <input type="number" class="search-input" id="alert-price-lower" placeholder="e.g., 100" min="0">
+                </div>
+                <span>-</span>
+                <div class="transaction-input-group">
+                    <label for="alert-price-upper">Upper Bound:</label>
+                    <input type="number" class="search-input" id="alert-price-upper" placeholder="e.g., 105.75" min="0">
+                </div>
+            </div>
+            
+            <button class="add-btn" id="save-alert-btn">Save Alert</button>
+        </div>
+    </div>
+    <div id="alertsSummaryModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" id="closeAlertsSummaryBtn">&times;</button>
+            <h3 class="modal-title">📋 Active Price Alerts</h3>
+            <div id="alerts-summary-content" style="max-height: 300px; overflow-y: auto; text-align: left;">
+            </div>
+        </div>
+    </div>
+    <div id="listAllModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn" id="closeListAllBtn">&times;</button>
+            <h3 class="modal-title">All Saved Symbols</h3>
+            <div id="list-all-content" style="max-height: 60vh; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <!-- 
     ==================================================================
     ==      YOUR JAVASCRIPT WITH IMPROVEMENTS                     ==
     ==================================================================
     This is your full JavaScript block with the Firebase library
     version updated for better performance and stability.
     -->
-<script type="module">
+    <script type="module">
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
                 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, browserPopupRedirectResolver, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, serverTimestamp, deleteDoc, onSnapshot, query, where, limit } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, serverTimestamp, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
 
         const firebaseConfig = {
@@ -2361,145 +1619,28 @@ body{
             // -----------------------------------------
             //  YAHOO FINANCE PRIMARY FETCH FUNCTIONS
             // -----------------------------------------
-            
-async fetchYahooQuote(symbol) {
-                // Yahoo Quote for Stocks/ETFs/Funds
-                // IMPORTANT: Mutual funds (typically end with 'X') are often flaky via the v7/finance/quote endpoint
-                // through public proxies (and can trigger noisy CORS/500 console errors).
-                // For mutual funds, we go straight to the v8/finance/chart meta path (more reliable + quiet).
-                const sym = (symbol || "").toUpperCase().trim();
-                // NOTE: Many mutual funds are 5-letter tickers ending in "X", but some STOCK tickers also end in "X" (e.g., WIX/STX).
-                // We do NOT classify mutual funds by this check; it only decides which Yahoo endpoint to use (chart-meta is quieter than public-quote proxies).
-                const endsWithX = sym.endsWith("X");
-
-                if (endsWithX) {
-                    const fromChart = await this._fetchYahooQuoteViaChartMeta(sym);
-                    fromChart.via = "chart";
-                    return fromChart;
-                }
-
-                // For stocks/ETFs, try quote endpoint first, then chart-meta fallback.
+            async fetchYahooQuote(symbol) {
                 try {
-                    return await this._fetchYahooQuoteViaQuoteEndpoint(sym);
+                    const url = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbol)}`;
+                    const res = await fetch(url);
+                    if (!res.ok) throw new Error("Yahoo quote fetch failed");
+                    const data = await res.json();
+                    const q = data.quoteResponse?.result?.[0];
+                    if (!q) throw new Error("Invalid Yahoo quote response");
+                    return {
+                        source: "yahoo",
+                        price: q.regularMarketPrice,
+                        previousClose: q.regularMarketPreviousClose,
+                        change: q.regularMarketChange,
+                        percentChange: q.regularMarketChangePercent
+                    };
                 } catch (err) {
-                    try {
-                        const fromChart = await this._fetchYahooQuoteViaChartMeta(sym);
-                        fromChart.via = "chart";
-                        return fromChart;
-                    } catch (err2) {
-                        // Surface the more informative error if available
-                        console.warn(`Yahoo quote failed for ${sym}`, err2 || err);
-                        throw (err2 || err);
-                    }
+                    console.warn(`Yahoo quote failed for ${symbol}`, err);
+                    throw err;
                 }
             }
-async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
-                const url = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbol)}`;
-                const res = await fetch(url, { cache: "no-store" });
-                if (!res.ok) throw new Error(`Yahoo quote fetch failed (HTTP ${res.status})`);
-
-                // Some proxies return non-JSON content-types even when the body is JSON.
-                let data;
-                const ct = (res.headers.get("content-type") || "").toLowerCase();
-                if (ct.includes("application/json")) {
-                    data = await res.json();
-                } else {
-                    const txt = await res.text();
-                    try { data = JSON.parse(txt); } catch { throw new Error("Yahoo quote non-JSON response"); }
-                }
-
-                // allorigins can sometimes wrap response as { contents: "..." }
-                if (data && typeof data === "object" && typeof data.contents === "string") {
-                    try { data = JSON.parse(data.contents); } catch { /* ignore */ }
-                }
-
-                const q =
-                    data?.quoteResponse?.result?.[0] ||
-                    data?.result?.[0] ||
-                    data?.quote?.[0] ||
-                    data?.quote ||
-                    null;
-
-                // Mutual funds sometimes expose NAV-like fields rather than regularMarketPrice
-                const priceCandidate =
-                    q?.regularMarketPrice ??
-                    q?.price ??
-                    q?.navPrice ??
-                    q?.regularMarketOpen ?? // last resort
-                    null;
-
-                const prevCandidate =
-                    q?.regularMarketPreviousClose ??
-                    q?.previousClose ??
-                    q?.regularMarketOpen ??
-                    null;
-
-                const price = (typeof priceCandidate === "number" && isFinite(priceCandidate)) ? priceCandidate : null;
-                const previousClose = (typeof prevCandidate === "number" && isFinite(prevCandidate)) ? prevCandidate : null;
-
-                let change =
-                    q?.regularMarketChange ??
-                    q?.change ??
-                    ((price != null && previousClose != null) ? (price - previousClose) : null);
-
-                let percentChange =
-                    q?.regularMarketChangePercent ??
-                    q?.changePercent ??
-                    ((change != null && previousClose) ? ((change / previousClose) * 100) : null);
-
-                // Some APIs return { raw: number } structures
-                if (percentChange && typeof percentChange === "object" && "raw" in percentChange) percentChange = percentChange.raw;
-
-                // If we still don't have a usable price, treat as invalid so callers can fallback.
-                if (price == null) {
-                    const errMsg =
-                        data?.quoteResponse?.error?.description ||
-                        data?.quoteResponse?.error?.code ||
-                        "";
-                    throw new Error(`Invalid Yahoo quote response${errMsg ? ": " + errMsg : ""}`);
-                }
-
-                return {
-                    source: "yahoo",
-                    price: Number(price),
-                    previousClose: previousClose != null ? Number(previousClose) : null,
-                    change: change != null ? Number(change) : null,
-                    percentChange: percentChange != null ? Number(percentChange) : null
-                };
-            }
-
-            async _fetchYahooQuoteViaChartMeta(symbol) {
-                const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
-                const res = await fetch(url, { cache: "no-store" });
-                if (!res.ok) throw new Error(`Yahoo chart fetch failed (HTTP ${res.status})`);
-                const json = await res.json();
-
-                const meta = json?.chart?.result?.[0]?.meta;
-                if (!meta) {
-                    const errMsg = json?.chart?.error?.description || json?.chart?.error?.code || "";
-                    throw new Error(`Invalid Yahoo chart response${errMsg ? ": " + errMsg : ""}`);
-                }
-
-                const price = meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? null;
-                const previousClose = meta?.previousClose ?? meta?.chartPreviousClose ?? null;
-
-                if (typeof price !== "number" || !isFinite(price)) {
-                    throw new Error("Invalid Yahoo chart meta price");
-                }
-
-                const change = (previousClose != null && isFinite(previousClose)) ? (price - previousClose) : null;
-                const percentChange = (change != null && previousClose) ? ((change / previousClose) * 100) : null;
-
-                return {
-                    source: "yahoo",
-                    price: Number(price),
-                    previousClose: previousClose != null ? Number(previousClose) : null,
-                    change: change != null ? Number(change) : null,
-                    percentChange: percentChange != null ? Number(percentChange) : null
-                };
-            }
-
-
+            
+            
             // --- 2. ENRICHMENT: Yahoo (The "Extra Brain" for AH/Day Split) ---
             async fetchYahooEnrichment(symbol) {
                 try {
@@ -2870,37 +2011,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 
                 // If it's explicitly a mutual fund (e.g., ends with X), skip Finnhub entirely
                 if (this.isMutualFund(symbol)) {
-                    // 0. Try Yahoo FIRST (best reliability for mutual funds)
-                    try {
-                        const y = await this.fetchYahooQuote(symbol);
-                        const price = parseFloat(y.price) || 0;
-                        const change = parseFloat(y.change ?? 0) || 0;
-                        const changePercent = parseFloat(y.percentChange ?? 0) || 0;
-                        const previousClose = parseFloat(y.previousClose ?? 0) || (price - change);
-
-                        if (price > 0) {
-                            console.log(`MF Source: YAHOO → ${symbol}`);
-                            return {
-                                success: true,
-                                data: {
-                                    symbol,
-                                    name: symbol,
-                                    price,
-                                    change,
-                                    changePercent,
-                                    open: previousClose,
-                                    high: price,
-                                    low: price,
-                                    previousClose,
-                                    industry: "Mutual Fund"
-                                }
-                            };
-                        }
-                    } catch (errYahooFund) {
-                        console.log(`Yahoo failed for mutual fund ${symbol}. Falling back...`, errYahooFund);
-                    }
-
-                    // 1. Try Alpha Vantage SECOND (fallback)
+                    // 1. Try Alpha Vantage FIRST (primary for mutual funds)
                     let result = await this.fetchAlphaVantageFundData(symbol);
                     if (result && result.success && result.data && result.data.price > 0) {
                         return result;
@@ -2908,7 +2019,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
 
                     console.log(`Alpha Vantage failed for ${symbol}. Falling back to FMP...`);
 
-                    // 2. Try FMP last
+                    // 2. Try FMP second
                     result = await this.fetchFmpFundData(symbol);
                     if (result && result.success && result.data && result.data.price > 0) {
                         return result;
@@ -3122,16 +2233,6 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 this.cardChartInstances = {}; // To manage individual card charts
                 this.chartDataCache = {}; // Cache for historical data (NEW: Persists in session/memory)
                 this.sessionId = crypto.randomUUID(); 
-                this._sessionState = {
-                    lastForceSeen: null,
-                    suppressKickUntil: 0,
-                    graceDeadline: 0,
-                    graceTimer: null,
-                    graceInterval: null,
-                    currentActiveSession: null,
-                    claimInFlight: false
-                };
- 
                 this.sessionUnsubscribe = null;
                 this.topMoversCount = 10; // default number of top movers in Today bar chart
                 
@@ -3293,10 +2394,6 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     userInfo: document.getElementById('user-info'),
                     userName: document.getElementById('user-name'),
                     signOutBtn: document.getElementById('sign-out-btn'),
-                    signOutOthersBtn: document.getElementById('sign-out-others-btn'),
-                    sessionWarning: document.getElementById('session-warning'),
-                    sessionGraceSeconds: document.getElementById('session-grace-seconds'),
-                    sessionClaimBtn: document.getElementById('session-claim-btn'),
                     stocksGrid: document.getElementById('stocksGrid'), loadingDiv: document.getElementById('loading'), errorDiv: document.getElementById('error'), successDiv: document.getElementById('success'),
                     stockInput: document.getElementById('stockInput'), addBtn: document.getElementById('addBtn'),
                     liveUpdateBtn: document.getElementById('liveUpdateBtn'), toggleLiveUpdateBtn: document.getElementById('toggleLiveUpdateBtn'), clearAllBtn: document.getElementById('clearAllBtn'),
@@ -3391,8 +2488,6 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             setupEventListeners() {
                 if (this.elements.googleSignInBtn) this.elements.googleSignInBtn.addEventListener('click', () => this.signIn());
                 if (this.elements.signOutBtn) this.elements.signOutBtn.addEventListener('click', () => this.signOut());
-                if (this.elements.signOutOthersBtn) this.elements.signOutOthersBtn.addEventListener('click', () => this.signOutOtherSessions());
-                if (this.elements.sessionClaimBtn) this.elements.sessionClaimBtn.addEventListener('click', () => this.signOutOtherSessions());
                 if (this.elements.addBtn) this.elements.addBtn.addEventListener('click', () => this.addItemFromInput('stock'));
                 if (this.elements.stockInput) this.elements.stockInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('stock'); });
                 if (this.elements.liveUpdateBtn) this.elements.liveUpdateBtn.addEventListener('click', () => this.refreshCurrentTab());
@@ -3787,7 +2882,25 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     stocks: this.stocks, mutualFunds: this.mutualFunds, watchlist: this.watchlist,
                     portfolioHistory: this.portfolioHistory, priceAlerts: this.priceAlerts,
                 };
-                await setDoc(userDocRef, data, { merge: true });
+
+                // Firestore rejects `undefined` anywhere in the payload. Strip it defensively.
+                const stripUndefinedDeep = (value) => {
+                    if (Array.isArray(value)) {
+                        return value.map(stripUndefinedDeep).filter(v => v !== undefined);
+                    }
+                    if (value && typeof value === 'object') {
+                        const out = {};
+                        for (const [k, v] of Object.entries(value)) {
+                            const cleaned = stripUndefinedDeep(v);
+                            if (cleaned !== undefined) out[k] = cleaned;
+                        }
+                        return out;
+                    }
+                    return value === undefined ? undefined : value;
+                };
+
+                await setDoc(userDocRef, stripUndefinedDeep(data), { merge: true });
+
             }
             async loadData() {
                 if (!this.userId) return;
@@ -3927,8 +3040,6 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 const sessionLabel = isAfterHours ? '<span style="font-size: 0.7em; opacity: 0.8; margin-left: 6px;">(After-Hours)</span>' : '';
 
                 let stats = { success: 0, gains: 0, losses: 0, unchanged: 0, failed: 0 };
-                let needsGroupRerender = false; // if any item flips gain/loss during refresh
-
                 
                 for (const [i, item] of items.entries()) {
                     let result;
@@ -3939,14 +3050,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     }
                     
                     if (result.success) {
-                        const prevChangePercent = Number(item.changePercent) || 0;
                         Object.assign(item, result.data);
-                        const newChangePercent = Number(item.changePercent) || 0;
-
-                        // If an item crosses from gain->loss or loss->gain, we need to re-render grouped view
-                        if ((prevChangePercent >= 0 && newChangePercent < 0) || (prevChangePercent < 0 && newChangePercent >= 0)) {
-                            needsGroupRerender = true;
-                        }
                         stats.success++;
                         if ((result.data.change || 0) > 0) stats.gains++;
                         else if ((result.data.change || 0) < 0) stats.losses++;
@@ -3977,18 +3081,10 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 this.showLoading(false);
                 this.showRefreshStatus(type, stats);
                 await this.saveData();
-                const currentSortMode = this.elements.portfolioSort ? this.elements.portfolioSort.value : 'performance';
-                const tabMatchesType = (type === 'stock' && this.currentTab === 'stocks') || (type === 'fund' && this.currentTab === 'funds');
-
-                // If items flipped between gain/loss buckets while we're in the grouped "performance" view,
-                // re-render the grid so group membership stays correct.
-                if (needsGroupRerender && tabMatchesType && currentSortMode === 'performance') {
-                    this.renderContent();
-                } else {
-                    this.renderPortfolioSummary();
-                    this.renderDiversificationChart();
-                }
-}
+                
+                this.renderPortfolioSummary();
+                this.renderDiversificationChart();
+            }
 
             
                         
@@ -4755,10 +3851,10 @@ renderPortfolioSummary() {
                                 <button class="add-btn transaction-btn" style="background-color: var(--color-positive); opacity: 0.8;" onclick="window.stockTracker.openTransactionModal('${item.id}', '${type}', 'dividend')">Record Dividend</button>
                             </div>
                             <div class="transaction-details">
-                                <div class="transaction-header collapsed">
+                                <div class="transaction-header">
                                     <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
                                 </div>
-                                <div class="transactions-container collapsed">
+                                <div class="transactions-container">
                                     ${this.renderTransactions(item.transactions, item.dividends, item.id, type)}
                                 </div>
                             </div>
@@ -4769,7 +3865,7 @@ renderPortfolioSummary() {
                                 <button class="add-btn transaction-btn buy-btn" data-id="${item.id}" data-type="${type}" style="background-color: var(--color-positive);">Re-open Position (Buy)</button>
                             </div>
                             <div class="transaction-details">
-                                <div class="transaction-header collapsed">
+                                <div class="transaction-header">
                                     <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
                                 </div>
                                 <div class="transactions-container collapsed">
@@ -5995,12 +5091,15 @@ getOldestTransactionDate(item) {
                 const uniquePlatforms = [...new Set((item.transactions || []).map(t => t.platform))].filter(p => p);
                 this.elements.editStockPlatform.value = uniquePlatforms.length === 1 ? uniquePlatforms[0] : (uniquePlatforms.length > 1 ? 'Multiple Platforms' : '');
 
-                // Allow editing Shares/Cost/Date even if there are multiple transactions.
-// When saved, we'll normalize the transaction log to match the edited core values.
-                this.elements.editStockShares.disabled = false;
-                this.elements.editStockCost.disabled = false;
-                this.elements.editStockDate.disabled = false;
-
+                // For simplicity, we disable editing core stats if multiple transactions exist
+                const canEditCore = (item.transactions || []).filter(t => t.type === 'buy').length <= 1;
+                this.elements.editStockShares.disabled = !canEditCore;
+                this.elements.editStockCost.disabled = !canEditCore;
+                this.elements.editStockDate.disabled = !canEditCore;
+                
+                if(!canEditCore) {
+                    this.showError("Cannot edit Shares/Cost/Date here. Use 'Buy/Sell' buttons to manage multiple transactions.");
+                }
             }
             closeEditStockModal() {
                  if (this.elements.editStockModal) this.elements.editStockModal.style.display = 'none';
@@ -6028,46 +5127,24 @@ getOldestTransactionDate(item) {
                     (item.transactions || []).forEach(t => t.platform = newPlatform);
                 }
 
-                                // Allow editing Shares/Cost/Date even with multiple transactions.
-                // To keep totals and P/L consistent, we normalize the position to match the edited core values.
-                // This replaces the transaction log with a single BUY transaction representing the current holding.
-                // A backup of previous transactions is stored on the item as _transactionsBackup.
-                const shares = parseFloat(this.elements.editStockShares ? this.elements.editStockShares.value : 0);
-                const cost = parseFloat(this.elements.editStockCost ? this.elements.editStockCost.value : 0);
-                const date = this.elements.editStockDate ? this.elements.editStockDate.value : '';
+                // If user edits shares/cost/date and it was a single transaction, update that transaction (not recommended, but supported for initial entry simplicity)
+                const canEditCore = (item.transactions || []).filter(t => t.type === 'buy').length <= 1;
+                if (canEditCore && (item.transactions || []).length > 0) {
+                    const shares = parseFloat(this.elements.editStockShares ? this.elements.editStockShares.value : 0);
+                    const cost = parseFloat(this.elements.editStockCost ? this.elements.editStockCost.value : 0);
+                    const date = this.elements.editStockDate ? this.elements.editStockDate.value : '';
 
-                const hasCoreInputs = !!(this.elements.editStockShares && this.elements.editStockCost && this.elements.editStockDate);
-                if (hasCoreInputs && date && !isNaN(shares) && shares >= 0 && !isNaN(cost) && cost >= 0) {
-                    const isoDate = `${date}T00:00:00.000Z`;
-                    const platformForTxn = (newPlatform && newPlatform !== 'Multiple Platforms')
-                        ? newPlatform
-                        : (((item.transactions || [])[0] && (item.transactions || [])[0].platform) ? (item.transactions || [])[0].platform : 'Uncategorized');
-
-                    // Backup existing transactions (so you can recover if needed)
-                    try {
-                        if (!item._transactionsBackup) item._transactionsBackup = [];
-                        item._transactionsBackup.push({
-                            savedAt: new Date().toISOString(),
-                            transactions: JSON.parse(JSON.stringify(item.transactions || []))
-                        });
-                    } catch (e) { /* ignore */ }
-
-                    if (shares === 0) {
-                        item.transactions = [];
-                    } else {
-                        item.transactions = [{
-                            id: `buy_${Date.now()}`,
-                            type: 'buy',
-                            shares: shares,
-                            price: cost,
-                            date: isoDate,
-                            platform: platformForTxn
-                        }];
+                    if (!isNaN(shares) && shares >= 0 && !isNaN(cost) && cost >= 0 && date) {
+                        const firstBuyIndex = item.transactions.findIndex(t => t.type === 'buy');
+                        if (firstBuyIndex > -1) {
+                            item.transactions[firstBuyIndex].shares = shares;
+                            item.transactions[firstBuyIndex].price = cost;
+                            item.transactions[firstBuyIndex].date = new Date(date).toISOString();
+                        }
                     }
                 }
 
-
-await this.saveData();
+                await this.saveData();
                 this.renderContent();
                 this.closeEditStockModal();
                 this.showSuccess(`✅ Details for ${item.symbol} saved.`);
@@ -6113,11 +5190,21 @@ await this.saveData();
 
                 const alert = {
                     id: crypto.randomUUID(),
-                    symbol, type, condition,
-                    price, priceLower, priceUpper,
+                    symbol,
+                    type,
                     triggered: false,
                     timestamp: new Date().toISOString()
                 };
+
+                // Only set fields relevant to the selected alert type.
+                if (type === 'single') {
+                    alert.condition = condition;
+                    alert.price = price;
+                } else { // range
+                    alert.priceLower = priceLower;
+                    alert.priceUpper = priceUpper;
+                };
+
 
                 this.priceAlerts.push(alert);
                 await this.saveData();
@@ -6227,138 +5314,28 @@ await this.saveData();
             }
 
             // --- Session/Security Logic ---
-            
-            _renderSessionWarning(show, secondsLeft = 10) {
-                if (!this.elements.sessionWarning) return;
-                this.elements.sessionWarning.style.display = show ? 'flex' : 'none';
-                if (show && this.elements.sessionGraceSeconds) {
-                    this.elements.sessionGraceSeconds.textContent = String(Math.max(0, Math.ceil(secondsLeft)));
-                }
-            }
-            _clearGraceWindow() {
-                if (this._sessionState.graceTimer) clearTimeout(this._sessionState.graceTimer);
-                if (this._sessionState.graceInterval) clearInterval(this._sessionState.graceInterval);
-                this._sessionState.graceTimer = null;
-                this._sessionState.graceInterval = null;
-                this._sessionState.graceDeadline = 0;
-                this._renderSessionWarning(false);
-            }
-            _startGraceWindow() {
-                const now = Date.now();
-                // If already running, just refresh UI
-                if (this._sessionState.graceDeadline && now < this._sessionState.graceDeadline) {
-                    const secondsLeft = (this._sessionState.graceDeadline - now) / 1000;
-                    this._renderSessionWarning(true, secondsLeft);
-                    return;
-                }
-                // Start a new 10s grace window
-                this._sessionState.graceDeadline = now + 10000;
-                this._renderSessionWarning(true, 10);
-
-                this._sessionState.graceInterval = setInterval(() => {
-                    const t = Date.now();
-                    const secondsLeft = (this._sessionState.graceDeadline - t) / 1000;
-                    this._renderSessionWarning(true, secondsLeft);
-                }, 250);
-
-                this._sessionState.graceTimer = setTimeout(() => {
-                    const t = Date.now();
-                    // If user clicked "claim", do not kick.
-                    if (t < (this._sessionState.suppressKickUntil || 0)) return;
-                    // If we became active during the grace window, do not kick.
-                    if (this._sessionState.currentActiveSession === this.sessionId) {
-                        this._clearGraceWindow();
-                        return;
-                    }
-                    // Still not active -> sign out after grace
-                    this.showError("You were signed out because another device is currently active.");
-                    this.signOut();
-                }, 10100);
-            }
-
             setupSessionListener() {
                 if (!this.userId) return;
                 const sessionDocRef = doc(db, "sessions", this.userId);
-
-                // IMPORTANT: Do NOT auto-claim activeSession on login (prevents ping-pong).
-                // Just record lastLogin/seen.
+                
+                // Set the current session ID on login (used for multi-device sign-out)
                 try {
-                    setDoc(sessionDocRef, {
+                    setDoc(sessionDocRef, { 
                         lastLogin: serverTimestamp(),
-                        userId: this.userId,
-                        lastSeenSession: this.sessionId
-                    }, { merge: true }).catch(err => console.error("Error writing session heartbeat:", err));
+                        activeSession: this.sessionId,
+                        userId: this.userId
+                    }, { merge: true }).catch(err => console.error("Error writing session ID:", err));
                 } catch (err) {
-                    console.error("Error writing session heartbeat (check rules):", err);
+                    console.error("Error setting initial session doc (check rules):", err);
                 }
 
+                // Listen for changes to the activeSession field
                 try {
-                    this.sessionUnsubscribe = onSnapshot(sessionDocRef, (snap) => {
-                        const now = Date.now();
-
-                        if (!snap.exists()) {
-                            // First session claims ownership
-                            setDoc(sessionDocRef, {
-                                userId: this.userId,
-                                lastLogin: serverTimestamp(),
-                                activeSession: this.sessionId,
-                                forceSignOut: 0,
-                                lastSignOutAllBy: this.sessionId
-                            }, { merge: true }).catch(() => {});
-                            this._sessionState.currentActiveSession = this.sessionId;
-                            this._clearGraceWindow();
-                            return;
-                        }
-
-                        const data = snap.data() || {};
-                        const active = data.activeSession || null;
-                        const force = Number(data.forceSignOut || 0);
-                        const lastBy = data.lastSignOutAllBy || null;
-
-                        this._sessionState.currentActiveSession = active;
-
-                        // Prime baseline to avoid "old forceSignOut" instantly booting.
-                        if (this._sessionState.lastForceSeen === null) {
-                            this._sessionState.lastForceSeen = force;
-                        } else if (force > this._sessionState.lastForceSeen) {
-                            this._sessionState.lastForceSeen = force;
-
-                            // If someone else initiated a global sign-out AND we're not the active session, sign out.
-                            if (lastBy && lastBy !== this.sessionId && active && active !== this.sessionId) {
-                                this.showError("You have been signed out because another device chose to sign out other devices.");
-                                this.signOut();
-                                return;
-                            }
-                        }
-
-                        // If no active session is set, claim it silently (avoids orphan state).
-                        if (!active) {
-                            if (now >= (this._sessionState.suppressKickUntil || 0) && !this._sessionState.claimInFlight) {
-                                this._sessionState.claimInFlight = true;
-                                setDoc(sessionDocRef, {
-                                    activeSession: this.sessionId,
-                                    lastSignOutAllBy: this.sessionId
-                                }, { merge: true }).finally(() => {
-                                    this._sessionState.claimInFlight = false;
-                                });
-                            }
-                            this._clearGraceWindow();
-                            return;
-                        }
-
-                        // If we are active, clear any grace state.
-                        if (active === this.sessionId) {
-                            this._clearGraceWindow();
-                            return;
-                        }
-
-                        // If another device is active: allow 10s grace to claim, otherwise kick.
-                        if (active && active !== this.sessionId) {
-                            if (now < (this._sessionState.suppressKickUntil || 0)) {
-                                // Ignore transient mismatch during claim propagation
-                                return;
-                            }
-                            this._startGraceWindow();
+                    this.sessionUnsubscribe = onSnapshot(sessionDocRef, (doc) => {
+                        if (doc.exists() && doc.data().activeSession !== this.sessionId) {
+                            // A different session has become the 'active' one (i.e., this session was signed out remotely)
+                            this.showError("You have been signed out because a new session was started or an admin action was taken.");
+                            this.signOut();
                         }
                     }, (error) => {
                         console.error("Error listening to session document:", error);
@@ -6367,32 +5344,18 @@ await this.saveData();
                     console.error("Error setting up session listener (check rules):", err);
                 }
             }
-
             async signOutOtherSessions() {
                 if (!this.userId) return;
-
-                // Immediately stop any pending kick while we claim.
-                this._clearGraceWindow();
-
-                const now = Date.now();
-                this._sessionState.suppressKickUntil = now + 12000; // protect this tab while writes propagate
-
-                const sessionDocRef = doc(db, "sessions", this.userId);
-                try {
-                    await setDoc(sessionDocRef, {
-                        userId: this.userId,
-                        lastLogin: serverTimestamp(),
-                        activeSession: this.sessionId,
-                        forceSignOut: now,
-                        lastSignOutAllBy: this.sessionId
-                    }, { merge: true });
-
-                    this.showSuccess("All other devices have been signed out. This session is now active.");
-                } catch (err) {
-                    this.showError(`Failed to sign out other devices. Check Firebase permissions.`);
-                    console.error("Error signing out other sessions:", err);
-                }
-            }
+                 this.openConfirmModal("Are you sure you want to sign out all other devices? This session will remain active.", async () => {
+                    const sessionDocRef = doc(db, "sessions", this.userId);
+                    // Update the activeSession ID to the current one, which invalidates all others (as they are watching for a mismatch)
+                    try {
+                        await setDoc(sessionDocRef, { activeSession: this.sessionId, forceSignOut: Date.now() }, { merge: true });
+                        this.showSuccess("All other sessions have been signed out.");
+                    } catch (err) {
+                         this.showError(`Failed to sign out other sessions. Check Firebase permissions.`);
+                         console.error("Error signing out other sessions:", err);
+                    }
                  });
             }
             
@@ -6477,6 +5440,10 @@ await this.saveData();
         window.stockTracker = new StockTracker();
 
     </script>
+
+
+
+
 <!-- START: Upgrades - TradingView style candles, improved line, events, summary, smoother switching -->
 <style>
 /* Modern UI tweaks for the chart area */
@@ -6515,28 +5482,14 @@ await this.saveData();
 /* Crosshair style */
 .crosshair-line { position:absolute; pointer-events:none; z-index:10; }
 .event-icon { position:absolute; width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;box-shadow:0 4px 8px rgba(0,0,0,0.12);pointer-events:auto; }
-
-/* --- v9: Color the summary pill NUMBERS based on sign --- */
-#chart-summary-panel .summary-pill{
-  color: var(--text-primary, #0b1220) !important;
-}
-#chart-summary-panel .summary-pill .pill-label{
-  opacity: 0.88;
-}
-#chart-summary-panel .summary-pill .pill-value{
-  font-weight: 800;
-  letter-spacing: 0.2px;
-}
-#chart-summary-panel .summary-pill .pill-value.positive{ color: var(--color-positive) !important; }
-#chart-summary-panel .summary-pill .pill-value.negative{ color: var(--color-negative) !important; }
-#chart-summary-panel .summary-pill .pill-value.neutral{  color: var(--text-primary, #0b1220) !important; }
-
 </style>
-<div aria-hidden="false" id="chart-summary-panel">
-<div class="summary-pill" id="summary-daily"><span class="pill-label">Today:</span> <span class="pill-value neutral">$0.00</span></div>
-<div class="summary-pill" id="summary-week"><span class="pill-label">1W:</span> <span class="pill-value neutral">0.00%</span></div>
-<div class="summary-pill" id="summary-month"><span class="pill-label">1M:</span> <span class="pill-value neutral">0.00%</span></div>
+
+<div id="chart-summary-panel" aria-hidden="false">
+  <div class="summary-pill" id="summary-daily">Today: $0.00</div>
+  <div class="summary-pill" id="summary-week">1W: 0.00%</div>
+  <div class="summary-pill" id="summary-month">1M: 0.00%</div>
 </div>
+
 <script>
 (function(){
   // utilities
@@ -6736,42 +5689,9 @@ await this.saveData();
       const plToday = tracker.totalPLToday || tracker.total_pl_today || (tracker.getTotalPLToday && tracker.getTotalPLToday());
       const pct1w = tracker.weekPercent || (tracker.getWeekPercent && tracker.getWeekPercent && tracker.getWeekPercent());
       const pct1m = tracker.monthPercent || (tracker.getMonthPercent && tracker.getMonthPercent && tracker.getMonthPercent());
-      function fmtPillCurrency(v){
-  const n = Number(v);
-  if(!Number.isFinite(n)) return '$0.00';
-  const abs = Math.abs(n);
-  const base = '$' + abs.toFixed(2);
-  return n < 0 ? '-' + base : base;
-}
-
-function normalizeCurrencyDisplay(s, v){
-  let out = String(s || '');
-  // Normalize "$-123.45" => "-$123.45" for consistent parsing/color logic
-  out = out.replace(/^\$-\s*/,'-$').replace(/^\$\+\s*/,'+$');
-  if(!out.includes('$') && Number.isFinite(Number(v))){
-    out = fmtPillCurrency(v);
-  }
-  return out;
-}
-function setPill(el, label, value, display){
-  if(!el) return;
-  const n = Number(value);
-  const cls = (!Number.isFinite(n) || n === 0) ? 'neutral' : (n > 0 ? 'positive' : 'negative');
-  el.innerHTML = '<span class="pill-label">'+label+'</span> <span class="pill-value '+cls+'">'+display+'</span>';
-}
-
-// Today (currency)
-const todayDispRaw = (plToday !== undefined ? (window.stockTracker && window.stockTracker.formatCurrency ? window.stockTracker.formatCurrency(plToday) : fmtPillCurrency(plToday)) : '$0.00');
-      const todayDisp = normalizeCurrencyDisplay(todayDispRaw, plToday);
-      setPill(daily, 'Today:', plToday, todayDisp);
-
-// 1W / 1M (percent)
-const wNum = (pct1w !== undefined) ? Number(pct1w) : 0;
-const mNum = (pct1m !== undefined) ? Number(pct1m) : 0;
-const wTxt = (pct1w !== undefined) ? ((wNum>0?'+':'') + wNum.toFixed(2) + '%') : '0.00%';
-const mTxt = (pct1m !== undefined) ? ((mNum>0?'+':'') + mNum.toFixed(2) + '%') : '0.00%';
-setPill(week, '1W:', wNum, wTxt);
-setPill(month, '1M:', mNum, mTxt);
+      if (daily) daily.textContent = 'Today: ' + (plToday !== undefined ? formatCurrency(plToday) : '$0.00');
+      if (week) week.textContent = '1W: ' + (pct1w !== undefined ? (pct1w>0?'+':'')+Number(pct1w).toFixed(2)+'%' : '0.00%');
+      if (month) month.textContent = '1M: ' + (pct1m !== undefined ? (pct1m>0?'+':'')+Number(pct1m).toFixed(2)+'%' : '0.00%');
     } catch(e){}
   }
 
@@ -6832,6 +5752,8 @@ setPill(month, '1M:', mNum, mTxt);
 })();
 </script>
 <!-- END: Upgrades -->
+
+
 <!-- STEP3A: TODAY chart fix (Top Movers using current portfolio data) -->
 <script>
 (function() {
@@ -7049,6 +5971,8 @@ const container = this.elements.portfolioPerformanceContainer;
     }
 })();
 </script>
+
+
 <script>
 // STEP3A-TODAY-PORTFOLIO-PT-FIXED
 (function() {
@@ -7267,6 +6191,8 @@ const container = this.elements.portfolioPerformanceContainer;
   }
 })();
 </script>
+
+
 <script>
 // YAHOO-STYLE BOTTOM PORTFOLIO CHART (safe override)
 (function() {
@@ -7577,130 +6503,6 @@ const container = this.elements.portfolioPerformanceContainer;
   }
 })();
 </script>
-<script id="summary-panel-height-js">
-(function(){
-  const panel = document.getElementById('chart-summary-panel');
-  if(!panel) return;
-
-  let t = null;
-  function apply(){
-    // Use actual rendered height (supports wrap to 2 lines)
-    const h = Math.ceil(panel.getBoundingClientRect().height);
-    if(h > 0){
-      document.documentElement.style.setProperty('--summary-panel-h', h + 'px');
-    }
-  }
-  window.addEventListener('load', apply, { once: true });
-  window.addEventListener('resize', function(){
-    clearTimeout(t);
-    t = setTimeout(apply, 120);
-  });
-  // also run soon in case data renders before 'load'
-  setTimeout(apply, 50);
-})();
-</script>
-
-<script id="summary-panel-ux-v5">
-(function(){
-  const panel = document.getElementById('chart-summary-panel');
-  if(!panel) return;
-
-  const pills = Array.from(panel.querySelectorAll('.summary-pill'));
-  if(!pills.length) return;
-
-  function parseValue(txt){
-    // Pull first numeric token like -$966.74 or 0.00% or +123.45
-    const m = String(txt).match(/[-+]?\s*\$?\s*[\d,]+(?:\.\d+)?/);
-    if(!m) return 0;
-    const raw = m[0].replace(/\$/g,'').replace(/,/g,'').replace(/\s+/g,'');
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : 0;
-  }
-
-  function classify(txt){
-    const n = parseValue(txt);
-    if(n < 0) return 'pulse-negative';
-    if(n > 0) return 'pulse-positive';
-    return 'pulse-neutral';
-  }
-
-  function pulse(el){
-    // restart animation reliably
-    el.classList.remove('pulse-positive','pulse-negative','pulse-neutral');
-    // force reflow
-    void el.offsetWidth;
-    el.classList.add(classify(el.textContent || ''));
-    el.addEventListener('animationend', function cleanup(){
-      el.classList.remove('pulse-positive','pulse-negative','pulse-neutral');
-      el.removeEventListener('animationend', cleanup);
-    }, { once: true });
-  }
-
-  // Observe text changes (works with any internal update logic)
-  const lastText = new Map();
-  pills.forEach(p => lastText.set(p, (p.textContent || '').trim()));
-
-  const obs = new MutationObserver((mutations) => {
-    const touched = new Set();
-    for(const mu of mutations){
-      const el = mu.target.nodeType === 3 ? mu.target.parentElement : mu.target;
-      const pill = el && el.closest ? el.closest('.summary-pill') : null;
-      if(pill) touched.add(pill);
-    }
-    touched.forEach(pill => {
-      const now = (pill.textContent || '').trim();
-      const prev = lastText.get(pill) || '';
-      if(now && now !== prev){
-        lastText.set(pill, now);
-        pulse(pill);
-      }
-    });
-  });
-
-  pills.forEach(pill => obs.observe(pill, { childList:true, characterData:true, subtree:true }));
-
-  // --- Smart collapse on scroll (down = collapse, up = expand) ---
-  let lastY = window.scrollY || 0;
-  let collapsed = false;
-
-  function updateReservedHeight(){
-    const h = Math.ceil(panel.getBoundingClientRect().height);
-    if(h > 0){
-      document.documentElement.style.setProperty('--summary-panel-h', h + 'px');
-    }
-  }
-
-  function setCollapsed(on){
-    if(on === collapsed) return;
-    collapsed = on;
-    panel.classList.toggle('is-collapsed', collapsed);
-    // allow layout to settle then update reserved padding
-    setTimeout(updateReservedHeight, 30);
-  }
-
-  function onScroll(){
-    const y = window.scrollY || 0;
-    const dy = y - lastY;
-
-    if(y < 8){
-      setCollapsed(false);
-    } else if(dy > 10){
-      setCollapsed(true);
-    } else if(dy < -10){
-      setCollapsed(false);
-    }
-    lastY = y;
-  }
-
-  window.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', () => setTimeout(updateReservedHeight, 60));
-  window.addEventListener('load', () => setTimeout(updateReservedHeight, 60), { once: true });
-
-  // initial
-  setTimeout(updateReservedHeight, 80);
-})();
-</script>
-
 
 </body>
 </html>
