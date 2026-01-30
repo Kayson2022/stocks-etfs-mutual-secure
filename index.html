@@ -1,6 +1,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -1967,9 +1968,19 @@ body{
 <div id="user-info" style="display: none;">
 <span id="user-name"></span>
 <button id="sign-out-btn">Sign Out</button>
+<button id="sign-out-other-btn" style="margin-left:8px; display:none;">Sign Out Other Devices</button>
 </div>
 </div>
 </header>
+<div id="session-conflict-banner" style="display:none; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--color-negative); border-radius: 10px; background: rgba(255, 0, 0, 0.08); align-items: center; justify-content: space-between; gap: 10px;">
+  <div style="min-width: 0;">
+    <div style="font-weight: 700;">⚠️ Another device is already signed in</div>
+    <div id="session-conflict-text" style="color: var(--text-secondary); font-size: 0.95rem; margin-top: 2px;">
+      You have <span id="session-conflict-countdown">10</span>s to click “Sign Out Other Devices” to keep this session.
+    </div>
+  </div>
+  <button id="session-claim-btn" class="btn-primary" style="white-space: nowrap;">Sign Out Other Devices</button>
+</div>
 <div id="header-countdown">Next update in: <span id="countdown">90</span>s</div>
 <div class="tabs">
 <button class="tab active" onclick="window.stockTracker.switchTab('stocks')">📊 Stocks &amp; Portfolio</button>
@@ -2317,7 +2328,7 @@ body{
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
                 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, browserPopupRedirectResolver, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, serverTimestamp, deleteDoc, onSnapshot, query, where, limit } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, runTransaction, serverTimestamp, deleteDoc, onSnapshot, query, where, limit} from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
 
         const firebaseConfig = {
@@ -3154,6 +3165,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         if(this.elements.loginContainer) this.elements.loginContainer.style.display = 'none';
                         if(this.elements.appContainer) this.elements.appContainer.style.display = 'block';
                         if(this.elements.userInfo) this.elements.userInfo.style.display = 'flex';
+                        if(this.elements.signOutOtherBtn) this.elements.signOutOtherBtn.style.display = 'inline-block';
                         if(this.elements.userName) this.elements.userName.textContent = `Welcome, ${user.displayName || 'User'}`;
                         await this.loadApiKeysFromFirestore();
                         this.loadData();
@@ -3164,6 +3176,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         if(this.elements.loginContainer) this.elements.loginContainer.style.display = 'block';
                         if(this.elements.appContainer) this.elements.appContainer.style.display = 'none';
                         if(this.elements.userInfo) this.elements.userInfo.style.display = 'none';
+                        if(this.elements.signOutOtherBtn) this.elements.signOutOtherBtn.style.display = 'none';
+                        if(this.elements.sessionConflictBanner) this.elements.sessionConflictBanner.style.display = 'none';
                         this.stocks = []; this.mutualFunds = []; this.watchlist = [];
                         this.renderContent();
                         if (this.sessionUnsubscribe) {
@@ -3266,6 +3280,11 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     userInfo: document.getElementById('user-info'),
                     userName: document.getElementById('user-name'),
                     signOutBtn: document.getElementById('sign-out-btn'),
+                    signOutOtherBtn: document.getElementById('sign-out-other-btn'),
+                    sessionConflictBanner: document.getElementById('session-conflict-banner'),
+                    sessionConflictText: document.getElementById('session-conflict-text'),
+                    sessionConflictCountdown: document.getElementById('session-conflict-countdown'),
+                    sessionClaimBtn: document.getElementById('session-claim-btn'),
                     stocksGrid: document.getElementById('stocksGrid'), loadingDiv: document.getElementById('loading'), errorDiv: document.getElementById('error'), successDiv: document.getElementById('success'),
                     stockInput: document.getElementById('stockInput'), addBtn: document.getElementById('addBtn'),
                     liveUpdateBtn: document.getElementById('liveUpdateBtn'), toggleLiveUpdateBtn: document.getElementById('toggleLiveUpdateBtn'), clearAllBtn: document.getElementById('clearAllBtn'),
@@ -3360,6 +3379,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             setupEventListeners() {
                 if (this.elements.googleSignInBtn) this.elements.googleSignInBtn.addEventListener('click', () => this.signIn());
                 if (this.elements.signOutBtn) this.elements.signOutBtn.addEventListener('click', () => this.signOut());
+                if (this.elements.signOutOtherBtn) this.elements.signOutOtherBtn.addEventListener('click', () => this.signOutOtherSessions({ skipConfirm: true }));
+                if (this.elements.sessionClaimBtn) this.elements.sessionClaimBtn.addEventListener('click', () => this.signOutOtherSessions({ skipConfirm: true }));
                 if (this.elements.addBtn) this.elements.addBtn.addEventListener('click', () => this.addItemFromInput('stock'));
                 if (this.elements.stockInput) this.elements.stockInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('stock'); });
                 if (this.elements.liveUpdateBtn) this.elements.liveUpdateBtn.addEventListener('click', () => this.refreshCurrentTab());
@@ -6194,29 +6215,94 @@ await this.saveData();
             }
 
             // --- Session/Security Logic ---
-            setupSessionListener() {
+            
+            // --- Session/Security Logic ---
+            /**
+             * Goals:
+             *  - If another session is already active, DO NOT kick immediately.
+             *  - Give this new session a 10s grace window to click "Sign Out Other Devices".
+             *  - Clicking "Sign Out Other Devices" must NEVER kick this tab. It should claim/defend ownership.
+             *  - Backward-compatible with older tabs that still auto-write activeSession on login (we "defend" briefly).
+             */
+            async setupSessionListener() {
                 if (!this.userId) return;
                 const sessionDocRef = doc(db, "sessions", this.userId);
-                
-                // Set the current session ID on login (used for multi-device sign-out)
+
+                // Session control state (kept on the instance)
+                if (!this._sessionCtrl) {
+                    this._sessionCtrl = {
+                        graceTimeout: null,
+                        graceInterval: null,
+                        graceEndsAt: 0,
+                        suppressKickUntil: 0,
+                        claimInFlight: false,
+                        lastActiveSession: null,
+                        reassertTimeouts: []
+                    };
+                }
+
+                // Clean up any previous listener
+                if (this.sessionUnsubscribe) {
+                    try { this.sessionUnsubscribe(); } catch (e) {}
+                    this.sessionUnsubscribe = null;
+                }
+
+                // Ensure the doc exists and update bookkeeping (do NOT overwrite activeSession here)
                 try {
-                    setDoc(sessionDocRef, { 
+                    await setDoc(sessionDocRef, {
+                        userId: this.userId,
                         lastLogin: serverTimestamp(),
-                        activeSession: this.sessionId,
-                        userId: this.userId
-                    }, { merge: true }).catch(err => console.error("Error writing session ID:", err));
+                        lastSeenAt: serverTimestamp(),
+                        lastSessionId: this.sessionId
+                    }, { merge: true });
                 } catch (err) {
                     console.error("Error setting initial session doc (check rules):", err);
                 }
 
-                // Listen for changes to the activeSession field
+                // If there is NO activeSession yet (first-ever login), claim it silently.
                 try {
-                    this.sessionUnsubscribe = onSnapshot(sessionDocRef, (doc) => {
-                        if (doc.exists() && doc.data().activeSession !== this.sessionId) {
-                            // A different session has become the 'active' one (i.e., this session was signed out remotely)
-                            this.showError("You have been signed out because a new session was started or an admin action was taken.");
-                            this.signOut();
+                    const snap = await getDoc(sessionDocRef);
+                    const data = snap.exists() ? (snap.data() || {}) : {};
+                    if (!data.activeSession) {
+                        await setDoc(sessionDocRef, {
+                            activeSession: this.sessionId,
+                            activeSessionSetAt: Date.now(),
+                            activeSessionSetBy: this.sessionId
+                        }, { merge: true });
+                    }
+                } catch (err) {
+                    console.error("Error reading/claiming initial activeSession:", err);
+                }
+
+                // Listen for session changes
+                try {
+                    this.sessionUnsubscribe = onSnapshot(sessionDocRef, (snap) => {
+                        if (!snap.exists()) return;
+                        const data = snap.data() || {};
+                        const active = data.activeSession || null;
+                        this._sessionCtrl.lastActiveSession = active;
+
+                        // No active session set yet -> nothing to enforce.
+                        if (!active) return;
+
+                        // We are the active session -> clear any warning/grace.
+                        if (active === this.sessionId) {
+                            this._clearSessionGraceWindow();
+                            this._hideSessionBanner();
+                            return;
                         }
+
+                        const now = Date.now();
+
+                        // If we're in takeover/defense mode, do NOT kick. Re-assert briefly.
+                        if (now < (this._sessionCtrl.suppressKickUntil || 0) || this._sessionCtrl.claimInFlight) {
+                            this._showSessionBannerDefending();
+                            this._scheduleReassertActiveSession();
+                            return;
+                        }
+
+                        // Otherwise, start (or continue) a 10s grace window.
+                        this._startSessionGraceWindow();
                     }, (error) => {
                         console.error("Error listening to session document:", error);
                     });
@@ -6224,20 +6310,196 @@ await this.saveData();
                     console.error("Error setting up session listener (check rules):", err);
                 }
             }
-            async signOutOtherSessions() {
-                if (!this.userId) return;
-                 this.openConfirmModal("Are you sure you want to sign out all other devices? This session will remain active.", async () => {
-                    const sessionDocRef = doc(db, "sessions", this.userId);
-                    // Update the activeSession ID to the current one, which invalidates all others (as they are watching for a mismatch)
-                    try {
-                        await setDoc(sessionDocRef, { activeSession: this.sessionId, forceSignOut: Date.now() }, { merge: true });
-                        this.showSuccess("All other sessions have been signed out.");
-                    } catch (err) {
-                         this.showError(`Failed to sign out other sessions. Check Firebase permissions.`);
-                         console.error("Error signing out other sessions:", err);
-                    }
-                 });
+
+            _showSessionBannerDefending() {
+                if (!this.elements?.sessionConflictBanner) return;
+                const banner = this.elements.sessionConflictBanner;
+                const text = this.elements.sessionConflictText;
+                const countdown = this.elements.sessionConflictCountdown;
+
+                banner.style.display = 'flex';
+                if (text) text.textContent = "Claiming this session… please wait a moment.";
+                if (countdown) countdown.textContent = "";
             }
+
+            _hideSessionBanner() {
+                if (!this.elements?.sessionConflictBanner) return;
+                this.elements.sessionConflictBanner.style.display = 'none';
+            }
+
+            _startSessionGraceWindow() {
+                if (!this.elements?.sessionConflictBanner) return;
+
+                // If already running, do nothing (the timer updates itself).
+                if (this._sessionCtrl.graceEndsAt && Date.now() < this._sessionCtrl.graceEndsAt) {
+                    return;
+                }
+
+                const banner = this.elements.sessionConflictBanner;
+                const countdownEl = this.elements.sessionConflictCountdown;
+                const textEl = this.elements.sessionConflictText;
+
+                banner.style.display = 'flex';
+                                // keep existing banner markup (includes the countdown <span>)
+
+                const start = Date.now();
+                this._sessionCtrl.graceEndsAt = start + 10000;
+
+                // Update countdown UI
+                this._clearGraceTimersOnly();
+                this._sessionCtrl.graceInterval = setInterval(() => {
+                    const msLeft = Math.max(0, this._sessionCtrl.graceEndsAt - Date.now());
+                    const sLeft = Math.ceil(msLeft / 1000);
+                    if (countdownEl) countdownEl.textContent = String(sLeft);
+                }, 200);
+
+                // Kick only AFTER 10 seconds, and only if we still aren't the active session.
+                this._sessionCtrl.graceTimeout = setTimeout(() => {
+                    const stillNotActive = (this._sessionCtrl.lastActiveSession && this._sessionCtrl.lastActiveSession !== this.sessionId);
+                    if (stillNotActive) {
+                        this.showError("Signed out: another device is currently active.");
+                        this.signOut();
+                    } else {
+                        this._hideSessionBanner();
+                    }
+                }, 10000);
+            }
+
+            _clearGraceTimersOnly() {
+                if (this._sessionCtrl?.graceTimeout) {
+                    clearTimeout(this._sessionCtrl.graceTimeout);
+                    this._sessionCtrl.graceTimeout = null;
+                }
+                if (this._sessionCtrl?.graceInterval) {
+                    clearInterval(this._sessionCtrl.graceInterval);
+                    this._sessionCtrl.graceInterval = null;
+                }
+            }
+
+            _clearSessionGraceWindow() {
+                if (!this._sessionCtrl) return;
+                this._clearGraceTimersOnly();
+                this._sessionCtrl.graceEndsAt = 0;
+            }
+
+            _cancelReasserts() {
+                if (!this._sessionCtrl?.reassertTimeouts) return;
+                this._sessionCtrl.reassertTimeouts.forEach(t => clearTimeout(t));
+                this._sessionCtrl.reassertTimeouts = [];
+            }
+
+            _scheduleReassertActiveSession() {
+                // Avoid spamming; schedule a couple re-assert attempts during suppression window.
+                if (!db || !this.userId) return;
+
+                // If we already are active, stop.
+                if (this._sessionCtrl?.lastActiveSession === this.sessionId) return;
+
+                // If reasserts already scheduled, don't schedule again.
+                if (this._sessionCtrl.reassertTimeouts && this._sessionCtrl.reassertTimeouts.length > 0) return;
+
+                const delays = [250, 900, 1800, 3000];
+                this._sessionCtrl.reassertTimeouts = delays.map(d => setTimeout(() => {
+                    this._reassertActiveSessionNow().catch(err => console.warn("Reassert failed", err));
+                }, d));
+            }
+
+            async _reassertActiveSessionNow() {
+                if (!db || !this.userId) return;
+                const now = Date.now();
+                if (!this._sessionCtrl || now > (this._sessionCtrl.suppressKickUntil || 0)) return;
+
+                const sessionDocRef = doc(db, "sessions", this.userId);
+
+                // Transaction: only write if we're still trying to own the session.
+                await runTransaction(db, async (tx) => {
+                    const snap = await tx.get(sessionDocRef);
+                    const data = snap.exists() ? (snap.data() || {}) : {};
+                    const active = data.activeSession || null;
+
+                    // If already active, nothing to do.
+                    if (active === this.sessionId) return;
+
+                    // Only reassert if we were the last one to trigger a sign-out-all recently.
+                    // (prevents infinite ping-pong if another client is doing the same.)
+                    const lastBy = data.activeSessionSetBy || null;
+                    const lastAt = data.activeSessionSetAt || 0;
+
+                    // If nobody has ever set it, we can set it.
+                    const allow =
+                        !active ||
+                        lastBy === this.sessionId ||
+                        (typeof lastAt === 'number' && (now - lastAt) > 5000);
+
+                    if (!allow) return;
+
+                    tx.set(sessionDocRef, {
+                        activeSession: this.sessionId,
+                        activeSessionSetAt: now,
+                        activeSessionSetBy: this.sessionId
+                    }, { merge: true });
+                });
+            }
+
+            async signOutOtherSessions({ skipConfirm = false } = {}) {
+                if (!this.userId) return;
+
+                const doClaim = async () => {
+                    // Stop grace kick the millisecond the user clicks.
+                    this._clearSessionGraceWindow();
+                    this._cancelReasserts();
+
+                    const now = Date.now();
+                    this._sessionCtrl.claimInFlight = true;
+
+                    // Suppress any "kick" logic & defend for a bit (handles older tabs that might overwrite once).
+                    this._sessionCtrl.suppressKickUntil = now + 15000;
+
+                    // Show "defending" state immediately.
+                    this._showSessionBannerDefending();
+
+                    const sessionDocRef = doc(db, "sessions", this.userId);
+
+                    try {
+                        await runTransaction(db, async (tx) => {
+                            const snap = await tx.get(sessionDocRef);
+                            const base = snap.exists() ? (snap.data() || {}) : {};
+                            tx.set(sessionDocRef, {
+                                ...base,
+                                activeSession: this.sessionId,
+                                activeSessionSetAt: now,
+                                activeSessionSetBy: this.sessionId,
+                                forceSignOut: now // legacy field; other tabs may use it
+                            }, { merge: true });
+                        });
+
+                        // Schedule reasserts during suppression window
+                        this._cancelReasserts();
+                        this._scheduleReassertActiveSession();
+
+                        // UI
+                        this._hideSessionBanner();
+                        if (this.elements?.signOutOtherBtn) this.elements.signOutOtherBtn.style.display = 'inline-block';
+                        this.showSuccess("All other devices signed out. This session is now active.");
+                    } catch (err) {
+                        console.error("Error signing out other sessions:", err);
+                        this.showError("Failed to claim the session. Please try again.");
+                    } finally {
+                        this._sessionCtrl.claimInFlight = false;
+                    }
+                };
+
+                if (skipConfirm) {
+                    await doClaim();
+                    return;
+                }
+
+                this.openConfirmModal(
+                    "Sign out all other devices? This session will remain active.",
+                    async () => await doClaim()
+                );
+            }
+
             
             // --- News Fetch ---
             async fetchAndRenderNews() {
