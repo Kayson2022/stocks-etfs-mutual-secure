@@ -1,5 +1,6 @@
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -1196,26 +1197,26 @@
    ============================================================ */
 
 :root{
-  /* Light (Day) Theme — brighter + clearly different from Night */
-  --bg-primary: #f6fbff;
-  --bg-secondary: rgba(7, 20, 39, 0.055);
-  --bg-tertiary: rgba(7, 20, 39, 0.075);
+  /* Light (Day) Theme — softer, lower-glare (v1) */
+  --bg-primary: #eef2f6;
+  --bg-secondary: rgba(7, 20, 39, 0.06);
+  --bg-tertiary: rgba(7, 20, 39, 0.085);
 
   --text-primary: #071427;
-  --text-secondary: rgba(7, 20, 39, 0.72);
+  --text-secondary: rgba(7, 20, 39, 0.70);
 
-  --border-color: rgba(7, 20, 39, 0.16);
+  --border-color: rgba(7, 20, 39, 0.18);
 
-  /* Day accents (more sky/teal, less neon) */
-  --accent-primary: #00a3ff;
-  --accent-primary-hover: #0086d6;
+  /* Day accents (calmer blue, less neon) */
+  --accent-primary: #0b84d8;
+  --accent-primary-hover: #096fb6;
 
-  --color-positive: #0aa86b;
-  --color-negative: #d81b60;
+  --color-positive: #0a8f63;
+  --color-negative: #c2185b;
 
   /* Chart fill colors (JS expects rgb ints) */
-  --chart-positive-fill-color-rgb: 10, 168, 107;
-  --chart-negative-fill-color-rgb: 216, 27, 96;
+  --chart-positive-fill-color-rgb: 10, 143, 99;
+  --chart-negative-fill-color-rgb: 194, 24, 91;
 }
 
 body.dark-mode{
@@ -1260,12 +1261,12 @@ body.dark-mode{
 }
 
 body:not(.dark-mode){
-  /* Day mode (tuned): still clearly lighter than night, but less bright */
+  /* Day mode (soft): reduce glare while keeping a "cool" feel */
   background:
-    radial-gradient(1200px 900px at 18% 0%, rgba(0, 163, 255, 0.12), transparent 62%),
-    radial-gradient(900px 700px at 86% 10%, rgba(0, 214, 182, 0.10), transparent 58%),
-    radial-gradient(900px 700px at 45% 120%, rgba(167, 139, 250, 0.07), transparent 60%),
-    linear-gradient(180deg, #edf5ff 0%, #e2efff 55%, #f1f6ff 100%);
+    radial-gradient(1200px 900px at 18% 0%, rgba(11, 132, 216, 0.07), transparent 64%),
+    radial-gradient(900px 700px at 86% 10%, rgba(0, 170, 150, 0.06), transparent 62%),
+    radial-gradient(900px 700px at 45% 120%, rgba(167, 139, 250, 0.04), transparent 64%),
+    linear-gradient(180deg, #e8eef6 0%, #dde6f1 55%, #eef2f7 100%);
   background-attachment: fixed;
 }
 
@@ -1277,26 +1278,26 @@ body:not(.dark-mode) .panel,
 body:not(.dark-mode) #portfolio-summary,
 body:not(.dark-mode) #portfolio-summary .summary-total,
 body:not(.dark-mode) #portfolio-summary .summary-box{
-  background: rgba(248,250,255,0.66) !important;
+  background: rgba(236,241,247,0.88) !important;
   border-color: rgba(7,20,39,0.12) !important;
-  box-shadow: 0 12px 34px rgba(7,20,39,0.10) !important;
+  box-shadow: 0 10px 28px rgba(7,20,39,0.12) !important;
 }
 
 body:not(.dark-mode) #chart-summary-panel{
-  background: rgba(246,249,255,0.64) !important;
+  background: rgba(232,238,246,0.90) !important;
   border-color: rgba(0,163,255,0.24) !important;
   box-shadow:
-    0 14px 38px rgba(0,163,255,0.10),
+    0 12px 28px rgba(11,132,216,0.08),
     0 12px 28px rgba(7,20,39,0.12) !important;
 }
 
 body:not(.dark-mode) #chart-summary-panel .summary-pill{
-  background: rgba(248,250,255,0.78) !important;
+  background: rgba(236,241,247,0.94) !important;
   border-color: rgba(0,163,255,0.28) !important;
   color: var(--text-primary) !important;
   box-shadow:
     0 0 0 1px rgba(0,163,255,0.08) inset,
-    0 0 18px rgba(0,163,255,0.16) !important;
+    0 0 14px rgba(11,132,216,0.12) !important;
 }
 
 
@@ -1474,6 +1475,11 @@ input::placeholder, textarea::placeholder {
 
 .info-label { color: rgba(234, 242, 255, 0.62) !important; }
 .info-value { color: var(--text-primary) !important; }
+
+/* Day mode readability: avoid "too bright" label/placeholder colors */
+body:not(.dark-mode) .info-label{ color: rgba(7, 20, 39, 0.62) !important; }
+body:not(.dark-mode) input::placeholder,
+body:not(.dark-mode) textarea::placeholder{ color: rgba(7, 20, 39, 0.45) !important; }
 
 .total-pl,
 .total-pl-today {
