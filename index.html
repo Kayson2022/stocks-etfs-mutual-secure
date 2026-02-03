@@ -1197,19 +1197,16 @@
    ============================================================ */
 
 :root{
-  /* Light (Day) Theme — softer, lower-glare (v1) */
-  --bg-primary: #eef2f6;
-  --bg-secondary: rgba(7, 20, 39, 0.06);
-  --bg-tertiary: rgba(7, 20, 39, 0.085);
-
-  --text-primary: #071427;
-  --text-secondary: rgba(7, 20, 39, 0.70);
-
-  --border-color: rgba(7, 20, 39, 0.18);
-
-  /* Day accents (calmer blue, less neon) */
-  --accent-primary: #0b84d8;
-  --accent-primary-hover: #096fb6;
+  /* Light (Day) Theme — matte, low-glare (v2) */
+  --bg-primary: #dde3eb;
+  --bg-secondary: rgba(7, 20, 39, 0.085);
+--bg-tertiary: rgba(7, 20, 39, 0.12);
+--text-primary: #071427;
+  --text-secondary: rgba(7, 20, 39, 0.72);
+--border-color: rgba(7, 20, 39, 0.16);
+/* Day accents (calmer blue, less neon) */
+  --accent-primary: #0b6fbf;
+  --accent-primary-hover: #0a5fa6;
 
   --color-positive: #0a8f63;
   --color-negative: #c2185b;
@@ -1261,12 +1258,12 @@ body.dark-mode{
 }
 
 body:not(.dark-mode){
-  /* Day mode (soft): reduce glare while keeping a "cool" feel */
+  /* Day mode (matte v2): less glare + less neon */
   background:
-    radial-gradient(1200px 900px at 18% 0%, rgba(11, 132, 216, 0.07), transparent 64%),
-    radial-gradient(900px 700px at 86% 10%, rgba(0, 170, 150, 0.06), transparent 62%),
-    radial-gradient(900px 700px at 45% 120%, rgba(167, 139, 250, 0.04), transparent 64%),
-    linear-gradient(180deg, #e8eef6 0%, #dde6f1 55%, #eef2f7 100%);
+    radial-gradient(1200px 900px at 18% 0%, rgba(11, 111, 191, 0.045), transparent 72%),
+    radial-gradient(900px 700px at 86% 10%, rgba(0, 150, 135, 0.035), transparent 75%),
+    radial-gradient(900px 700px at 45% 120%, rgba(122, 92, 246, 0.028), transparent 76%),
+    linear-gradient(180deg, #d7dee8 0%, #cfd7e2 55%, #dde3eb 100%);
   background-attachment: fixed;
 }
 
@@ -1278,21 +1275,21 @@ body:not(.dark-mode) .panel,
 body:not(.dark-mode) #portfolio-summary,
 body:not(.dark-mode) #portfolio-summary .summary-total,
 body:not(.dark-mode) #portfolio-summary .summary-box{
-  background: rgba(236,241,247,0.88) !important;
-  border-color: rgba(7,20,39,0.12) !important;
-  box-shadow: 0 10px 28px rgba(7,20,39,0.12) !important;
+  background: rgba(226, 233, 242, 0.86) !important;
+  border-color: rgba(7, 20, 39, 0.14) !important;
+  box-shadow: 0 10px 26px rgba(7, 20, 39, 0.10) !important;
 }
 
 body:not(.dark-mode) #chart-summary-panel{
-  background: rgba(232,238,246,0.90) !important;
-  border-color: rgba(0,163,255,0.24) !important;
+  background: rgba(220, 228, 239, 0.88) !important;
+  border-color: rgba(11, 111, 191, 0.18) !important;
   box-shadow:
-    0 12px 28px rgba(11,132,216,0.08),
-    0 12px 28px rgba(7,20,39,0.12) !important;
+    0 12px 28px rgba(11, 111, 191, 0.06),
+    0 12px 28px rgba(7, 20, 39, 0.10) !important;
 }
 
 body:not(.dark-mode) #chart-summary-panel .summary-pill{
-  background: rgba(236,241,247,0.94) !important;
+  background: rgba(232, 237, 245, 0.90) !important;
   border-color: rgba(0,163,255,0.28) !important;
   color: var(--text-primary) !important;
   box-shadow:
@@ -1737,6 +1734,82 @@ button {
 }
 @media (max-width: 520px){
   #portfolio-summary .summary-grid{ grid-template-columns: 1fr; }
+}
+
+
+/* ============================================================
+   DAY MODE v2 — matte controls (keeps night mode unchanged)
+   ============================================================ */
+
+body:not(.dark-mode) input,
+body:not(.dark-mode) select,
+body:not(.dark-mode) textarea{
+  background: rgba(235, 240, 247, 0.88) !important;
+  border: 1px solid rgba(7, 20, 39, 0.16) !important;
+  box-shadow: 0 8px 18px rgba(7, 20, 39, 0.06) !important;
+}
+
+body:not(.dark-mode) input:focus,
+body:not(.dark-mode) select:focus,
+body:not(.dark-mode) textarea:focus{
+  border-color: rgba(11, 111, 191, 0.30) !important;
+  box-shadow: 0 0 0 3px rgba(11, 111, 191, 0.10), 0 10px 22px rgba(7, 20, 39, 0.08) !important;
+  outline: none !important;
+}
+
+/* Tabs / top controls: remove neon glow in day */
+body:not(.dark-mode) .tabs-container,
+body:not(.dark-mode) .tabs{
+  background: rgba(226, 233, 242, 0.82) !important;
+  border: 1px solid rgba(7, 20, 39, 0.14) !important;
+  backdrop-filter: blur(6px) !important;
+  box-shadow: 0 10px 22px rgba(7, 20, 39, 0.08) !important;
+}
+
+body:not(.dark-mode) .tab:hover,
+body:not(.dark-mode) .tab-btn:hover,
+body:not(.dark-mode) .tabs button:hover{
+  border-color: rgba(7, 20, 39, 0.18) !important;
+}
+
+body:not(.dark-mode) .tab.active,
+body:not(.dark-mode) .tab-btn.active,
+body:not(.dark-mode) .tabs button.active{
+  background: rgba(232, 237, 245, 0.92) !important;
+  border-color: rgba(7, 20, 39, 0.18) !important;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.55) inset, 0 10px 22px rgba(7, 20, 39, 0.08) !important;
+}
+
+/* Primary buttons: matte gradient instead of neon */
+body:not(.dark-mode) .add-btn,
+body:not(.dark-mode) .btn-primary,
+body:not(.dark-mode) .transaction-btn{
+  background: linear-gradient(180deg, rgba(242, 246, 251, 0.95), rgba(224, 232, 242, 0.90)) !important;
+  border: 1px solid rgba(7, 20, 39, 0.16) !important;
+  box-shadow: 0 10px 22px rgba(7, 20, 39, 0.10) !important;
+}
+
+body:not(.dark-mode) .add-btn:hover,
+body:not(.dark-mode) .btn-primary:hover,
+body:not(.dark-mode) .transaction-btn:hover{
+  transform: translateY(-1px);
+  border-color: rgba(7, 20, 39, 0.22) !important;
+  box-shadow: 0 14px 28px rgba(7, 20, 39, 0.12) !important;
+}
+
+/* Chips/pills: fix day contrast */
+body:not(.dark-mode) .pill,
+body:not(.dark-mode) .badge,
+body:not(.dark-mode) .chip{
+  background: rgba(232, 237, 245, 0.88) !important;
+  border-color: rgba(7, 20, 39, 0.14) !important;
+  color: rgba(7, 20, 39, 0.78) !important;
+}
+
+/* Transaction details panel: neutral in day */
+body:not(.dark-mode) .transaction-details{
+  background: rgba(226, 233, 242, 0.86) !important;
+  border: 1px solid rgba(7, 20, 39, 0.14) !important;
 }
 </style>
 <script>
