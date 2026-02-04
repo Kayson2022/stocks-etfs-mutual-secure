@@ -1,5 +1,6 @@
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -1898,6 +1899,11 @@ body:not(.dark-mode) .transaction-btn:hover{
 
 /* END DAY THEME PACK */
 
+/* daymode-readable-fix: ensure neutral summary values are visible on light cards */
+body:not(.dark-mode) .summary-box .summary-value{
+  color:#1f2937 !important;     /* readable neutral value */
+  text-shadow:none !important;   /* avoid glow washout */
+}
 </style>
 <script>
   // Make Neon (dark) the default theme on first load (user can still toggle).
