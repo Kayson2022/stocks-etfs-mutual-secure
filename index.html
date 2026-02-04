@@ -1899,6 +1899,39 @@ body:not(.dark-mode) .transaction-btn:hover{
 
 /* END DAY THEME PACK */
 
+/* daymode-readable-fix: ensure neutral summary values are visible on light cards */
+body:not(.dark-mode) .summary-box .summary-value{
+  color:#1f2937 !important;     /* readable neutral value */
+  text-shadow:none !important;   /* avoid glow washout */
+}
+
+/* daymode-readable-fix-v3: summary tiles use .summary-item (not .summary-box) */
+body:not(.dark-mode) .summary-item .summary-value:not(.positive):not(.negative){
+  color:#1f2937 !important;      /* readable neutral value */
+  text-shadow:none !important;    /* avoid glow washout */
+  font-weight:800 !important;
+}
+body:not(.dark-mode) .summary-item .summary-item-label{
+  color:#334155 !important;
+  text-shadow:none !important;
+}
+
+/* daymode-force-visible-v4: force key summary values visible in light mode */
+body:not(.dark-mode) #portfolio-summary #total-contributions,
+body:not(.dark-mode) #portfolio-summary #stock-count-value,
+body:not(.dark-mode) #portfolio-summary #fund-count-value{
+  color:#0f172a !important;
+  opacity:1 !important;
+  visibility:visible !important;
+  text-shadow:none !important;
+  font-weight:900 !important;
+}
+body:not(.dark-mode) #portfolio-summary #total-contributions{
+  padding: 2px 10px !important;
+  border-radius: 999px !important;
+  background: rgba(15,23,42,0.06) !important;
+  border: 1px solid rgba(15,23,42,0.12) !important;
+}
 </style>
 <script>
   // Make Neon (dark) the default theme on first load (user can still toggle).
