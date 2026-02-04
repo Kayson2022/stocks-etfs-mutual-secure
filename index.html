@@ -1327,32 +1327,6 @@ section,
   backdrop-filter: blur(10px);
 }
 
-/* Day mode readability: summary mini-cards (Stocks Total Value / Mutual Fund Value, etc.) */
-body:not(.dark-mode) #portfolio-summary .summary-item{
-  background: rgba(255,255,255,0.78) !important;
-  border: 1px solid rgba(15,23,42,0.14) !important;
-  box-shadow: 0 10px 22px rgba(15,23,42,0.08) !important;
-  backdrop-filter: none !important; /* reduce blur washout in day */
-}
-
-body:not(.dark-mode) #portfolio-summary .summary-item-label{
-  color: rgba(15,23,42,0.72) !important;
-  font-weight: 700;
-}
-
-body:not(.dark-mode) #portfolio-summary .summary-item-value .summary-value{
-  display: inline-flex;
-  align-items: baseline;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: rgba(15,23,42,0.06);
-  border: 1px solid rgba(15,23,42,0.10);
-  font-size: 1.12rem !important;
-  font-weight: 900 !important;
-  letter-spacing: 0.2px;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.85);
-}
-
 /* Tabs / top controls */
 .tabs-container,
 .tabs {
@@ -1758,179 +1732,6 @@ button {
 }
 @media (max-width: 520px){
   #portfolio-summary .summary-grid{ grid-template-columns: 1fr; }
-}
-
-
-/* DAY THEME PACK: SOFT BLUE (calm, readable) */
-body:not(.dark-mode){
-  --bg-primary: #e9f1ff;
-  --bg-secondary: rgba(6, 24, 44, 0.050);
-  --bg-tertiary: rgba(6, 24, 44, 0.070);
-
-  --text-primary: #06182c;
-  --text-secondary: rgba(6, 24, 44, 0.72);
-
-  --border-color: rgba(6, 24, 44, 0.15);
-
-  --accent-primary: #0ea5e9;
-  --accent-primary-hover: #0284c7;
-
-  --color-positive: #0f9f66;
-  --color-negative: #d81b60;
-
-  --chart-positive-fill-color-rgb: 15, 159, 102;
-  --chart-negative-fill-color-rgb: 216, 27, 96;
-}
-body:not(.dark-mode){
-  background:
-    radial-gradient(1100px 850px at 18% 0%, rgba(14, 165, 233, 0.12), transparent 62%),
-    radial-gradient(900px 750px at 86% 10%, rgba(56, 189, 248, 0.10), transparent 60%),
-    radial-gradient(900px 700px at 45% 120%, rgba(167, 139, 250, 0.07), transparent 62%),
-    linear-gradient(180deg, #dde9ff 0%, #d6e6ff 55%, #eef5ff 100%);
-  background-attachment: fixed;
-}
-
-/* Surfaces */
-body:not(.dark-mode) .card,
-body:not(.dark-mode) .stock-card,
-body:not(.dark-mode) .fund-card,
-body:not(.dark-mode) .watchlist-card,
-body:not(.dark-mode) .modal-content,
-body:not(.dark-mode) .panel,
-body:not(.dark-mode) #portfolio-summary,
-body:not(.dark-mode) #portfolio-summary .summary-total,
-body:not(.dark-mode) #portfolio-summary .summary-box{
-  background: rgba(244, 248, 255, 0.74) !important;
-  border-color: rgba(6, 24, 44, 0.13) !important;
-  box-shadow: 0 12px 30px rgba(6, 24, 44, 0.12) !important;
-}
-body:not(.dark-mode) #chart-summary-panel{
-  background: rgba(242, 247, 255, 0.76) !important;
-  border-color: rgba(14, 165, 233, 0.22) !important;
-  box-shadow: 0 14px 34px rgba(6, 24, 44, 0.14) !important;
-}
-
-/* Labels */
-body:not(.dark-mode) .info-label,
-body:not(.dark-mode) .muted,
-body:not(.dark-mode) .subtext{
-  color: var(--text-secondary) !important;
-}
-body:not(.dark-mode) .info-row{
-  border-bottom-color: rgba(6, 24, 44, 0.10) !important;
-}
-
-/* Tabs */
-body:not(.dark-mode) .tabs-container,
-body:not(.dark-mode) .tabs{
-  background: rgba(244, 248, 255, 0.62) !important;
-  border-color: rgba(6, 24, 44, 0.12) !important;
-  backdrop-filter: blur(10px);
-}
-body:not(.dark-mode) .tab,
-body:not(.dark-mode) .tab-btn,
-body:not(.dark-mode) .tabs button{
-  color: rgba(6, 24, 44, 0.70) !important;
-}
-body:not(.dark-mode) .tab:hover,
-body:not(.dark-mode) .tab-btn:hover,
-body:not(.dark-mode) .tabs button:hover{
-  color: var(--text-primary) !important;
-  border-color: rgba(14, 165, 233, 0.22) !important;
-}
-body:not(.dark-mode) .tab.active,
-body:not(.dark-mode) .tab-btn.active,
-body:not(.dark-mode) .tabs button.active{
-  background: rgba(255, 255, 255, 0.90) !important;
-  border-color: rgba(14, 165, 233, 0.30) !important;
-  box-shadow: 0 1px 0 rgba(255,255,255,0.75) inset, 0 10px 22px rgba(6,24,44,0.12) !important;
-}
-
-/* Inputs */
-body:not(.dark-mode) input,
-body:not(.dark-mode) select,
-body:not(.dark-mode) textarea{
-  background: rgba(255, 255, 255, 0.86) !important;
-  border-color: rgba(6, 24, 44, 0.18) !important;
-  color: var(--text-primary) !important;
-}
-body:not(.dark-mode) input::placeholder,
-body:not(.dark-mode) textarea::placeholder{
-  color: rgba(6, 24, 44, 0.45) !important;
-}
-body:not(.dark-mode) input:focus,
-body:not(.dark-mode) select:focus,
-body:not(.dark-mode) textarea:focus{
-  outline: none !important;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.16) !important;
-  border-color: rgba(14, 165, 233, 0.36) !important;
-}
-
-/* Pills / chips */
-body:not(.dark-mode) .pill,
-body:not(.dark-mode) .badge,
-body:not(.dark-mode) .chip{
-  background: rgba(6, 24, 44, 0.06) !important;
-  border-color: rgba(6, 24, 44, 0.14) !important;
-  color: rgba(6, 24, 44, 0.82) !important;
-}
-
-/* Small action buttons */
-body:not(.dark-mode) .remove-btn{
-  background: rgba(6, 24, 44, 0.06) !important;
-  color: rgba(6, 24, 44, 0.80) !important;
-  border-color: rgba(6, 24, 44, 0.14) !important;
-}
-
-/* Primary buttons (soft blue) */
-body:not(.dark-mode) .add-btn,
-body:not(.dark-mode) .btn-primary,
-body:not(.dark-mode) .transaction-btn{
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.92), rgba(2, 132, 199, 0.92)) !important;
-  border-color: rgba(14, 165, 233, 0.44) !important;
-  color: #ffffff !important;
-  box-shadow: 0 10px 24px rgba(6, 24, 44, 0.14) !important;
-}
-body:not(.dark-mode) .add-btn:hover,
-body:not(.dark-mode) .btn-primary:hover,
-body:not(.dark-mode) .transaction-btn:hover{
-  border-color: rgba(2, 132, 199, 0.58) !important;
-}
-
-/* END DAY THEME PACK */
-
-/* daymode-readable-fix: ensure neutral summary values are visible on light cards */
-body:not(.dark-mode) .summary-box .summary-value{
-  color:#1f2937 !important;     /* readable neutral value */
-  text-shadow:none !important;   /* avoid glow washout */
-}
-
-/* daymode-readable-fix-v3: summary tiles use .summary-item (not .summary-box) */
-body:not(.dark-mode) .summary-item .summary-value:not(.positive):not(.negative){
-  color:#1f2937 !important;      /* readable neutral value */
-  text-shadow:none !important;    /* avoid glow washout */
-  font-weight:800 !important;
-}
-body:not(.dark-mode) .summary-item .summary-item-label{
-  color:#334155 !important;
-  text-shadow:none !important;
-}
-
-/* daymode-force-visible-v4: force key summary values visible in light mode */
-body:not(.dark-mode) #portfolio-summary #total-contributions,
-body:not(.dark-mode) #portfolio-summary #stock-count-value,
-body:not(.dark-mode) #portfolio-summary #fund-count-value{
-  color:#0f172a !important;
-  opacity:1 !important;
-  visibility:visible !important;
-  text-shadow:none !important;
-  font-weight:900 !important;
-}
-body:not(.dark-mode) #portfolio-summary #total-contributions{
-  padding: 2px 10px !important;
-  border-radius: 999px !important;
-  background: rgba(15,23,42,0.06) !important;
-  border: 1px solid rgba(15,23,42,0.12) !important;
 }
 </style>
 <script>
@@ -2533,6 +2334,50 @@ body{
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
+            // DEBUG/RECOVERY: expose firebase handles for console + add backup/migration helper
+            try {
+                window.__fb = { auth, db, doc, getDoc, setDoc };
+
+                // Read-only backup: downloads users/{uid} as JSON
+                window.backupUserDoc = async function(uid) {
+                    const { db, doc, getDoc } = window.__fb;
+                    const snap = await getDoc(doc(db, "users", uid));
+                    if (!snap.exists()) throw new Error("User doc not found: " + uid);
+                    const data = snap.data() || {};
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                    const a = document.createElement("a");
+                    const ts = new Date().toISOString().slice(0,10);
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `users_${uid}_backup_${ts}.json`;
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                    console.log("✅ Downloaded backup for", uid);
+                    return true;
+                };
+
+                // Migration helper (only writes if you call it)
+                window.migrateUserDoc = async function(fromUid, toUid) {
+                    const { auth, db, doc, getDoc, setDoc } = window.__fb;
+                    const targetUid = toUid || auth.currentUser?.uid;
+                    if (!targetUid) throw new Error("Not signed in (no target UID).");
+                    const fromSnap = await getDoc(doc(db, "users", fromUid));
+                    if (!fromSnap.exists()) throw new Error("Source user doc not found: " + fromUid);
+                    const d = fromSnap.data() || {};
+                    const payload = {
+                        stocks: d.stocks || [],
+                        mutualFunds: d.mutualFunds || [],
+                        watchlist: d.watchlist || [],
+                        closedPositions: d.closedPositions || [],
+                        contributions: d.contributions ?? d.totalContributions ?? null
+                    };
+                    await setDoc(doc(db, "users", targetUid), payload, { merge: true });
+                    console.log("✅ Migrated portfolio fields from", fromUid, "to", targetUid, payload);
+                    return payload;
+                };
+            } catch (e) {
+                console.warn("Recovery helpers not attached:", e);
+            }
+
         }
 
         class ApiService {
