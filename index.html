@@ -1899,22 +1899,6 @@ body:not(.dark-mode) .transaction-btn:hover{
 
 /* END DAY THEME PACK */
 
-/* daymode-readable-fix: ensure neutral summary values are visible on light cards */
-body:not(.dark-mode) .summary-box .summary-value{
-  color:#1f2937 !important;     /* readable neutral value */
-  text-shadow:none !important;   /* avoid glow washout */
-}
-
-/* daymode-readable-fix-v3: summary tiles use .summary-item (not .summary-box) */
-body:not(.dark-mode) .summary-item .summary-value:not(.positive):not(.negative){
-  color:#1f2937 !important;      /* readable neutral value */
-  text-shadow:none !important;    /* avoid glow washout */
-  font-weight:800 !important;
-}
-body:not(.dark-mode) .summary-item .summary-item-label{
-  color:#334155 !important;
-  text-shadow:none !important;
-}
 </style>
 <script>
   // Make Neon (dark) the default theme on first load (user can still toggle).
