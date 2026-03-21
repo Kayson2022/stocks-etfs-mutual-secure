@@ -8091,7 +8091,26 @@ const container = this.elements.portfolioPerformanceContainer;
           data: points,
           borderColor: lineColor,
           borderWidth: 2,
-          pointRadius: 0,
+          pointRadius: (context) => {
+            if (isToday) return 0;
+            const idx = context.dataIndex;
+            const d = new Date(points[idx] && points[idx].x ? points[idx].x : 0);
+            const dow = d.getDay();
+            const dom = d.getDate();
+            const mon = d.getMonth();
+            const r = range;
+            if (r === '1W') return (dow >= 1 && dow <= 5) ? 5 : 0;
+            if (r === '1M') return (dow >= 1 && dow <= 5) ? 4 : 0;
+            if (r === '6M' || r === 'YTD') return (dow >= 1 && dow <= 5) ? 2.5 : 0;
+            if (r === '1Y') return (dow >= 1 && dow <= 5) ? 2 : 0;
+            if (r === '3Y') return (dow >= 1 && dow <= 5) ? 1.5 : 0;
+            return 1.5; // 5Y / ALL
+          },
+          pointHoverRadius: 7,
+          pointHitRadius: 14,
+          pointBackgroundColor: lineColor,
+          pointBorderColor: 'rgba(255,255,255,0.8)',
+          pointBorderWidth: 1.5,
           fill: true,
           backgroundColor: `rgba(${fillRgb},0.15)`,
           tension: 0.35
@@ -8153,9 +8172,48 @@ const container = this.elements.portfolioPerformanceContainer;
             x: {
               type: 'time',
               time: {
-                unit: isToday ? 'hour' : 'month'
+                unit: isToday ? 'hour' : (range === '1W' || range === '1M' ? 'day' : 'month'),
+                displayFormats: {
+                  hour: 'ha',
+                  day: 'MMM d',
+                  month: 'MMM yyyy'
+                }
               },
-              ticks: { color: labelColor },
+              ticks: {
+                color: labelColor,
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: (() => {
+                  if (isToday) return 8;
+                  if (range === '1W') return 7;
+                  if (range === '1M') return 8;
+                  if (range === '6M' || range === 'YTD') return 6;
+                  if (range === '1Y') return 12;
+                  if (range === '3Y') return 12;
+                  if (range === '5Y') return 10;
+                  return 10;
+                })(),
+                callback: (value) => {
+                  if (isToday) {
+                    return new Date(value).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+                  }
+                  const d = new Date(value);
+                  const dow = d.getDay();
+                  const dom = d.getDate();
+                  const mon = d.getMonth();
+                  const yr = d.getFullYear();
+                  if (range === '1W') return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                  if (range === '1M') return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+                  if (range === '6M' || range === 'YTD') return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+                  if (range === '1Y') { return `${d.toLocaleDateString(undefined,{month:'short'})} '${yr.toString().slice(2)}`; }
+                  if (range === '3Y') {
+                    if ([0,3,6,9].includes(mon) && dom <= 7) return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+                    return '';
+                  }
+                  if (range === '5Y' || range === 'ALL') { return mon === 0 ? yr.toString() : ''; }
+                  return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+                }
+              },
               grid: { color: gridColor }
             },
             y: {
