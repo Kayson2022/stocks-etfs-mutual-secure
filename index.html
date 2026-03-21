@@ -6132,11 +6132,16 @@ getOldestTransactionDate(item) {
                             {
                                 label: "Portfolio Value ($)",
                                 data: chartData,
-                                borderColor: lineRgb, 
-                                borderWidth: 2, 
-                                pointRadius: 0,
-                                pointHitRadius: 10,
-                                tension: 0.2, // Smoother curve
+                                borderColor: lineRgb,
+                                borderWidth: 2,
+                                // Show dots when data is sparse, hide when dense to avoid clutter
+                                pointRadius: chartData.length <= 30 ? 4 : chartData.length <= 90 ? 2.5 : 0,
+                                pointHoverRadius: 6,
+                                pointHitRadius: 12,
+                                pointBackgroundColor: lineRgb,
+                                pointBorderColor: this.isDarkMode ? '#1c1f2e' : '#ffffff',
+                                pointBorderWidth: chartData.length <= 30 ? 2 : 1.5,
+                                tension: 0.2,
                                 fill: 'origin', // Fill area below the line
                                 backgroundColor: (context) => {
                                     const chartArea = context.chart.chartArea;
