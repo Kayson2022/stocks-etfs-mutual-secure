@@ -3033,11 +3033,10 @@ async fetchYahooQuote(symbol) {
                 }
             }
 async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
-                const url = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbol)}`;
+                const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`;
                 const res = await fetch(url, { cache: "no-store" });
                 if (!res.ok) throw new Error(`Yahoo quote fetch failed (HTTP ${res.status})`);
 
-                // Some proxies return non-JSON content-types even when the body is JSON.
                 let data;
                 const ct = (res.headers.get("content-type") || "").toLowerCase();
                 if (ct.includes("application/json")) {
@@ -3045,11 +3044,6 @@ async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
                 } else {
                     const txt = await res.text();
                     try { data = JSON.parse(txt); } catch { throw new Error("Yahoo quote non-JSON response"); }
-                }
-
-                // allorigins can sometimes wrap response as { contents: "..." }
-                if (data && typeof data === "object" && typeof data.contents === "string") {
-                    try { data = JSON.parse(data.contents); } catch { /* ignore */ }
                 }
 
                 const q =
@@ -3143,37 +3137,42 @@ async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
             }
 
 
-            // --- 2. ENRICHMENT: Yahoo (The "Extra Brain" for AH/Day Split) ---
+            // --- 2. ENRICHMENT: Yahoo (AH/Day Split) via chart endpoint + corsproxy.io ---
             async fetchYahooEnrichment(symbol) {
                 try {
-                    // Using 'allorigins' as an alternative proxy since corsproxy.io is failing
-                    const url = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbol)}`;
-
-                    const res = await fetch(url);
-                    if (!res.ok) throw new Error("Yahoo network error");
+                    // Use the same chart endpoint as the rest of the app — corsproxy.io works on GitHub Pages
+                    const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+                    const res = await fetch(url, { cache: 'no-store' });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     const json = await res.json();
-                    const q = json.quoteResponse?.result?.[0];
-                    if (!q) throw new Error("No data");
+                    const meta = json?.chart?.result?.[0]?.meta;
+                    if (!meta) throw new Error('No meta');
+
+                    const regularPrice   = meta.regularMarketPrice ?? meta.chartPreviousClose ?? null;
+                    const previousClose  = meta.previousClose ?? meta.chartPreviousClose ?? null;
+                    const regularChange  = (regularPrice && previousClose) ? regularPrice - previousClose : null;
+                    const regularPct     = (regularChange && previousClose) ? (regularChange / previousClose) * 100 : null;
+
+                    const postPrice      = meta.postMarketPrice   || null;
+                    const postChangePct  = meta.postMarketChangePercent || null;
+                    const postChange     = (postPrice && previousClose) ? postPrice - previousClose : regularChange;
 
                     return {
                         success: true,
                         data: {
-                            // "Frozen" Day Data
-                            priceRegular: q.regularMarketPrice,
-                            changeRegular: q.regularMarketChange,
-                            percentRegular: q.regularMarketChangePercent,
-
-                            // "Live" After-Hours Data
-                            priceExtended: q.postMarketPrice || q.regularMarketPrice,
-                            changeExtended: (q.postMarketPrice || q.regularMarketPrice) - q.regularMarketPreviousClose,
-                            percentExtended: q.postMarketChangePercent || q.regularMarketChangePercent,
-
-                            // Market State
-                            marketState: q.marketState
+                            priceRegular:    regularPrice,
+                            changeRegular:   regularChange,
+                            percentRegular:  regularPct,
+                            priceExtended:   postPrice   || regularPrice,
+                            changeExtended:  postChange  || regularChange,
+                            percentExtended: postChangePct || regularPct,
+                            marketState:     meta.marketState || 'CLOSED',
+                            fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh ?? null,
+                            fiftyTwoWeekLow:  meta.fiftyTwoWeekLow  ?? null,
                         }
                     };
                 } catch (e) {
-                    return { success: false, reason: "Yahoo enrichment failed" };
+                    return { success: false, reason: `Yahoo enrichment failed: ${e.message}` };
                 }
             }
 
