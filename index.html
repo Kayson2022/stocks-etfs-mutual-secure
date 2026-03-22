@@ -4473,7 +4473,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             _emailjsTemplateId() { return 'template_wbsgl1q'; }
             _emailjsPublicKey()  { return 'I15gJm9MKxGRBd9CQ'; }
             _backupEmail()       { return 'khanhjunkemails@gmail.com'; }
-            _backupIntervalMs()  { return 3 * 60 * 1000; } // Every 3 minutes
+            _backupIntervalMs()  { return 24 * 60 * 60 * 1000; } // Every 24 hours
 
             getBackupData() {
                 // Strip to essential fields only to stay under EmailJS 50kb limit
@@ -4562,16 +4562,30 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             }
 
             startAutoBackup() {
-                // Respect user preference — don't start if disabled
+                // Always respect user preference first
                 const disabled = localStorage.getItem('secureAutoBackupDisabled') === 'true';
                 if (disabled) {
                     this._updateBackupToggleBtn(false);
+                    console.log('Secure auto-backup is paused by user.');
                     return;
                 }
                 if (this._backupTimer) clearInterval(this._backupTimer);
+                // Only do catch-up send if NOT disabled
                 const elapsed = Date.now() - parseInt(localStorage.getItem('secureLastBackup') || '0');
-                if (elapsed > this._backupIntervalMs()) setTimeout(() => this.sendBackupEmail(false), 10000);
-                this._backupTimer = setInterval(() => this.sendBackupEmail(false), this._backupIntervalMs());
+                if (elapsed > this._backupIntervalMs()) {
+                    setTimeout(() => {
+                        // Double-check still not disabled before sending catch-up
+                        if (localStorage.getItem('secureAutoBackupDisabled') !== 'true') {
+                            this.sendBackupEmail(false);
+                        }
+                    }, 10000);
+                }
+                this._backupTimer = setInterval(() => {
+                    // Check every tick too in case user paused mid-session
+                    if (localStorage.getItem('secureAutoBackupDisabled') !== 'true') {
+                        this.sendBackupEmail(false);
+                    }
+                }, this._backupIntervalMs());
                 console.log(`Secure app auto-backup every ${this._backupIntervalMs() / 60000} minutes`);
                 this._updateBackupToggleBtn(true);
             }
