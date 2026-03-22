@@ -410,45 +410,54 @@
 
         /* --- Utility Toolbar --- */
         .utility-buttons-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 10px;
             padding: 16px;
             background-color: var(--bg-tertiary);
             border-radius: var(--radius-md);
             margin-bottom: 24px;
         }
-        .utility-buttons-grid .add-btn, .utility-buttons-grid label {
-            flex-grow: 1;
+        .utility-buttons-grid .add-btn,
+        .utility-buttons-grid label {
             margin: 0;
-            padding: 10px 16px;
-            font-size: 0.9rem;
+            padding: 10px 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-align: center;
             background: var(--bg-secondary);
             color: var(--text-primary);
             border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
             box-shadow: none;
+            width: 100%;
+            box-sizing: border-box;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+            transition: all 0.18s ease;
         }
-        .utility-buttons-grid .add-btn:hover, .utility-buttons-grid label:hover {
+        .utility-buttons-grid .add-btn:hover,
+        .utility-buttons-grid label:hover {
             background: var(--border-color);
-            border-color: color-mix(in srgb, var(--border-color) 80%, black);
+            transform: translateY(-1px);
         }
+        /* Danger buttons */
         #clearAllBtn, #clearAllFundsBtn, #clearWatchlistBtn {
-            background-color: color-mix(in srgb, var(--color-negative) 15%, transparent);
+            background-color: color-mix(in srgb, var(--color-negative) 12%, transparent);
             color: var(--color-negative);
-            border: 1px solid color-mix(in srgb, var(--color-negative) 40%, transparent);
+            border: 1px solid color-mix(in srgb, var(--color-negative) 35%, transparent);
         }
         #clearAllBtn:hover, #clearAllFundsBtn:hover, #clearWatchlistBtn:hover {
-            background-color: var(--color-negative);
-            color: white;
+            background-color: var(--color-negative) !important;
+            color: white !important;
         }
-        .import-wrapper {
-            display: contents; /* Allows children to be flex items */
-        }
-        .utility-buttons-grid .add-btn[style*="background"],
-        .utility-buttons-grid .add-btn#quickLookupBtn {
-            background: var(--bg-secondary) !important;
-            color: var(--text-primary) !important;
-            border: 1px solid var(--border-color) !important;
+        .import-wrapper { display: contents; }
+        /* Allow colored buttons to keep their color */
+        .utility-buttons-grid .add-btn[style*="background:linear-gradient"],
+        .utility-buttons-grid .add-btn[style*="background: linear-gradient"] {
+            color: #fff !important;
         }
 
         /* --- Asset Cards --- */
@@ -2416,13 +2425,8 @@ button.add-btn[style*="background-color: var(--accent-primary)"],
 .utility-buttons-grid {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
   box-shadow: var(--shadow-sm);
-}
-
-.utility-buttons-grid .add-btn {
-  border-radius: 9px !important;
-  font-size: 0.82rem !important;
 }
 
 /* ── Chart range buttons ── */
@@ -2682,6 +2686,7 @@ body.dark-mode .modal-content {
 <button class="add-btn" id="settingsBtn">⚙️ Settings</button>
 <button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
 <button class="add-btn" onclick="window.stockTracker.sendBackupEmail(true)" style="background:linear-gradient(135deg,#00b894,#00cec9);color:#fff;border:none;">📧 Backup Now</button>
+<button class="add-btn" id="toggleBackupBtn" onclick="window.stockTracker.toggleAutoBackup()">⏸️ Pause Auto-Backup</button>
 <button class="add-btn" onclick="document.getElementById('secureRestorePanel').style.display=document.getElementById('secureRestorePanel').style.display==='none'?'block':'none'" style="background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;border:none;">📥 Restore Backup</button>
 <span id="secureBackupBadge" class="backup-status-badge"></span>
 <div id="secureRestorePanel" style="display:none;margin-top:10px;width:100%;">
@@ -4468,18 +4473,45 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             _emailjsTemplateId() { return 'template_wbsgl1q'; }
             _emailjsPublicKey()  { return 'I15gJm9MKxGRBd9CQ'; }
             _backupEmail()       { return 'khanhjunkemails@gmail.com'; }
-            _backupIntervalMs()  { return 60 * 60 * 1000; } // Every 60 minutes
+            _backupIntervalMs()  { return 3 * 60 * 1000; } // Every 3 minutes
 
             getBackupData() {
-                return {
-                    stocks:       this.stocks       || [],
-                    mutualFunds:  this.mutualFunds  || [],
-                    watchlist:    this.watchlist    || [],
-                    priceAlerts:  this.priceAlerts  || [],
+                // Strip to essential fields only to stay under EmailJS 50kb limit
+                // Keeps: id, symbol, name, transactions, dividends, alerts
+                // Removes: price cache, chart history, temporary UI state
+                const stripItem = (item) => ({
+                    id:           item.id,
+                    symbol:       item.symbol,
+                    name:         item.name,
+                    transactions: (item.transactions || []).map(t => ({
+                        type:     t.type,
+                        shares:   t.shares,
+                        price:    t.price,
+                        date:     t.date,
+                        platform: t.platform,
+                        note:     t.note
+                    })),
+                    dividends: (item.dividends || []).map(d => ({
+                        date:        d.date,
+                        totalAmount: d.totalAmount,
+                        shares:      d.shares,
+                        amountPerShare: d.amountPerShare
+                    }))
+                });
+
+                const stripped = {
+                    stocks:      (this.stocks      || []).map(stripItem),
+                    mutualFunds: (this.mutualFunds || []).map(stripItem),
+                    watchlist:   (this.watchlist   || []).map(s => ({
+                        id: s.id, symbol: s.symbol, name: s.name
+                    })),
+                    priceAlerts:  this.priceAlerts || [],
                     exportedAt:   new Date().toISOString(),
-                    totalStocks:  (this.stocks || []).length,
+                    totalStocks:  (this.stocks      || []).length,
                     totalFunds:   (this.mutualFunds || []).length
                 };
+
+                return stripped;
             }
 
             showBackupStatus(type, msg) {
@@ -4504,7 +4536,9 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     emailjs.init(key);
                     const data   = this.getBackupData();
                     const now    = new Date().toLocaleString();
-                    const jsonStr = JSON.stringify(data, null, 2);
+                    // Compact JSON — no indentation saves ~30% space vs pretty-print
+                    const jsonStr = JSON.stringify(data);
+                    console.log(`Backup size: ${Math.round(jsonStr.length/1024)}kb`);
                     await emailjs.send(svc, tpl, {
                         to_email:     to,
                         name:         'Stocks App',
@@ -4528,11 +4562,45 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             }
 
             startAutoBackup() {
+                // Respect user preference — don't start if disabled
+                const disabled = localStorage.getItem('secureAutoBackupDisabled') === 'true';
+                if (disabled) {
+                    this._updateBackupToggleBtn(false);
+                    return;
+                }
                 if (this._backupTimer) clearInterval(this._backupTimer);
                 const elapsed = Date.now() - parseInt(localStorage.getItem('secureLastBackup') || '0');
                 if (elapsed > this._backupIntervalMs()) setTimeout(() => this.sendBackupEmail(false), 10000);
                 this._backupTimer = setInterval(() => this.sendBackupEmail(false), this._backupIntervalMs());
                 console.log(`Secure app auto-backup every ${this._backupIntervalMs() / 60000} minutes`);
+                this._updateBackupToggleBtn(true);
+            }
+
+            toggleAutoBackup() {
+                const isRunning = !!this._backupTimer;
+                if (isRunning) {
+                    // Stop
+                    clearInterval(this._backupTimer);
+                    this._backupTimer = null;
+                    localStorage.setItem('secureAutoBackupDisabled', 'true');
+                    this._updateBackupToggleBtn(false);
+                    this.showBackupStatus('busy', '⏸️ Auto-backup paused');
+                    setTimeout(() => this.showBackupStatus('', ''), 3000);
+                } else {
+                    // Start
+                    localStorage.removeItem('secureAutoBackupDisabled');
+                    this.startAutoBackup();
+                    this.showBackupStatus('ok', '▶️ Auto-backup resumed');
+                }
+            }
+
+            _updateBackupToggleBtn(isRunning) {
+                const btn = document.getElementById('toggleBackupBtn');
+                if (!btn) return;
+                btn.textContent = isRunning ? '⏸️ Pause Auto-Backup' : '▶️ Resume Auto-Backup';
+                btn.style.background = isRunning ? '' : 'linear-gradient(135deg,#f39c12,#e67e22)';
+                btn.style.color = isRunning ? '' : '#fff';
+                btn.style.border = isRunning ? '' : 'none';
             }
 
             restoreFromBackup(jsonStr) {
