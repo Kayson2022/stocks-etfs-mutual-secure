@@ -7746,35 +7746,39 @@ await this.saveData();
             async fetchAndRenderRSSNews(container) {
                 container.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text-secondary);">⏳ Loading market news...</div>`;
 
-                // Free RSS feeds — no API key needed, routed via corsproxy.io
+                // Use rss2json.com — free service that converts RSS to JSON, no CORS issues
+                // These feeds are reliable and don't block proxy requests
                 const feeds = [
-                    { name: 'Yahoo Finance', url: 'https://finance.yahoo.com/news/rssindex' },
-                    { name: 'Reuters Business', url: 'https://feeds.reuters.com/reuters/businessNews' },
-                    { name: 'MarketWatch', url: 'https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines' }
+                    { name: 'CNBC Markets', url: 'https://www.cnbc.com/id/20910258/device/rss/rss.html' },
+                    { name: 'Investing.com', url: 'https://www.investing.com/rss/news_25.rss' },
+                    { name: 'Seeking Alpha', url: 'https://seekingalpha.com/market_currents.xml' }
                 ];
+
+                // rss2json API — free, no key needed for basic use
+                const RSS2JSON = 'https://api.rss2json.com/v1/api.json?rss_url=';
 
                 let articles = [];
 
                 for (const feed of feeds) {
                     try {
-                        const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(feed.url)}`);
+                        const res = await fetch(RSS2JSON + encodeURIComponent(feed.url), { cache: 'no-store' });
                         if (!res.ok) continue;
-                        const text = await res.text();
-                        const parser = new DOMParser();
-                        const xml = parser.parseFromString(text, 'text/xml');
-                        const items = [...xml.querySelectorAll('item')].slice(0, 8);
-                        items.forEach(item => {
-                            const title = item.querySelector('title')?.textContent?.trim() || '';
-                            const link  = item.querySelector('link')?.textContent?.trim() || '#';
-                            const desc  = item.querySelector('description')?.textContent?.replace(/<[^>]*>/g,'').trim().slice(0,120) || '';
-                            const date  = item.querySelector('pubDate')?.textContent?.trim() || '';
-                            if (title) articles.push({ title, link, desc, date, source: feed.name });
+                        const json = await res.json();
+                        if (json.status !== 'ok' || !Array.isArray(json.items)) continue;
+                        json.items.slice(0, 8).forEach(item => {
+                            const title = (item.title || '').trim();
+                            const link  = item.link || '#';
+                            const desc  = (item.description || item.content || '')
+                                            .replace(/<[^>]*>/g, '').trim().slice(0, 120);
+                            const date  = item.pubDate || '';
+                            const img   = item.thumbnail || item.enclosure?.link || '';
+                            if (title) articles.push({ title, link, desc, date, source: feed.name, img });
                         });
                     } catch(e) { console.warn(`RSS fetch failed for ${feed.name}:`, e.message); }
                 }
 
                 // Sort newest first
-                articles.sort((a,b) => new Date(b.date) - new Date(a.date));
+                articles.sort((a, b) => new Date(b.date) - new Date(a.date));
 
                 if (articles.length === 0) {
                     container.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-secondary);">
@@ -7786,14 +7790,15 @@ await this.saveData();
 
                 // Update title
                 const titleEl = document.querySelector('#news-tab .watchlist-title');
-                if (titleEl) titleEl.innerHTML = '📰 Market News <span style="font-size:0.72rem;font-weight:500;color:var(--text-secondary);margin-left:6px;">(Free RSS — add Finnhub key for portfolio news)</span>';
+                if (titleEl) titleEl.innerHTML = '📰 Market News <span style="font-size:0.72rem;font-weight:500;color:var(--text-secondary);margin-left:6px;">(Add Finnhub key in Settings for personalized news)</span>';
 
                 container.innerHTML = articles.map(a => `
                     <a href="${a.link}" target="_blank" rel="noopener" class="news-article-card">
-                        <img src="https://placehold.co/80x80/6c757d/ffffff?text=${encodeURIComponent(a.source.slice(0,2))}" alt="">
+                        <img src="${a.img || 'https://placehold.co/80x80/6c757d/ffffff?text=' + encodeURIComponent(a.source.slice(0,2))}"
+                             alt="" onerror="this.src='https://placehold.co/80x80/6c757d/ffffff?text=News'">
                         <div class="news-article-content">
                             <h4>${a.title}</h4>
-                            <p>${a.desc}...</p>
+                            <p>${a.desc}${a.desc ? '...' : ''}</p>
                             <span style="font-size:0.72rem;color:var(--text-secondary);">${a.source} · ${a.date ? new Date(a.date).toLocaleDateString() : ''}</span>
                         </div>
                     </a>`).join('');
