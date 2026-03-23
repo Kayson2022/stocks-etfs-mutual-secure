@@ -2520,6 +2520,153 @@ body.dark-mode .modal-content {
   border: 1px solid var(--border-color) !important;
   box-shadow: var(--shadow-sm) !important;
 }
+
+/* ══════════════════════════════════════════════════════════
+   MOBILE RESPONSIVENESS — Comprehensive overhaul
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Phones (≤ 480px) ── */
+@media (max-width: 480px) {
+
+    /* Base */
+    .container { padding: 10px !important; }
+    body { padding-top: 56px !important; }
+
+    /* Header */
+    .header { padding: 10px 0; margin-bottom: 14px; }
+    .header h1 { font-size: 1.1rem !important; }
+    #sign-out-btn { font-size: 0.75rem; padding: 5px 10px; }
+
+    /* Summary panel pills */
+    #chart-summary-panel {
+        top: 4px !important;
+        gap: 6px !important;
+        padding: 7px 8px !important;
+    }
+    #chart-summary-panel .summary-pill {
+        min-width: 80px !important;
+        padding: 6px 8px !important;
+        font-size: 0.78rem !important;
+    }
+
+    /* Portfolio summary banner */
+    #portfolio-summary { padding: 12px !important; border-radius: 14px !important; }
+    #portfolio-summary .portfolio-inner { flex-direction: column; gap: 10px; }
+    #portfolio-summary .summary-total .summary-value { font-size: 1.6rem !important; }
+    #portfolio-summary .summary-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 7px !important;
+    }
+    #portfolio-summary .summary-item { padding: 7px 9px !important; border-radius: 10px !important; }
+    #portfolio-summary .summary-item-value .summary-value { font-size: 0.88rem !important; }
+    #portfolio-summary .summary-badges { flex-wrap: wrap; gap: 5px; }
+    #portfolio-summary .summary-badge { font-size: 0.72rem; padding: 4px 7px; }
+
+    /* Tabs — scrollable pill row */
+    .tabs {
+        width: 100% !important;
+        border-radius: 10px !important;
+        padding: 3px !important;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab { padding: 7px 12px !important; font-size: 0.8rem !important; white-space: nowrap; }
+
+    /* Search & input sections */
+    .search-section, .portfolio-controls, .funds-controls, .watchlist-controls {
+        flex-direction: column;
+        gap: 8px !important;
+    }
+    .input-wrapper { min-width: unset !important; width: 100% !important; }
+    .search-input, #portfolioSort, #platformFilter {
+        width: 100% !important;
+        font-size: 0.88rem !important;
+        padding: 10px 12px !important;
+    }
+    .add-btn { width: 100% !important; text-align: center; }
+
+    /* Utility buttons grid — 2 columns on phone */
+    .utility-buttons-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 7px !important;
+        padding: 10px !important;
+    }
+    .utility-buttons-grid .add-btn,
+    .utility-buttons-grid label {
+        font-size: 0.75rem !important;
+        padding: 8px 6px !important;
+    }
+
+    /* Stock cards — full width, tighter */
+    .stocks-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+    .group-content { grid-template-columns: 1fr !important; gap: 12px !important; }
+    .stock-card, .fund-card, .watchlist-card { padding: 14px !important; }
+    .stock-price { font-size: 1.7rem !important; }
+    .stock-change { font-size: 0.88rem !important; }
+    .stock-symbol, .fund-symbol { font-size: 1.25rem !important; }
+
+    /* Card actions — 2 columns */
+    .card-actions[style*="repeat(5"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+    .card-actions[style*="repeat(4"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* Info rows smaller text */
+    .info-row { font-size: 0.82rem !important; }
+
+    /* Charts */
+    .canvas-wrapper { height: 240px !important; }
+    .chart-controls { gap: 5px !important; }
+    .chart-range-btn { padding: 5px 8px !important; font-size: 0.72rem !important; }
+    #portfolio-performance-container { padding: 12px !important; }
+
+    /* Modals — full screen on phone */
+    .modal-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 92vh !important;
+        border-radius: 18px 18px 0 0 !important;
+        margin-top: auto !important;
+        padding: 18px !important;
+    }
+    .modal {
+        align-items: flex-end !important;
+    }
+
+    /* List All modal cards — 2 cols */
+    #list-all-content > div[style*="grid"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    /* Portfolio snapshot table — scrollable */
+    .modal-content table { font-size: 0.75rem !important; }
+    .modal-content div[style*="overflow-x:auto"] { -webkit-overflow-scrolling: touch; }
+
+    /* Small countdown */
+    .small-countdown { font-size: 0.75rem; padding: 5px 10px; bottom: 8px; left: 8px; }
+}
+
+/* ── Tablets (481px – 768px) ── */
+@media (min-width: 481px) and (max-width: 768px) {
+    .container { padding: 14px !important; }
+    .stocks-grid { grid-template-columns: 1fr !important; gap: 14px !important; }
+    .group-content { grid-template-columns: 1fr !important; gap: 14px !important; }
+    .utility-buttons-grid { grid-template-columns: repeat(3, 1fr) !important; }
+    .tabs { overflow-x: auto; flex-wrap: nowrap !important; }
+    .tab { white-space: nowrap; font-size: 0.85rem !important; }
+    #portfolio-summary .summary-grid { grid-template-columns: repeat(3, 1fr) !important; }
+    .canvas-wrapper { height: 280px !important; }
+    .card-actions[style*="repeat(5"] {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+
 </style>
 
 
@@ -2606,7 +2753,7 @@ body.dark-mode .modal-content {
 <button class="tab active" onclick="window.stockTracker.switchTab('stocks')">📊 Stocks &amp; Portfolio</button>
 <button class="tab" onclick="window.stockTracker.switchTab('funds')">🏛️ Mutual Funds</button>
 <button class="tab" onclick="window.stockTracker.switchTab('watchlist')">👀 Watchlist</button>
-<button class="tab" onclick="window.stockTracker.switchTab('news')">📰 News</button>
+
 </div>
 <div class="tab-content active" id="stocks-tab">
 <div class="portfolio-summary" id="portfolio-summary" style="display: none;">
@@ -2731,10 +2878,7 @@ body.dark-mode .modal-content {
 </div>
 <h3 class="watchlist-title"><span>Your Watchlist <span id="watchlist-count">(0)</span></span></h3>
 </div>
-<div class="tab-content" id="news-tab">
-<h3 class="watchlist-title">📰 Top News for Your Stocks</h3>
-<div id="news-articles-container"></div>
-</div>
+
 <div class="stocks-grid" id="stocksGrid"></div>
 <!-- 
 ==================================================================
@@ -2886,7 +3030,7 @@ body.dark-mode .modal-content {
 </div>
 <div class="transaction-input-group">
 <label for="enable-push-notifications-btn">Enable Push Notifications:</label>
-<button class="add-btn" id="enable-push-notifications-btn">🔔 Enable Notifications</button>
+<button class="add-btn" id="enable-push-notifications-btn" onclick="window.stockTracker.enablePushNotifications()">🔔 Enable Notifications</button>
 </div>
 <div class="transaction-input-group">
 <label for="sign-out-other-sessions-btn">Security:</label>
@@ -5662,16 +5806,15 @@ renderPortfolioSummary() {
                         `;
                     } else if (!isClosedPosition) {
                          cardActionsHTML = `
-                            <div class="card-actions" style="grid-template-columns: repeat(5, 1fr); margin-top: 10px;">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
                                 <button class="add-btn buy-btn transaction-btn" data-id="${item.id}" data-type="${type}">Buy</button>
                                 <button class="add-btn sell-btn transaction-btn" data-id="${item.id}" data-type="${type}">Sell</button>
                                 <button class="add-btn set-alert-btn" data-id="${item.id}" data-type="${type}">Alert</button>
                                 <button class="add-btn edit-btn" data-id="${item.id}" data-type="${type}">Edit Details</button>
-                                <button class="add-btn" onclick="window.stockTracker.openTaxLotModal('${item.id}','${type}')" style="font-size:0.75rem;">🧾 Tax Lots</button>
+                                <button class="add-btn transaction-btn" style="background-color:var(--color-positive);opacity:0.8;grid-column:span 1;" onclick="window.stockTracker.openTransactionModal('${item.id}','${type}','dividend')">💵 Dividend</button>
+                                <button class="add-btn" onclick="window.stockTracker.openTaxLotModal('${item.id}','${type}')" style="font-size:0.82rem;">🧾 Tax Lots</button>
                             </div>
-                            <div class="card-actions" style="grid-template-columns: 1fr; margin-top: 12px;">
-                                <button class="add-btn transaction-btn" style="background-color: var(--color-positive); opacity: 0.8;" onclick="window.stockTracker.openTransactionModal('${item.id}', '${type}', 'dividend')">Record Dividend</button>
-                            </div>
+
                             <div class="transaction-details">
                                 <div class="transaction-header collapsed">
                                     <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
@@ -6804,6 +6947,7 @@ getOldestTransactionDate(item) {
                 }, 100);
             }
             openSettingsModal() {
+                this._updatePushBtn();
                 if (this.elements.settingsModal) this.elements.settingsModal.style.display = 'flex';
                 if (this.elements.modalFinnhubKey) this.elements.modalFinnhubKey.value = localStorage.getItem('finnhubApiKey') || this.config.finnhubApiKey;
                 if (this.elements.modalAlphaVantageKey) this.elements.modalAlphaVantageKey.value = localStorage.getItem('alphaVantageApiKey') || this.config.alphaVantageKey;
@@ -7396,6 +7540,66 @@ getOldestTransactionDate(item) {
                 `;
             }
 
+
+            // ── Browser Push Notifications ─────────────────────────
+            async enablePushNotifications() {
+                if (!('Notification' in window)) {
+                    this.showError('Push notifications are not supported in this browser.');
+                    return;
+                }
+                if (Notification.permission === 'granted') {
+                    this.showSuccess('✅ Push notifications are already enabled!');
+                    this._updatePushBtn();
+                    return;
+                }
+                if (Notification.permission === 'denied') {
+                    this.showError('Notifications are blocked. Please enable them in your browser settings.');
+                    return;
+                }
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    this.showSuccess('✅ Push notifications enabled! You'll be notified when price alerts trigger.');
+                    new Notification('Portfolio Tracker', {
+                        body: 'Price alert notifications are now active! 🔔',
+                        icon: 'https://placehold.co/64x64/7c3aed/ffffff?text=PT'
+                    });
+                } else {
+                    this.showError('Notification permission denied.');
+                }
+                this._updatePushBtn();
+            }
+
+            _updatePushBtn() {
+                const btn = document.getElementById('enable-push-notifications-btn');
+                if (!btn) return;
+                if (!('Notification' in window)) {
+                    btn.textContent = '🔕 Not Supported';
+                    btn.disabled = true;
+                } else if (Notification.permission === 'granted') {
+                    btn.textContent = '✅ Notifications Enabled';
+                    btn.style.background = 'var(--color-positive)';
+                    btn.style.color = '#fff';
+                } else if (Notification.permission === 'denied') {
+                    btn.textContent = '🚫 Blocked in Browser';
+                    btn.disabled = true;
+                } else {
+                    btn.textContent = '🔔 Enable Notifications';
+                }
+            }
+
+            sendPushNotification(title, body) {
+                if (!('Notification' in window) || Notification.permission !== 'granted') return;
+                try {
+                    new Notification(title, {
+                        body,
+                        icon: 'https://placehold.co/64x64/7c3aed/ffffff?text=PT',
+                        badge: 'https://placehold.co/32x32/7c3aed/ffffff?text=PT',
+                        tag: 'price-alert', // replaces previous notification of same tag
+                        requireInteraction: true // stays until user dismisses
+                    });
+                } catch(e) { console.warn('Push notification failed:', e); }
+            }
+
             closeListAllModal() {
                 if (this.elements.listAllModal) this.elements.listAllModal.style.display = 'none';
             }
@@ -7637,6 +7841,20 @@ await this.saveData();
                 this.elements.alertNotification.innerHTML = `<h4>🔔 Price Alert!</h4><p>${message}</p>`;
                 this.elements.alertNotification.style.display = 'block';
                 setTimeout(() => { if(this.elements.alertNotification) this.elements.alertNotification.style.display = 'none'; }, 20000);
+
+                // Fire browser push notification for each triggered alert
+                alerts.forEach(a => {
+                    const allItems = [...this.stocks, ...this.mutualFunds, ...this.watchlist];
+                    const item = allItems.find(i => i.symbol === a.symbol);
+                    const curPrice = this.formatCurrency(item?.price || 0);
+                    const priceInfo = a.type === 'single'
+                        ? `${a.condition === 'above' ? 'rose above' : 'fell below'} ${this.formatCurrency(a.price)}`
+                        : `entered range ${this.formatCurrency(a.priceLower)}–${this.formatCurrency(a.priceUpper)}`;
+                    this.sendPushNotification(
+                        `🔔 ${a.symbol} Price Alert!`,
+                        `${a.symbol} ${priceInfo}. Current price: ${curPrice}`
+                    );
+                });
             }
 
             openAlertsSummaryModal() {
