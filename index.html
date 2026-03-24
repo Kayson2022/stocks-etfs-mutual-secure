@@ -10091,11 +10091,7 @@ setTimeout(tryInitLazy, 1000);
 /* ── shared panel ── */
 .st-panel { display:none; background:var(--bg-secondary); border-radius:12px; margin:12px 16px 20px; padding:20px; border:1px solid var(--border-color); }
 .st-panel.open { display:block; }
-/* Guarantee panels never take space when hidden */
-.st-panel:not(.open) { display:none !important; height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; border:none !important; }
-#stToolbarRow { display:flex; flex-wrap:wrap; gap:6px; padding:8px 16px 4px; min-height:0; }
-/* Hide toolbar row itself if empty (before JS injects it) */
-#stToolbarRow:empty { display:none !important; padding:0 !important; margin:0 !important; }
+#stToolbarRow { display:flex; flex-wrap:wrap; gap:6px; padding:8px 16px 4px; }
 .st-panel-title { font-size:1rem; font-weight:700; color:var(--text-primary); margin-bottom:4px; }
 .st-panel-sub { font-size:0.75rem; color:var(--text-secondary); margin-bottom:16px; }
 .st-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:18px; }
@@ -10136,32 +10132,6 @@ body.st-compact .investment-info { gap:4px !important; }
 .st-toolbar-btn.active { background:var(--color-positive,#27ae60); color:#fff; border-color:var(--color-positive,#27ae60); }
 </style>
 
-<!-- ── Panel containers (moved into place by injectToolbar) ── -->
-<div id="stSnapshotPanel" class="st-panel" style="display:none">
-  <div class="st-panel-title">📊 Portfolio Snapshot</div>
-  <div class="st-panel-sub">Live breakdown of your holdings by platform, asset type, and performance.</div>
-  <div id="stSnapshotContent"></div>
-</div>
-<div id="stTaxPanel" class="st-panel" style="display:none">
-  <div class="st-panel-title">🧾 Tax Summary</div>
-  <div class="st-panel-sub">Realized P/L, short vs long-term breakdown, and open lot analysis. Estimates only — consult a tax professional.</div>
-  <div id="stTaxContent"></div>
-</div>
-<div id="stCalPanel" class="st-panel" style="display:none">
-  <div class="st-panel-title">📅 Contribution Calendar</div>
-  <div class="st-panel-sub">52-week heatmap of your buy/sell activity.</div>
-  <div id="stCalContent"></div>
-</div>
-<div id="stWhatIfPanel" class="st-panel" style="display:none">
-  <div class="st-panel-title">🔮 What-If Simulator</div>
-  <div class="st-panel-sub">Project your portfolio value if you invested more each week.</div>
-  <div id="stWhatIfContent"></div>
-</div>
-<div id="stRecurPanel" class="st-panel" style="display:none">
-  <div class="st-panel-title">🔁 Recurring Buys</div>
-  <div class="st-panel-sub">Schedule automatic reminders for weekly/bi-weekly/monthly purchases.</div>
-  <div id="stRecurContent"></div>
-</div>
 
 <script>
 (function(){
@@ -10842,10 +10812,9 @@ window._stDeleteRecur = function(idx) {
 //  TOOLBAR INJECTION
 // ══════════════════════════════════════════════
 function injectToolbar() {
-  // Find the utility buttons area
-  const utilArea = document.querySelector('.utility-buttons-grid') || document.querySelector('.add-btn')?.parentElement;
-  if (!utilArea || document.getElementById('stToolbarRow')) return;
+  if (document.getElementById('stToolbarRow')) return;
 
+  // Create toolbar row
   const row = document.createElement('div');
   row.id = 'stToolbarRow';
   row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px 4px;';
@@ -10857,23 +10826,39 @@ function injectToolbar() {
     <button class="st-toolbar-btn" data-st-panel="recur" onclick="togglePanel('recur',renderRecurring)">🔁 Recurring</button>
     <button class="st-toolbar-btn" data-st-panel="compact" onclick="toggleCompact()" id="stCompactBtn">⊞ Compact</button>`;
 
-  // Insert after the tabs
+  // Create all panels dynamically — zero DOM presence until needed
+  const panelDefs = [
+    { id:'stSnapshotPanel', key:'snapshot', title:'📊 Portfolio Snapshot', sub:'Live breakdown of your holdings by platform, asset type, and performance.', contentId:'stSnapshotContent' },
+    { id:'stTaxPanel',      key:'tax',      title:'🧾 Tax Summary',         sub:'Realized P/L, short vs long-term breakdown, and open lot analysis. Estimates only — consult a tax professional.', contentId:'stTaxContent' },
+    { id:'stCalPanel',      key:'cal',      title:'📅 Contribution Calendar', sub:'52-week heatmap of your buy/sell activity.', contentId:'stCalContent' },
+    { id:'stWhatIfPanel',   key:'whatif',   title:'🔮 What-If Simulator',   sub:'Project your portfolio value if you invested more each week.', contentId:'stWhatIfContent' },
+    { id:'stRecurPanel',    key:'recur',    title:'🔁 Recurring Buys',      sub:'Schedule automatic reminders for weekly/bi-weekly/monthly purchases.', contentId:'stRecurContent' },
+  ];
+
+  // Insert toolbar after tabs
   const tabs = document.querySelector('.tabs');
   if (tabs) tabs.after(row);
   else document.body.prepend(row);
 
-  // Restore compact button state
-  if (localStorage.getItem('stCompact')==='1') {
-    document.getElementById('stCompactBtn')?.classList.add('active');
-    document.getElementById('stCompactBtn').textContent = '⊠ Compact: On';
-  }
-
-  // Insert panels after toolbar
-  const panelOrder = ['stSnapshotPanel','stTaxPanel','stCalPanel','stWhatIfPanel','stRecurPanel'];
-  panelOrder.forEach(id => {
-    const p = document.getElementById(id);
-    if (p) row.after(p);
+  // Create each panel and insert right after the toolbar row — hidden
+  panelDefs.forEach(def => {
+    if (document.getElementById(def.id)) return; // already exists
+    const panel = document.createElement('div');
+    panel.id = def.id;
+    panel.className = 'st-panel';
+    panel.style.display = 'none';
+    panel.innerHTML = `
+      <div class="st-panel-title">${def.title}</div>
+      <div class="st-panel-sub">${def.sub}</div>
+      <div id="${def.contentId}"></div>`;
+    row.after(panel);
   });
+
+  // Restore compact button state
+  if (localStorage.getItem('stCompact') === '1') {
+    const btn = document.getElementById('stCompactBtn');
+    if (btn) { btn.classList.add('active'); btn.textContent = '⊠ Compact: On'; }
+  }
 }
 
 // ══════════════════════════════════════════════
