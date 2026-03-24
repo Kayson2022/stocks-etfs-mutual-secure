@@ -7558,7 +7558,7 @@ getOldestTransactionDate(item) {
                 }
                 const permission = await Notification.requestPermission();
                 if (permission === 'granted') {
-                    this.showSuccess('✅ Push notifications enabled! You'll be notified when price alerts trigger.');
+                    this.showSuccess("✅ Push notifications enabled! You'll be notified when price alerts trigger.");
                     new Notification('Portfolio Tracker', {
                         body: 'Price alert notifications are now active! 🔔',
                         icon: 'https://placehold.co/64x64/7c3aed/ffffff?text=PT'
@@ -7931,18 +7931,12 @@ await this.saveData();
                 }
 
                 // Listen for changes to the activeSession field
-                // Use a short delay before attaching the listener to avoid a race condition where
-                // the initial snapshot fires before our own setDoc write has settled, causing a
-                // false mismatch and immediate sign-out.
+                // Skip the first snapshot to avoid a race condition where the initial read
+                // fires before our own setDoc write settles, causing a false mismatch + sign-out.
                 try {
                     let isFirstSnapshot = true;
                     this.sessionUnsubscribe = onSnapshot(sessionDocRef, (doc) => {
-                        // Skip the very first snapshot — it fires immediately on subscribe and may
-                        // reflect a stale activeSession from a previous device before our write lands.
-                        if (isFirstSnapshot) {
-                            isFirstSnapshot = false;
-                            return;
-                        }
+                        if (isFirstSnapshot) { isFirstSnapshot = false; return; }
                         if (doc.exists() && doc.data().activeSession !== this.sessionId) {
                             // A different session has become the 'active' one (i.e., this session was signed out remotely)
                             this.showError("You have been signed out because a new session was started or an admin action was taken.");
