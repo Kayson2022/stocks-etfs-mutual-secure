@@ -3974,10 +3974,10 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             runInitialization() {
                 this.loadConfig();
                 try {
-                    const storedState = sessionStorage.getItem('groupCollapseState');
+                    const storedState = localStorage.getItem('groupCollapseState');
                     this.groupCollapseState = storedState ? JSON.parse(storedState) : {};
                 } catch (e) {
-                    console.error("Could not parse group collapse state from sessionStorage", e);
+                    console.error("Could not parse group collapse state from localStorage", e);
                     this.groupCollapseState = {};
                 }
                 this.apiService = new ApiService(this.config);
@@ -4336,7 +4336,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 };
                 setupModalCloseListeners();
                 window.addEventListener('beforeunload', () => {
-                    sessionStorage.setItem('scrollPosition', window.scrollY);
+                    localStorage.setItem('stockTracker_scrollY', window.scrollY);
                 });
  
                 // After-Hours / Day toggle
@@ -4394,7 +4394,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 updateAhButton();
                 setInterval(updateAhButton, 60 * 1000);
                window.addEventListener('load', () => {
-                    const scrollPosition = sessionStorage.getItem('scrollPosition');
+                    const scrollPosition = localStorage.getItem('stockTracker_scrollY');
                     if (scrollPosition) {
                         window.scrollTo(0, parseInt(scrollPosition));
                     }
@@ -4402,12 +4402,25 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 if (this.elements.stocksGrid) this.elements.stocksGrid.addEventListener('click', (e) => this.handleCardAction(e));
             }
             saveScrollPosition() {
+                // Save to both memory and localStorage so it survives re-renders
                 this.lastScrollPosition = window.scrollY;
+                if (this.lastScrollPosition > 0) {
+                    localStorage.setItem('stockTracker_scrollY', this.lastScrollPosition);
+                }
             }
             restoreScrollPosition() {
-                if (this.lastScrollPosition !== undefined) {
-                    window.scrollTo(0, this.lastScrollPosition);
-                    this.lastScrollPosition = undefined;
+                // Read from memory first, fall back to localStorage
+                const pos = this.lastScrollPosition !== undefined
+                    ? this.lastScrollPosition
+                    : parseInt(localStorage.getItem('stockTracker_scrollY') || '0', 10);
+                this.lastScrollPosition = undefined;
+                if (pos > 0) {
+                    // Small defer so DOM has finished painting before we scroll
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            window.scrollTo({ top: pos, behavior: 'instant' });
+                        });
+                    });
                 }
             }
             
@@ -5667,7 +5680,7 @@ renderPortfolioSummary() {
                     const footerBtn = footer.querySelector('.collapse-group-btn');
                     if(footerBtn) footerBtn.textContent = isCollapsed ? 'Expand' : 'Collapse';
                     this.groupCollapseState[title] = isCollapsed;
-                    sessionStorage.setItem('groupCollapseState', JSON.stringify(this.groupCollapseState));
+                    localStorage.setItem('groupCollapseState', JSON.stringify(this.groupCollapseState));
                 };
 
                 header.addEventListener('click', toggleGroup);
