@@ -10191,7 +10191,7 @@ const PANELS = {
   recur:    'stRecurPanel',
 };
 
-function togglePanel(key, renderFn) {
+window.togglePanel = function togglePanel(key, renderFn) {
   const id = PANELS[key];
   const el = document.getElementById(id);
   if (!el) return;
@@ -10214,7 +10214,7 @@ function togglePanel(key, renderFn) {
 // ══════════════════════════════════════════════
 //  1. PORTFOLIO SNAPSHOT
 // ══════════════════════════════════════════════
-function renderSnapshot() {
+window.renderSnapshot = function renderSnapshot() {
   const el = document.getElementById('stSnapshotContent');
   if (!el) return;
   const items = getAllItems().filter(i => getStats(i).totalSharesOwned > 0);
@@ -10352,7 +10352,7 @@ function renderSnapshot() {
 // ══════════════════════════════════════════════
 //  2. TAX SUMMARY
 // ══════════════════════════════════════════════
-function renderTax() {
+window.renderTax = function renderTax() {
   const el = document.getElementById('stTaxContent');
   if (!el) return;
   const today = new Date(); today.setHours(0,0,0,0);
@@ -10471,7 +10471,7 @@ window._stTaxYear = new Date().getFullYear();
 // ══════════════════════════════════════════════
 //  3. CONTRIBUTION CALENDAR
 // ══════════════════════════════════════════════
-function renderCalendar() {
+window.renderCalendar = function renderCalendar() {
   const el = document.getElementById('stCalContent');
   if (!el) return;
   const today = new Date(); today.setHours(0,0,0,0);
@@ -10571,7 +10571,7 @@ function renderCalendar() {
 // ══════════════════════════════════════════════
 //  4. COMPACT VIEW TOGGLE
 // ══════════════════════════════════════════════
-function toggleCompact() {
+window.toggleCompact = function toggleCompact() {
   const isCompact = document.body.classList.toggle('st-compact');
   localStorage.setItem('stCompact', isCompact ? '1' : '0');
   document.querySelectorAll('[data-st-panel="compact"]').forEach(b => {
@@ -10631,7 +10631,7 @@ document.getElementById('settingsBtn')?.addEventListener('click', () => setTimeo
 // ══════════════════════════════════════════════
 //  6. WHAT-IF SIMULATOR
 // ══════════════════════════════════════════════
-function renderWhatIf() {
+window.renderWhatIf = function renderWhatIf() {
   const el = document.getElementById('stWhatIfContent');
   if (!el) return;
   const t = getTracker();
@@ -10748,7 +10748,7 @@ const RECUR_KEY = 'stRecurringBuys';
 function loadRecurring() { try{return JSON.parse(localStorage.getItem(RECUR_KEY)||'[]');}catch(e){return [];} }
 function saveRecurring(r){ localStorage.setItem(RECUR_KEY, JSON.stringify(r)); }
 
-function renderRecurring() {
+window.renderRecurring = function renderRecurring() {
   const el = document.getElementById('stRecurContent');
   if (!el) return;
   const items = loadRecurring();
@@ -10908,11 +10908,18 @@ setTimeout(init, 1500);
 window.addEventListener('load', () => setTimeout(init, 1000));
 
 // Expose panel functions globally for keyboard shortcut hint updates
-window._stPanelToggle = togglePanel;
+window._stPanelToggle    = togglePanel;
+window.togglePanel       = togglePanel;
+window.toggleCompact     = toggleCompact;
 window._stRenderSnapshot = renderSnapshot;
-window._stRenderCal = renderCalendar;
-window._stRenderWhatIf = renderWhatIf;
+window.renderSnapshot    = renderSnapshot;
+window._stRenderCal      = renderCalendar;
+window.renderCalendar    = renderCalendar;
+window._stRenderWhatIf   = renderWhatIf;
+window.renderWhatIf      = renderWhatIf;
 window._stRenderRecurring = renderRecurring;
+window.renderRecurring   = renderRecurring;
+window.renderTax         = renderTax;
 
 })();
 </script>
