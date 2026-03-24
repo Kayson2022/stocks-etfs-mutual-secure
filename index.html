@@ -14,19 +14,15 @@
 <script>
         // Safe Chart.js creator to avoid "Canvas is already in use" errors
         function createSafeChart(ctx, config) {
-            return new Promise(resolve => {
-                requestAnimationFrame(() => {
-                    try {
-                        if (window.Chart && ctx && ctx.canvas) {
-                            const existing = Chart.getChart(ctx.canvas);
-                            if (existing) existing.destroy();
-                        }
-                    } catch (e) {
-                        console.warn("Error destroying existing Chart instance:", e);
-                    }
-                    resolve(new Chart(ctx, config));
-                });
-            });
+            try {
+                if (window.Chart && ctx && ctx.canvas) {
+                    const existing = Chart.getChart(ctx.canvas);
+                    if (existing) existing.destroy();
+                }
+            } catch (e) {
+                console.warn("Error destroying existing Chart instance:", e);
+            }
+            return new Chart(ctx, config);
         }
     </script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
