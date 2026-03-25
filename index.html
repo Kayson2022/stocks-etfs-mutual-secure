@@ -2850,28 +2850,6 @@ body.dark-mode .modal-content {
 </div>
 </div>
 </div>
-</div>
-<div class="search-section">
-<div class="input-wrapper">
-<input class="search-input" id="stockInput" placeholder="Enter stock symbol (e.g., AAPL)" type="text"/>
-<span class="clear-input" data-target="stockInput">×</span>
-</div>
-<button class="add-btn" id="addBtn">Add Stock</button>
-</div>
-<div class="portfolio-controls">
-<div class="input-wrapper">
-<input class="search-input" id="portfolioFilter" placeholder="🔎 Filter your portfolio..." type="text"/>
-<span class="clear-input" data-target="portfolioFilter">×</span>
-</div>
-<select class="search-input" id="platformFilter" style="display: none;"></select>
-<select id="portfolioSort">
-<option value="performance">Sort by Performance</option>
-<option value="alphabetical">Sort Alphabetical (A-Z)</option>
-<option value="value">Sort by Total Value</option>
-<option value="pl_overall">Sort by Overall P/L ($)</option>
-<option value="platform">Sort by Platform</option>
-</select>
-</div>
 <div class="utility-buttons-grid">
 <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
 <button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
@@ -2900,6 +2878,29 @@ body.dark-mode .modal-content {
 <button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
 </div>
 </div>
+</div><!-- end portfolio-summary -->
+<div class="search-section">
+<div class="input-wrapper">
+<input class="search-input" id="stockInput" placeholder="Enter stock symbol (e.g., AAPL)" type="text"/>
+<span class="clear-input" data-target="stockInput">×</span>
+</div>
+<button class="add-btn" id="addBtn">Add Stock</button>
+</div>
+<div class="portfolio-controls">
+<div class="input-wrapper">
+<input class="search-input" id="portfolioFilter" placeholder="🔎 Filter your portfolio..." type="text"/>
+<span class="clear-input" data-target="portfolioFilter">×</span>
+</div>
+<select class="search-input" id="platformFilter" style="display: none;"></select>
+<select id="portfolioSort">
+<option value="performance">Sort by Performance</option>
+<option value="alphabetical">Sort Alphabetical (A-Z)</option>
+<option value="value">Sort by Total Value</option>
+<option value="pl_overall">Sort by Overall P/L ($)</option>
+<option value="platform">Sort by Platform</option>
+</select>
+</div>
+</div><!-- end stocks-tab -->
 <div class="tab-content" id="funds-tab">
 <div class="search-section">
 <div class="input-wrapper">
