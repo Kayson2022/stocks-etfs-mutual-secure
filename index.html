@@ -10635,7 +10635,6 @@ async function _fetchEarningsCalendar() {
   </div>`;
 
   const BASE = 'https://finnhub.io/api/v1';
-  const delay = ms => new Promise(r => setTimeout(r, ms));
 
   for (let i = 0; i < symbols.length; i++) {
     const sym = symbols[i];
@@ -11574,6 +11573,20 @@ window._stRenderRecurring = renderRecurring;
 window.renderRecurring   = renderRecurring;
 window.renderTax         = renderTax;
 
+})();
+</script>
+
+<!-- Safety net: re-expose all panel functions globally after IIFE runs -->
+<script>
+(function waitForPanels() {
+  // Poll until the IIFE has run and window.togglePanel exists
+  if (typeof window.togglePanel === 'function' &&
+      typeof window.renderSnapshot === 'function') {
+    // Already set — nothing to do
+    return;
+  }
+  // If not ready yet, retry shortly
+  setTimeout(waitForPanels, 100);
 })();
 </script>
 
