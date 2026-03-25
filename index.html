@@ -10566,7 +10566,7 @@ window.renderCalendar = function renderCalendar() {
   <div id="stEarningsCalSection" style="margin-top:24px;padding-top:20px;border-top:2px solid var(--border-color);">
     <div class="st-section-head" style="margin-top:0;">Earnings &amp; Ex-Dividend Dates</div>
     <p style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:12px;">
-      Upcoming events for your holdings — next 90 days. Fetched live from Finnhub.
+      Upcoming events for your holdings — next 90 days. Fetched live from Yahoo Finance.
     </p>
     <div id="stEarningsContent">
       <div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.82rem;">
@@ -10603,13 +10603,28 @@ async function _fetchEarningsCalendar() {
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
   // Yahoo Finance quoteSummary — free, no key, one call per symbol
-  // modules=calendarEvents gives earningsDate, exDividendDate, dividendDate, dividendRate
+  // Try multiple CORS proxies with fallback
+  const PROXIES = [
+    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    url => `https://cors-anywhere.herokuapp.com/${url}`,
+  ];
+
+  async function fetchWithProxy(targetUrl) {
+    for (const proxy of PROXIES) {
+      try {
+        const res = await fetch(proxy(targetUrl), { signal: AbortSignal.timeout(8000) });
+        if (res.ok) return res;
+      } catch(e) { /* try next proxy */ }
+    }
+    throw new Error('All proxies failed');
+  }
+
   for (let i = 0; i < symbols.length; i++) {
     const sym = symbols[i];
     try {
-      const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=calendarEvents,summaryDetail`;
-      const res = await fetch(url);
-      if (!res.ok) continue;
+      const targetUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=calendarEvents,summaryDetail`;
+      const res = await fetchWithProxy(targetUrl);
       const data = await res.json();
       const result = data?.quoteSummary?.result?.[0];
       if (!result) continue;
