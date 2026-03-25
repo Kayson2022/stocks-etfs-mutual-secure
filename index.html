@@ -3272,6 +3272,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
+            window._db = db; // expose for enhancement scripts
         }
 
         class ApiService {
@@ -9905,9 +9906,11 @@ body.dark-mode #sticky-mini-bar { background: rgba(34,37,46,0.95); }
       ta.className = 'card-note-input';
       ta.rows = 2;
       ta.placeholder = '📝 Add a note (buy rationale, target price…)';
-      ta.value = localStorage.getItem('note_' + id) || '';
+      // Load from Firestore (via in-memory cache)
+      const notes = FS.getSync('notes', {});
+      ta.value = notes[id] || '';
       ta.addEventListener('input', debounce(() => {
-        localStorage.setItem('note_' + id, ta.value);
+        FS.update('notes', n => { const obj = {...(n||{})}; obj[id] = ta.value; return obj; });
       }, 500));
       wrap.appendChild(ta);
       // Append before card-actions or at end
@@ -10059,7 +10062,7 @@ async function applyCurrency(code, locale) {
     }
 
     // Save preference
-    localStorage.setItem(SAVED_CURRENCY_KEY, JSON.stringify({ code, locale }));
+    FS.set('currency', { code, locale });
 
     // Re-render everything so all values show in new currency
     if (window.stockTracker && typeof window.stockTracker.renderContent === 'function') {
@@ -10086,7 +10089,7 @@ function initCurrencySelector() {
 
     // Restore saved preference
     try {
-        const saved = JSON.parse(localStorage.getItem(SAVED_CURRENCY_KEY) || 'null');
+        const saved = FS.getSync('currency', null);
         if (saved && saved.code) {
             const matchOpt = Array.from(sel.options).find(o => o.value.startsWith(saved.code + '|'));
             if (matchOpt) sel.value = matchOpt.value;
@@ -10257,6 +10260,117 @@ const colorN = n => `color:${n>=0?'var(--color-positive,#27ae60)':'var(--color-n
 const signN  = n => (n>=0?'+':'')+fc(n);
 
 function getTracker() { return window.stockTracker; }
+
+// ══════════════════════════════════════════════
+//  FIRESTORE SYNC LAYER
+//  All enhancement features write here instead
+//  of localStorage. Single user doc field:
+//  users/{uid}.enhancementData = {
+//    notes, currency, whatIf, recurring,
+//    goalTargets, goalGrand,
+//    rebalTargets, rebalContribs, priceTargets
+//  }
+// ══════════════════════════════════════════════
+let _fsData   = null;   // full in-memory cache
+let _fsLoaded = false;
+let _fsSaveTimer = null;
+
+async function fsEnsureLoaded() {
+  if (_fsLoaded) return;
+  _fsLoaded = true; // set early to prevent double-load race
+  try {
+    const tracker = getTracker();
+    const db = window._db;
+    if (!tracker?.userId || !db) return;
+    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js');
+    const snap = await getDoc(doc(db, 'users', tracker.userId));
+    if (snap.exists()) {
+      _fsData = snap.data().enhancementData || {};
+    } else {
+      _fsData = {};
+    }
+    // Migrate any existing localStorage values into Firestore on first load
+    _fsMigrateFromLocalStorage();
+  } catch(e) {
+    console.warn('fsEnsureLoaded error:', e.message);
+    _fsData = {};
+  }
+}
+
+function _fsMigrateFromLocalStorage() {
+  // One-time migration: pull existing localStorage values into _fsData
+  const migrations = {
+    notes:        () => {
+      const notes = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('note_')) notes[k.slice(5)] = localStorage.getItem(k);
+      }
+      return Object.keys(notes).length ? notes : null;
+    },
+    currency:     () => { try { return JSON.parse(localStorage.getItem('stockTracker_currency')); } catch(e) { return null; } },
+    whatIf:       () => {
+      const w = localStorage.getItem('stWhatIfWeekly');
+      if (!w) return null;
+      return {
+        weekly: parseFloat(w)||500,
+        years:  parseFloat(localStorage.getItem('stWhatIfYears'))||10,
+        rate:   parseFloat(localStorage.getItem('stWhatIfRate'))||7,
+        target: parseFloat(localStorage.getItem('stWhatIfTarget'))||0,
+      };
+    },
+    recurring:    () => { try { return JSON.parse(localStorage.getItem('stRecurringBuys')); } catch(e) { return null; } },
+    goalTargets:  () => { try { return JSON.parse(localStorage.getItem('stGoalTargets')); }  catch(e) { return null; } },
+    goalGrand:    () => { try { return JSON.parse(localStorage.getItem('stGoalGrand')); }    catch(e) { return null; } },
+    rebalTargets: () => { try { return JSON.parse(localStorage.getItem('stRebalTargets')); } catch(e) { return null; } },
+    rebalContribs:() => { try { return JSON.parse(localStorage.getItem('stRebalContribs')); }catch(e) { return null; } },
+  };
+  let migrated = false;
+  for (const [key, fn] of Object.entries(migrations)) {
+    if (!_fsData[key]) {
+      const val = fn();
+      if (val !== null && val !== undefined) { _fsData[key] = val; migrated = true; }
+    }
+  }
+  if (migrated) _fsCommit(); // write migrated data to Firestore
+}
+
+function _fsCommit() {
+  clearTimeout(_fsSaveTimer);
+  _fsSaveTimer = setTimeout(async () => {
+    try {
+      const tracker = getTracker();
+      const db = window._db;
+      if (!tracker?.userId || !db) return;
+      const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js');
+      await setDoc(doc(db, 'users', tracker.userId), { enhancementData: _fsData }, { merge: true });
+    } catch(e) { console.warn('fsCommit error:', e.message); }
+  }, 800);
+}
+
+// Public API — all features use these instead of localStorage
+const FS = {
+  async get(key, fallback = null) {
+    if (!_fsLoaded) await fsEnsureLoaded();
+    const val = (_fsData || {})[key];
+    return val !== undefined ? val : fallback;
+  },
+  set(key, value) {
+    if (!_fsData) _fsData = {};
+    _fsData[key] = value;
+    _fsCommit();
+  },
+  update(key, fn) {
+    if (!_fsData) _fsData = {};
+    _fsData[key] = fn(_fsData[key]);
+    _fsCommit();
+  },
+  getSync(key, fallback = null) {
+    // synchronous read from in-memory cache (call after fsEnsureLoaded)
+    const val = (_fsData || {})[key];
+    return val !== undefined ? val : fallback;
+  },
+};
 
 function getAllItems() {
   const t = getTracker();
@@ -11052,10 +11166,11 @@ window.renderWhatIf = function renderWhatIf() {
   const totalInvested = allTxns.reduce((s,tx)=>s+(tx.shares||0)*(tx.price||0),0);
   const avgWeekly = Math.round(totalInvested/weeksElapsed);
 
-  const savedWeekly = parseFloat(localStorage.getItem('stWhatIfWeekly')) || avgWeekly || 500;
-  const savedYears  = parseFloat(localStorage.getItem('stWhatIfYears'))  || 10;
-  const savedRate   = parseFloat(localStorage.getItem('stWhatIfRate'))   || 7;
-  const savedTarget = parseFloat(localStorage.getItem('stWhatIfTarget')) || 0;
+  const wi = FS.getSync('whatIf', {});
+  const savedWeekly = wi.weekly || avgWeekly || 500;
+  const savedYears  = wi.years  || 10;
+  const savedRate   = wi.rate   || 7;
+  const savedTarget = wi.target || 0;
 
   function fv(pv, weeklyPMT, rate, years) {
     const r=rate/100/52, n=years*52;
@@ -11102,10 +11217,7 @@ window.renderWhatIf = function renderWhatIf() {
     document.getElementById('wiWeeklyVal').textContent = fc0(weekly);
     document.getElementById('wiYearsVal').textContent  = years+' yrs';
     document.getElementById('wiRateVal').textContent   = rate+'%';
-    localStorage.setItem('stWhatIfWeekly', weekly);
-    localStorage.setItem('stWhatIfYears',  years);
-    localStorage.setItem('stWhatIfRate',   rate);
-    localStorage.setItem('stWhatIfTarget', target);
+    FS.set('whatIf', { weekly, years, rate, target });
 
     const scenarios = [
       {label:'Conservative', rate:5},
@@ -11146,8 +11258,8 @@ window.renderWhatIf = function renderWhatIf() {
 //  7. RECURRING BUY TRACKER
 // ══════════════════════════════════════════════
 const RECUR_KEY = 'stRecurringBuys';
-function loadRecurring() { try{return JSON.parse(localStorage.getItem(RECUR_KEY)||'[]');}catch(e){return [];} }
-function saveRecurring(r){ localStorage.setItem(RECUR_KEY, JSON.stringify(r)); }
+function loadRecurring() { return FS.getSync('recurring', []); }
+function saveRecurring(r){ FS.set('recurring', r); }
 
 window.renderRecurring = function renderRecurring() {
   const el = document.getElementById('stRecurContent');
@@ -11293,9 +11405,24 @@ document.addEventListener('keydown', e => {
 //  INIT
 // ══════════════════════════════════════════════
 function init() {
-  if (window.stockTracker) {
+  if (window.stockTracker && window._db) {
     injectToolbar();
     hookSettingsOverview();
+    // Preload all enhancement data from Firestore so FS.getSync() calls work
+    fsEnsureLoaded().then(() => {
+      // Re-apply currency preference after data loads
+      const saved = FS.getSync('currency', null);
+      if (saved && saved.code) {
+        const sel = document.getElementById('currency-select');
+        if (sel) {
+          const matchOpt = Array.from(sel.options).find(o => o.value.startsWith(saved.code + '|'));
+          if (matchOpt && sel.value !== matchOpt.value) {
+            sel.value = matchOpt.value;
+            sel.dispatchEvent(new Event('change'));
+          }
+        }
+      }
+    });
   } else {
     setTimeout(init, 600);
   }
@@ -11333,10 +11460,10 @@ document.addEventListener('DOMContentLoaded', () => {
 const ST_GOAL_KEY   = 'stGoalTargets';
 const ST_GOAL_GRAND = 'stGoalGrand';
 
-function stLoadGoals()  { try{return JSON.parse(localStorage.getItem(ST_GOAL_KEY)||'{}');}catch(e){return {};} }
-function stSaveGoals(g) { localStorage.setItem(ST_GOAL_KEY, JSON.stringify(g)); }
-function stLoadGrand()  { try{return JSON.parse(localStorage.getItem(ST_GOAL_GRAND)||'{}');}catch(e){return {};} }
-function stSaveGrand(g) { localStorage.setItem(ST_GOAL_GRAND, JSON.stringify(g)); }
+function stLoadGoals()  { return FS.getSync('goalTargets', {}); }
+function stSaveGoals(g) { FS.set('goalTargets', g); }
+function stLoadGrand()  { return FS.getSync('goalGrand', {}); }
+function stSaveGrand(g) { FS.set('goalGrand', g); }
 
 window.stSaveGoal  = (key,field,v) => { const g=stLoadGoals(); if(!g[key])g[key]={}; g[key][field]=parseFloat(v)||0; stSaveGoals(g); };
 window.stSaveGrand = (field,v)     => { const g=stLoadGrand(); g[field]=parseFloat(v)||0; stSaveGrand(g); };
@@ -11542,10 +11669,10 @@ function _stBuildGoal(el) {
 const ST_REBAL_KEY    = 'stRebalTargets';
 const ST_REBAL_CONTRIBS = 'stRebalContribs';
 
-function stLoadRebalTargets()  { try{return JSON.parse(localStorage.getItem(ST_REBAL_KEY)||'{}');}catch(e){return {};} }
-function stSaveRebalTargets(t) { localStorage.setItem(ST_REBAL_KEY, JSON.stringify(t)); }
-function stLoadRebalContribs() { try{return JSON.parse(localStorage.getItem(ST_REBAL_CONTRIBS)||'{}');}catch(e){return {};} }
-function stSaveRebalContribs(c){ localStorage.setItem(ST_REBAL_CONTRIBS, JSON.stringify(c)); }
+function stLoadRebalTargets()  { return FS.getSync('rebalTargets', {}); }
+function stSaveRebalTargets(t) { FS.set('rebalTargets', t); }
+function stLoadRebalContribs() { return FS.getSync('rebalContribs', {}); }
+function stSaveRebalContribs(c){ FS.set('rebalContribs', c); }
 
 window.stSaveRebalTarget      = (k,v)      => { const t=stLoadRebalTargets(); t[k]=parseFloat(v)||0; stSaveRebalTargets(t); };
 window.stSaveRebalInner       = (plat,tp,v)=> { const t=stLoadRebalTargets(); const k=`${plat}||${tp}`; t[k]=parseFloat(v)||0; stSaveRebalTargets(t); };
@@ -11747,18 +11874,28 @@ function _stBuildRebal(el) {
 }
 
 // ══════════════════════════════════════════════
-//  PRICE TARGET TRACKER
+//  PRICE TARGET TRACKER  (Firestore-backed via FS)
 // ══════════════════════════════════════════════
-const PT_KEY = 'stPriceTargets'; // { [id]: { buy: number|null, sell: number|null, note: string } }
+let _ptLoaded = false;
 
-function ptLoad() {
-  try { return JSON.parse(localStorage.getItem(PT_KEY) || '{}'); } catch(e) { return {}; }
-}
-function ptSave(data) {
-  localStorage.setItem(PT_KEY, JSON.stringify(data));
+async function ptEnsureLoaded() {
+  if (_ptLoaded) return;
+  await fsEnsureLoaded();
+  _ptLoaded = true;
 }
 
-window.stTogglePriceTarget = function(id, symbol, currentPrice) {
+async function ptSave(data) {
+  FS.set('priceTargets', data);
+}
+
+function ptGet(id) {
+  const all = FS.getSync('priceTargets', {});
+  return all[id] || { buy: null, sell: null, note: '' };
+}
+
+function getDb() { return window._db || null; }
+
+window.stTogglePriceTarget = async function(id, symbol, currentPrice) {
   const content = document.getElementById(`pt-content-${id}`);
   const chevron = document.getElementById(`pt-chevron-${id}`);
   if (!content) return;
@@ -11772,6 +11909,13 @@ window.stTogglePriceTarget = function(id, symbol, currentPrice) {
 
   content.style.display = 'block';
   if (chevron) chevron.style.transform = 'rotate(90deg)';
+
+  // Load from Firestore if not yet loaded
+  if (!_ptLoaded) {
+    content.innerHTML = `<div style="font-size:0.75rem;color:var(--text-secondary);padding:6px 0;">Loading…</div>`;
+    await ptEnsureLoaded();
+  }
+
   window.stRenderPriceTarget(id, symbol, currentPrice);
 };
 
@@ -11779,8 +11923,7 @@ window.stRenderPriceTarget = function(id, symbol, currentPrice) {
   const content = document.getElementById(`pt-content-${id}`);
   if (!content) return;
 
-  const all = ptLoad();
-  const pt  = all[id] || { buy: null, sell: null, note: '' };
+  const pt  = ptGet(id);
   const price = currentPrice || 0;
 
   const distStr = (target) => {
@@ -11858,9 +12001,12 @@ window.stSavePriceTarget = function(id, symbol, currentPrice) {
   const sell = parseFloat(sellEl.value) || null;
   const note = noteEl ? noteEl.value : '';
 
-  const all = ptLoad();
-  all[id] = { buy, sell, note, symbol };
-  ptSave(all);
+  // Update in-memory cache immediately (instant UI feedback)
+  FS.update('priceTargets', all => {
+    const obj = {...(all||{})};
+    obj[id] = { buy, sell, note, symbol };
+    return obj;
+  });
 
   // Update distance indicators live
   const price = currentPrice || 0;
@@ -11877,9 +12023,11 @@ window.stSavePriceTarget = function(id, symbol, currentPrice) {
 };
 
 window.stClearPriceTarget = function(id, symbol, currentPrice) {
-  const all = ptLoad();
-  delete all[id];
-  ptSave(all);
+  FS.update('priceTargets', all => {
+    const obj = {...(all||{})};
+    delete obj[id];
+    return obj;
+  });
   window.stRenderPriceTarget(id, symbol, currentPrice);
 };
 const _stNewsCache = {}; // cache per symbol so we don't re-fetch on re-open
