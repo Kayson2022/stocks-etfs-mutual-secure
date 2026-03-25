@@ -2816,43 +2816,44 @@ body.dark-mode .modal-content {
 
 <!-- ── Enhancement Toolbar — always visible, no JS timing dependency ── -->
 <div id="stToolbarRow" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px 4px;">
-  <button class="st-toolbar-btn" data-st-panel="snapshot" onclick="(window.togglePanel||function(){})(this.dataset.stPanel, window.renderSnapshot)">📊 Snapshot</button>
-  <button class="st-toolbar-btn" data-st-panel="tax" onclick="(window.togglePanel||function(){})(this.dataset.stPanel, window.renderTax)">🧾 Tax Summary</button>
-  <button class="st-toolbar-btn" data-st-panel="cal" onclick="(window.togglePanel||function(){})(this.dataset.stPanel, window.renderCalendar)">📅 Calendar</button>
-  <button class="st-toolbar-btn" data-st-panel="whatif" onclick="(window.togglePanel||function(){})(this.dataset.stPanel, window.renderWhatIf)">🔮 What-If</button>
-  <button class="st-toolbar-btn" data-st-panel="goal" onclick="(window.togglePanel||function(){})(this.dataset.stPanel, window.renderGoal)">🎯 Goal</button>
-  <button class="st-toolbar-btn" data-st-panel="rebal" onclick="(window.togglePanel||function(){})(this.dataset.stPanel, window.renderStRebal)">⚖️ Rebalance</button>
-  <button class="st-toolbar-btn" data-st-panel="recur" onclick="(window.togglePanel||function(){})(this.dataset.stPanel, window.renderRecurring)">🔁 Recurring</button>
-  <button class="st-toolbar-btn" data-st-panel="compact" onclick="(window.toggleCompact||function(){})();" id="stCompactBtn">⊞ Compact</button>
+  <button class="st-toolbar-btn" data-st-panel="snapshot">📊 Snapshot</button>
+  <button class="st-toolbar-btn" data-st-panel="tax">🧾 Tax Summary</button>
+  <button class="st-toolbar-btn" data-st-panel="cal">📅 Calendar</button>
+  <button class="st-toolbar-btn" data-st-panel="whatif">🔮 What-If</button>
+  <button class="st-toolbar-btn" data-st-panel="goal">🎯 Goal</button>
+  <button class="st-toolbar-btn" data-st-panel="rebal">⚖️ Rebalance</button>
+  <button class="st-toolbar-btn" data-st-panel="recur">🔁 Recurring</button>
+  <button class="st-toolbar-btn" data-st-panel="compact" id="stCompactBtn">⊞ Compact</button>
 </div>
 
-<!-- Wire toolbar buttons via JS as soon as panel functions are ready -->
 <script>
-(function wireToolbar() {
-  var btns = document.querySelectorAll('#stToolbarRow [data-st-panel]');
-  if (!btns.length) { setTimeout(wireToolbar, 200); return; }
-  btns.forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var key = this.getAttribute('data-st-panel');
-      if (key === 'compact') {
-        if (typeof window.toggleCompact === 'function') window.toggleCompact();
-        return;
-      }
-      var renderFns = {
-        snapshot: window.renderSnapshot,
-        tax:      window.renderTax,
-        cal:      window.renderCalendar,
-        whatif:   window.renderWhatIf,
-        goal:     window.renderGoal,
-        rebal:    window.renderStRebal,
-        recur:    window.renderRecurring,
-      };
-      if (typeof window.togglePanel === 'function') {
-        window.togglePanel(key, renderFns[key]);
-      }
-    });
-  });
-})();
+// Single delegated click handler on the toolbar row.
+// Reads window.togglePanel etc AT CLICK TIME so timing doesn't matter.
+document.getElementById('stToolbarRow').addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-st-panel]');
+  if (!btn) return;
+  var key = btn.getAttribute('data-st-panel');
+  var map = {
+    snapshot: 'renderSnapshot',
+    tax:      'renderTax',
+    cal:      'renderCalendar',
+    whatif:   'renderWhatIf',
+    goal:     'renderGoal',
+    rebal:    'renderStRebal',
+    recur:    'renderRecurring',
+  };
+  if (key === 'compact') {
+    if (typeof window.toggleCompact === 'function') window.toggleCompact();
+    else console.warn('toggleCompact not ready yet');
+    return;
+  }
+  var fn = window[map[key]];
+  if (typeof window.togglePanel === 'function') {
+    window.togglePanel(key, fn);
+  } else {
+    console.warn('togglePanel not ready — window.togglePanel:', typeof window.togglePanel);
+  }
+});
 </script>
 <div class="tab-content active" id="stocks-tab">
 <div class="portfolio-summary" id="portfolio-summary" style="display: none;">
