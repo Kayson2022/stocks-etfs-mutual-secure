@@ -10602,75 +10602,80 @@ async function _fetchEarningsCalendar() {
   const events = [];
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
-  // Yahoo Finance quoteSummary — free, no key, one call per symbol
-  // Try multiple CORS proxies with fallback
-  const PROXIES = [
-    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    url => `https://cors-anywhere.herokuapp.com/${url}`,
-  ];
+  // Finnhub — uses existing API key, direct calls (no proxy needed)
+  // Two endpoints per symbol: /calendar/earnings + /stock/metric (ex-div date)
+  const tracker = getTracker();
+  const finnhubKey = tracker?.config?.finnhubApiKey || tracker?.config?.finnhubKey || '';
 
-  async function fetchWithProxy(targetUrl) {
-    for (const proxy of PROXIES) {
-      try {
-        const res = await fetch(proxy(targetUrl), { signal: AbortSignal.timeout(8000) });
-        if (res.ok) return res;
-      } catch(e) { /* try next proxy */ }
-    }
-    throw new Error('All proxies failed');
+  if (!finnhubKey) {
+    contentEl.innerHTML = `<div style="text-align:center;padding:20px;background:var(--bg-color);border-radius:10px;border:1px solid var(--border-color);">
+      <div style="font-size:1.2rem;margin-bottom:6px;">🔑</div>
+      <div style="font-size:0.85rem;font-weight:700;color:var(--text-primary);">Finnhub API key required</div>
+      <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:4px;">Add your Finnhub API key in ⚙️ Settings to see earnings &amp; dividend dates.</div>
+    </div>`;
+    return;
   }
+
+  // Show progress while loading
+  contentEl.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.82rem;">
+    <div id="stCalProgress">Fetching data for ${symbols.length} symbols…</div>
+    <div style="margin-top:8px;font-size:0.72rem;">This may take up to 2 minutes for large portfolios.</div>
+  </div>`;
+
+  const BASE = 'https://finnhub.io/api/v1';
+  const delay = ms => new Promise(r => setTimeout(r, ms));
 
   for (let i = 0; i < symbols.length; i++) {
     const sym = symbols[i];
+    const prog = document.getElementById('stCalProgress');
+    if (prog) prog.textContent = `Fetching ${sym}… (${i+1}/${symbols.length})`;
+
     try {
-      const targetUrl = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=calendarEvents,summaryDetail`;
-      const res = await fetchWithProxy(targetUrl);
-      const data = await res.json();
-      const result = data?.quoteSummary?.result?.[0];
-      if (!result) continue;
+      // 1. Earnings calendar
+      const earnRes = await fetch(
+        `${BASE}/calendar/earnings?symbol=${encodeURIComponent(sym)}&from=${todayStr}&to=${in90Str}&token=${finnhubKey}`
+      );
+      if (earnRes.ok) {
+        const earnData = await earnRes.json();
+        (earnData.earningsCalendar || []).forEach(e => {
+          if (e.date && e.date >= todayStr && e.date <= in90Str) {
+            events.push({
+              symbol: sym,
+              type: 'earnings',
+              date: e.date,
+              detail: e.epsEstimate != null
+                ? `EPS est. ${e.epsEstimate >= 0 ? '+' : ''}$${Math.abs(Number(e.epsEstimate)).toFixed(2)}`
+                : '',
+              hour: e.hour || '' // BMO = before market open, AMC = after market close
+            });
+          }
+        });
+      }
 
-      // ── Earnings date ──
-      const cal = result.calendarEvents;
-      const earningsDates = cal?.earnings?.earningsDate || [];
-      earningsDates.forEach(ed => {
-        const ts  = ed.raw || ed;
-        const date = new Date(ts * 1000); date.setHours(0,0,0,0);
-        const ds  = date.toISOString().split('T')[0];
-        if (ds >= todayStr && ds <= in90Str) {
-          const epsEst = cal?.earnings?.earningsAverage?.raw;
-          events.push({
-            symbol: sym,
-            type: 'earnings',
-            date: ds,
-            detail: epsEst != null ? `EPS est. ${epsEst >= 0 ? '+' : ''}$${Math.abs(epsEst).toFixed(2)}` : '',
-            hour: ''
-          });
-        }
-      });
-
-      // ── Ex-dividend date ──
-      const sumDetail = result.summaryDetail;
-      const exDivTs   = sumDetail?.exDividendDate?.raw;
-      const divRate   = sumDetail?.dividendRate?.raw;
-      const divYield  = sumDetail?.dividendYield?.raw;
-      if (exDivTs) {
-        const exDate = new Date(exDivTs * 1000); exDate.setHours(0,0,0,0);
-        const ds = exDate.toISOString().split('T')[0];
-        if (ds >= todayStr && ds <= in90Str) {
+      // 2. Basic financials for ex-dividend date
+      const metricRes = await fetch(
+        `${BASE}/stock/metric?symbol=${encodeURIComponent(sym)}&metric=all&token=${finnhubKey}`
+      );
+      if (metricRes.ok) {
+        const metricData = await metricRes.json();
+        const exDate = metricData.metric?.dividendExDate || metricData.metric?.lastDividendDate;
+        const divAmt = metricData.metric?.dividendPerShareTTM || metricData.metric?.dividendPerShareAnnual;
+        if (exDate && exDate >= todayStr && exDate <= in90Str) {
           events.push({
             symbol: sym,
             type: 'exdiv',
-            date: ds,
-            detail: divRate ? `$${divRate.toFixed(3)}/share annually` : divYield ? `${(divYield*100).toFixed(2)}% yield` : '',
-            payDate: ''
+            date: exDate,
+            detail: divAmt ? `$${Number(divAmt).toFixed(3)}/share` : '',
+            hour: ''
           });
         }
       }
     } catch(e) {
       console.warn(`Calendar fetch failed for ${sym}:`, e.message);
     }
-    // Polite delay between requests — Yahoo is lenient but we don't want to hammer it
-    if (i < symbols.length - 1) await delay(150);
+
+    // Finnhub free tier = 60 req/min → 2 calls per symbol → ~500ms between symbols keeps us safe
+    if (i < symbols.length - 1) await delay(500);
   }
 
   if (!events.length) {
@@ -10755,7 +10760,7 @@ async function _fetchEarningsCalendar() {
   </div>
   ${rows}
   <p style="font-size:0.68rem;color:var(--text-secondary);margin-top:10px;font-style:italic;">
-    Data from Yahoo Finance. No API key required. Ex-dividend dates are forward-looking — verify before trading.
+    Data from Finnhub. Earnings dates are estimates. Ex-dividend dates may lag — verify before trading.
   </p>`;
 }
 
