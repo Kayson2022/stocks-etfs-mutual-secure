@@ -9595,6 +9595,12 @@ body.dark-mode #sticky-mini-bar { background: rgba(34,37,46,0.95); }
   <div class="krow"><span>Funds tab</span><kbd>2</kbd></div>
   <div class="krow"><span>Watchlist tab</span><kbd>3</kbd></div>
   <div class="krow"><span>News tab</span><kbd>4</kbd></div>
+  <div class="krow"><span>Portfolio Snapshot</span><kbd>S</kbd></div>
+  <div class="krow"><span>Tax Summary</span><kbd>T</kbd></div>
+  <div class="krow"><span>Contribution Calendar</span><kbd>C</kbd></div>
+  <div class="krow"><span>What-If Simulator</span><kbd>W</kbd></div>
+  <div class="krow"><span>Recurring Buys</span><kbd>N</kbd></div>
+  <div class="krow"><span>Compact view toggle</span><kbd>K</kbd></div>
   <div class="krow"><span>This panel</span><kbd>?</kbd></div>
 </div>
 
@@ -10563,48 +10569,55 @@ if (localStorage.getItem('stCompact') === '1') {
 // ══════════════════════════════════════════════
 //  5. SETTINGS DATA OVERVIEW
 // ══════════════════════════════════════════════
+
+// ══════════════════════════════════════════════
 function injectSettingsOverview() {
   const modal = document.getElementById('settingsModal');
-  if (!modal || document.getElementById('stSettingsOverview')) return;
+  if (!modal) return;
+  // Always remove and re-create so data is fresh every open
+  const existing = document.getElementById('stSettingsOverview');
+  if (existing) existing.remove();
   const t = getTracker();
   if (!t) return;
 
-  const allItems = getAllItems();
-  const txnCount = allItems.reduce((s,i)=>s+(i.transactions||[]).length,0);
-  const symbols  = allItems.length;
-  const platforms = new Set(allItems.flatMap(i=>(i.transactions||[]).map(tx=>tx.platform)).filter(Boolean));
+  const allItems  = getAllItems();
+  const txnCount  = allItems.reduce((s,i) => s + (i.transactions||[]).length, 0);
+  const symbols   = allItems.length;
+  const platforms = new Set(allItems.flatMap(i => (i.transactions||[]).map(tx => tx.platform)).filter(Boolean));
   const alertCount = (t.priceAlerts||[]).length;
+  const historyPts = (t.portfolioHistory||[]).length;
 
   const div = document.createElement('div');
   div.id = 'stSettingsOverview';
   div.style.cssText = 'background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;padding:14px;margin-bottom:16px;';
   div.innerHTML = `
-    <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin-bottom:10px;">Portfolio Overview</div>
+    <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin-bottom:10px;">Portfolio Data Overview</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.82rem;">
       <div><span style="color:var(--text-secondary);">Total symbols:</span> <strong>${symbols}</strong></div>
-      <div><span style="color:var(--text-secondary);">Total transactions:</span> <strong>${txnCount}</strong></div>
+      <div><span style="color:var(--text-secondary);">Total transactions:</span> <strong>${txnCount.toLocaleString()}</strong></div>
       <div><span style="color:var(--text-secondary);">Platforms:</span> <strong>${platforms.size}</strong></div>
       <div><span style="color:var(--text-secondary);">Price alerts:</span> <strong>${alertCount}</strong></div>
-      <div style="grid-column:1/-1;"><span style="color:var(--text-secondary);">Last data refresh:</span> <strong>${new Date().toLocaleTimeString()}</strong></div>
+      <div><span style="color:var(--text-secondary);">History points:</span> <strong>${historyPts}</strong></div>
+      <div><span style="color:var(--text-secondary);">Refreshed at:</span> <strong>${new Date().toLocaleTimeString()}</strong></div>
     </div>`;
 
-  // Insert before first child of modal-content
   const mc = modal.querySelector('.modal-content');
   if (mc) mc.insertBefore(div, mc.firstChild);
 }
 
-// Hook into settings open
-const origOpen = window.stockTracker?.openSettingsModal?.bind(window.stockTracker);
-if (origOpen) {
-  window.stockTracker.openSettingsModal = function() {
-    origOpen();
-    setTimeout(injectSettingsOverview, 50);
-  };
+// Hook into settings open — re-inject fresh data every time
+function hookSettingsOverview() {
+  const origOpen = window.stockTracker?.openSettingsModal?.bind(window.stockTracker);
+  if (origOpen && !window.stockTracker._stSettingsHooked) {
+    window.stockTracker._stSettingsHooked = true;
+    window.stockTracker.openSettingsModal = function() {
+      origOpen();
+      setTimeout(injectSettingsOverview, 150);
+    };
+  }
+  document.getElementById('settingsBtn')?.addEventListener('click', () => setTimeout(injectSettingsOverview, 200));
 }
-// Also run when settings button is clicked directly
-document.getElementById('settingsBtn')?.addEventListener('click', () => setTimeout(injectSettingsOverview, 100));
 
-// ══════════════════════════════════════════════
 //  6. WHAT-IF SIMULATOR
 // ══════════════════════════════════════════════
 window.renderWhatIf = function renderWhatIf() {
@@ -10742,7 +10755,7 @@ window.renderRecurring = function renderRecurring() {
   const rows = items.length ? items.map((item,idx) => {
     const next = nextDate(item.startDate, item.frequency);
     const daysUntil = Math.ceil((next-today)/(1000*60*60*24));
-    const isdue = daysUntil <= 2;
+    const isdue = daysUntil <= 7;
     return `<div class="st-recur-row" style="${isdue?'background:rgba(39,174,96,0.05);border-radius:8px;padding:8px;':''}">
       <div style="flex:1;min-width:120px;">
         <strong>${item.symbol}</strong>
@@ -10752,7 +10765,7 @@ window.renderRecurring = function renderRecurring() {
       <div><span class="st-pill st-pill-blue">${item.frequency}</span></div>
       <div style="min-width:120px;">
         <span style="font-size:0.8rem;color:${isdue?'#27ae60':'var(--text-secondary)'};">
-          ${isdue?'🔔 Due in '+daysUntil+'d':next.toLocaleDateString()}
+          ${daysUntil===0?'🔔 Due today':isdue?`🔔 Due in ${daysUntil}d`:next.toLocaleDateString()}
         </span>
       </div>
       <button onclick="window._stDeleteRecur(${idx})" style="padding:3px 8px;border-radius:5px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:0.72rem;cursor:pointer;">Remove</button>
@@ -10883,14 +10896,7 @@ document.addEventListener('keydown', e => {
 function init() {
   if (window.stockTracker) {
     injectToolbar();
-    // Hook settings open
-    const origOpen = window.stockTracker.openSettingsModal?.bind(window.stockTracker);
-    if (origOpen && !window.stockTracker._stSettingsHooked) {
-      window.stockTracker._stSettingsHooked = true;
-      window.stockTracker.openSettingsModal = function() {
-        origOpen(); setTimeout(injectSettingsOverview, 80);
-      };
-    }
+    hookSettingsOverview();
   } else {
     setTimeout(init, 600);
   }
