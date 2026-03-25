@@ -9599,6 +9599,8 @@ body.dark-mode #sticky-mini-bar { background: rgba(34,37,46,0.95); }
   <div class="krow"><span>Tax Summary</span><kbd>T</kbd></div>
   <div class="krow"><span>Contribution Calendar</span><kbd>C</kbd></div>
   <div class="krow"><span>What-If Simulator</span><kbd>W</kbd></div>
+  <div class="krow"><span>Goal Projection</span><kbd>G</kbd></div>
+  <div class="krow"><span>Rebalancer</span><kbd>B</kbd></div>
   <div class="krow"><span>Recurring Buys</span><kbd>N</kbd></div>
   <div class="krow"><span>Compact view toggle</span><kbd>K</kbd></div>
   <div class="krow"><span>This panel</span><kbd>?</kbd></div>
@@ -10170,6 +10172,8 @@ const PANELS = {
   cal:      'stCalPanel',
   whatif:   'stWhatIfPanel',
   recur:    'stRecurPanel',
+  goal:     'stGoalPanel',
+  rebal:    'stRebalPanel',
 };
 
 window.togglePanel = function togglePanel(key, renderFn) {
@@ -10836,16 +10840,20 @@ function injectToolbar() {
     <button class="st-toolbar-btn" data-st-panel="tax" onclick="togglePanel('tax',renderTax)">🧾 Tax Summary</button>
     <button class="st-toolbar-btn" data-st-panel="cal" onclick="togglePanel('cal',renderCalendar)">📅 Calendar</button>
     <button class="st-toolbar-btn" data-st-panel="whatif" onclick="togglePanel('whatif',renderWhatIf)">🔮 What-If</button>
+    <button class="st-toolbar-btn" data-st-panel="goal" onclick="togglePanel('goal',renderGoal)">🎯 Goal</button>
+    <button class="st-toolbar-btn" data-st-panel="rebal" onclick="togglePanel('rebal',renderStRebal)">⚖️ Rebalance</button>
     <button class="st-toolbar-btn" data-st-panel="recur" onclick="togglePanel('recur',renderRecurring)">🔁 Recurring</button>
     <button class="st-toolbar-btn" data-st-panel="compact" onclick="toggleCompact()" id="stCompactBtn">⊞ Compact</button>`;
 
   // Create all panels dynamically — zero DOM presence until needed
   const panelDefs = [
-    { id:'stSnapshotPanel', key:'snapshot', title:'📊 Portfolio Snapshot', sub:'Live breakdown of your holdings by platform, asset type, and performance.', contentId:'stSnapshotContent' },
-    { id:'stTaxPanel',      key:'tax',      title:'🧾 Tax Summary',         sub:'Realized P/L, short vs long-term breakdown, and open lot analysis. Estimates only — consult a tax professional.', contentId:'stTaxContent' },
-    { id:'stCalPanel',      key:'cal',      title:'📅 Contribution Calendar', sub:'52-week heatmap of your buy/sell activity.', contentId:'stCalContent' },
-    { id:'stWhatIfPanel',   key:'whatif',   title:'🔮 What-If Simulator',   sub:'Project your portfolio value if you invested more each week.', contentId:'stWhatIfContent' },
-    { id:'stRecurPanel',    key:'recur',    title:'🔁 Recurring Buys',      sub:'Schedule automatic reminders for weekly/bi-weekly/monthly purchases.', contentId:'stRecurContent' },
+    { id:'stSnapshotPanel', key:'snapshot', title:'📊 Portfolio Snapshot',     sub:'Live breakdown of your holdings by platform, asset type, and performance.', contentId:'stSnapshotContent' },
+    { id:'stTaxPanel',      key:'tax',      title:'🧾 Tax Summary',             sub:'Realized P/L, short vs long-term breakdown, and open lot analysis. Estimates only — consult a tax professional.', contentId:'stTaxContent' },
+    { id:'stCalPanel',      key:'cal',      title:'📅 Contribution Calendar',   sub:'52-week heatmap of your buy/sell activity.', contentId:'stCalContent' },
+    { id:'stWhatIfPanel',   key:'whatif',   title:'🔮 What-If Simulator',       sub:'Project your portfolio value if you invested more each week.', contentId:'stWhatIfContent' },
+    { id:'stGoalPanel',     key:'goal',     title:'🎯 Goal Projection',         sub:'Set target amounts and timelines by platform, asset type, and total portfolio. Uses your actual return rate.', contentId:'stGoalContent' },
+    { id:'stRebalPanel',    key:'rebal',    title:'⚖️ Portfolio Rebalancer',    sub:'Set target allocations by platform and asset type within each platform. Plan weekly contributions to rebalance.', contentId:'stRebalContent' },
+    { id:'stRecurPanel',    key:'recur',    title:'🔁 Recurring Buys',          sub:'Schedule automatic reminders for weekly/bi-weekly/monthly purchases.', contentId:'stRecurContent' },
   ];
 
   // Insert toolbar after tabs
@@ -10885,6 +10893,8 @@ document.addEventListener('keydown', e => {
     case 't': togglePanel('tax', renderTax); break;
     case 'c': togglePanel('cal', renderCalendar); break;
     case 'w': togglePanel('whatif', renderWhatIf); break;
+    case 'g': togglePanel('goal', renderGoal); break;
+    case 'b': togglePanel('rebal', renderStRebal); break;
     case 'n': togglePanel('recur', renderRecurring); break;
     case 'k': toggleCompact(); break;
   }
@@ -10905,7 +10915,427 @@ setTimeout(init, 1500);
 window.addEventListener('load', () => setTimeout(init, 1000));
 
 // Expose panel functions globally for keyboard shortcut hint updates
-window._stPanelToggle    = togglePanel;
+// ══════════════════════════════════════════════
+//  8. GOAL PROJECTION
+// ══════════════════════════════════════════════
+const ST_GOAL_KEY   = 'stGoalTargets';
+const ST_GOAL_GRAND = 'stGoalGrand';
+
+function stLoadGoals()  { try{return JSON.parse(localStorage.getItem(ST_GOAL_KEY)||'{}');}catch(e){return {};} }
+function stSaveGoals(g) { localStorage.setItem(ST_GOAL_KEY, JSON.stringify(g)); }
+function stLoadGrand()  { try{return JSON.parse(localStorage.getItem(ST_GOAL_GRAND)||'{}');}catch(e){return {};} }
+function stSaveGrand(g) { localStorage.setItem(ST_GOAL_GRAND, JSON.stringify(g)); }
+
+window.stSaveGoal  = (key,field,v) => { const g=stLoadGoals(); if(!g[key])g[key]={}; g[key][field]=parseFloat(v)||0; stSaveGoals(g); };
+window.stSaveGrand = (field,v)     => { const g=stLoadGrand(); g[field]=parseFloat(v)||0; stSaveGrand(g); };
+
+window.renderGoal = function renderGoal() {
+  const el = document.getElementById('stGoalContent');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px;">Loading...</p>';
+  setTimeout(() => _stBuildGoal(el), 30);
+};
+
+function _stBuildGoal(el) {
+  const items   = getAllItems();
+  const tracker = getTracker();
+
+  // ── Compute actual annualised return ──
+  function calcActualReturn() {
+    let totalCost=0, totalVal=0;
+    items.forEach(i => {
+      const s = getStats(i);
+      totalCost += s.costOfRemainingShares||0;
+      totalVal  += s.currentValue||0;
+    });
+    if (!totalCost || totalCost<=0) return null;
+    const buys = items.flatMap(i=>(i.transactions||[]).filter(t=>t.type==='buy'));
+    const dates = buys.map(t=>new Date(t.date)).filter(d=>!isNaN(d));
+    if (!dates.length) return null;
+    const earliest = new Date(Math.min(...dates));
+    const yrs = (Date.now()-earliest)/(365.25*24*60*60*1000);
+    if (yrs < 0.25) return null;
+    return (Math.pow(totalVal/totalCost, 1/yrs)-1)*100;
+  }
+  const actualRet = calcActualReturn();
+
+  // ── Compute average weekly contribution ──
+  const allBuys = items.flatMap(i=>(i.transactions||[]).filter(t=>t.type==='buy'));
+  const dates   = allBuys.map(t=>new Date(t.date)).filter(d=>!isNaN(d));
+  const earliest = dates.length ? new Date(Math.min(...dates)) : new Date();
+  const weeksElapsed = Math.max(1,(Date.now()-earliest)/(7*24*60*60*1000));
+  const totalInvested = allBuys.reduce((s,t)=>s+(t.shares||0)*(t.price||0),0);
+  const avgWeekly = totalInvested / weeksElapsed;
+
+  // ── Group values ──
+  const byPlatform = {}, byType = {};
+  let totalVal = 0;
+  items.forEach(i => {
+    const s = getStats(i);
+    const v = s.currentValue||0;
+    totalVal += v;
+    const plat = (i.transactions&&i.transactions[0]&&i.transactions[0].platform)||'Uncategorized';
+    byPlatform[plat] = (byPlatform[plat]||0)+v;
+    const tp = i.type||(i.mutualFund?'Mutual Fund':'Stock');
+    byType[tp] = (byType[tp]||0)+v;
+  });
+
+  const goals = stLoadGoals();
+  const grand = stLoadGrand();
+
+  const scenarios = [
+    {label:'Conservative', rate:5,  note:'5%/yr'},
+    {label:'Moderate',     rate:7,  note:'7%/yr', highlight:true},
+    {label:'Optimistic',   rate:10, note:'10%/yr'},
+  ];
+  if (actualRet!==null) scenarios.push({label:'Your actual', rate:parseFloat(actualRet.toFixed(1)), note:`${actualRet.toFixed(1)}%/yr`, actual:true});
+
+  function fv(pv, wPMT, rate, years) {
+    const r=rate/100/52, n=years*52;
+    if (r===0) return pv+wPMT*n;
+    return pv*Math.pow(1+r,n)+(wPMT>0?wPMT*(Math.pow(1+r,n)-1)/r:0);
+  }
+  function reqWeekly(pv, target, rate, years) {
+    const r=rate/100/52, n=years*52;
+    const fvPV = pv*Math.pow(1+r,n);
+    const need = target-fvPV;
+    return need>0 && Math.pow(1+r,n)>1 ? need*r/(Math.pow(1+r,n)-1) : 0;
+  }
+
+  function scenarioCards(curVal, wContrib, goalObj, key) {
+    const targetAmt = parseFloat(goalObj?.target)||0;
+    const years     = parseFloat(goalObj?.years)||10;
+    if (!targetAmt) return '';
+    const cards = scenarios.map(s => {
+      const projected = fv(curVal, wContrib, s.rate, years);
+      const onTrack   = projected >= targetAmt;
+      return `<div class="st-card${s.highlight?' st-card-highlight':''}">
+        <div class="st-card-label">${s.label} (${s.note})</div>
+        <div class="st-card-val" style="color:${onTrack?'var(--color-positive,#27ae60)':'var(--color-negative,#e74c3c)'};">
+          ${fc(projected)}
+        </div>
+        <div class="st-card-sub" style="color:${onTrack?'var(--color-positive,#27ae60)':'var(--color-negative,#e74c3c)'};">
+          ${onTrack?'✓ On track':'Short '+fc0(Math.abs(targetAmt-projected))}
+        </div>
+      </div>`;
+    }).join('');
+    const rq = reqWeekly(curVal, targetAmt, 7, years);
+    return `<div class="st-cards" style="margin:10px 0;">${cards}</div>
+    <p style="font-size:0.75rem;color:var(--text-secondary);">
+      To reach <strong>${fc(targetAmt)}</strong> in <strong>${years} yrs</strong> at 7%: need
+      <strong style="color:var(--text-primary);">${fc0(Math.max(0,rq))}/week</strong>
+      ${wContrib>0?` (contributing ~${fc0(wContrib)}/week — ${rq<=wContrib?'<span style="color:var(--color-positive,#27ae60);">✓ enough</span>':'<span style="color:var(--color-negative,#e74c3c);">need '+fc0(rq-wContrib)+' more/week</span>'})`:' — set a weekly contribution in the Rebalancer to see if it\'s enough'}
+    </p>`;
+  }
+
+  function goalInputRow(key, curVal, wContrib, label) {
+    const g = goals[key]||{};
+    const t = parseFloat(g.target)||0;
+    const y = parseFloat(g.years)||10;
+    return `<div style="margin-bottom:18px;padding-bottom:18px;border-bottom:0.5px solid var(--border-color);">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+        <strong style="font-size:0.88rem;">${label}</strong>
+        <span style="font-size:0.8rem;color:var(--text-secondary);">Current: ${fc(curVal)}</span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:0.82rem;margin-bottom:${t?'10px':'0'};">
+        <span style="color:var(--text-secondary);">Target ($)</span>
+        <input type="number" class="st-goal-input" min="0" step="1000"
+          value="${t||''}" placeholder="e.g. 500000"
+          onchange="window.stSaveGoal('${key}','target',this.value);window.renderGoal();"
+          style="width:130px;padding:5px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;">
+        <span style="color:var(--text-secondary);">in</span>
+        <input type="number" class="st-goal-input" min="1" max="50" step="1"
+          value="${y}" placeholder="10"
+          onchange="window.stSaveGoal('${key}','years',this.value);window.renderGoal();"
+          style="width:60px;padding:5px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;">
+        <span style="color:var(--text-secondary);">years</span>
+      </div>
+      ${scenarioCards(curVal, wContrib, g, key)}
+    </div>`;
+  }
+
+  // ── Per-platform section ──
+  const platformSection = Object.entries(byPlatform).sort((a,b)=>b[1]-a[1]).map(([plat,val]) => {
+    // Estimate weekly contribution to this platform from history
+    const platItems = items.filter(i=>(i.transactions&&i.transactions[0]&&i.transactions[0].platform)===plat||(i.transactions||[]).some(t=>t.platform===plat));
+    const platBuys = platItems.flatMap(i=>(i.transactions||[]).filter(t=>t.type==='buy'));
+    const platInvested = platBuys.reduce((s,t)=>s+(t.shares||0)*(t.price||0),0);
+    const platWeekly = weeksElapsed>0 ? platInvested/weeksElapsed : 0;
+    return goalInputRow(`plat_${plat}`, val, platWeekly, `🏦 ${plat}`);
+  }).join('');
+
+  // ── Per-asset-type section ──
+  const typeSection = Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([tp,val]) => {
+    const typeBuys = items.filter(i=>(i.type||(i.mutualFund?'Mutual Fund':'Stock'))===tp).flatMap(i=>(i.transactions||[]).filter(t=>t.type==='buy'));
+    const typeInvested = typeBuys.reduce((s,t)=>s+(t.shares||0)*(t.price||0),0);
+    const typeWeekly = weeksElapsed>0 ? typeInvested/weeksElapsed : 0;
+    return goalInputRow(`type_${tp}`, val, typeWeekly, `📦 ${tp}`);
+  }).join('');
+
+  // ── Grand total section ──
+  const g = grand;
+  const gTarget = parseFloat(g.target)||0;
+  const gYears  = parseFloat(g.years)||20;
+  const grandCards = gTarget>0 ? (() => {
+    const cards = scenarios.map(s => {
+      const projected = fv(totalVal, avgWeekly, s.rate, gYears);
+      const onTrack   = projected >= gTarget;
+      return `<div class="st-card${s.highlight?' st-card-highlight':''}">
+        <div class="st-card-label">${s.label} (${s.note})</div>
+        <div class="st-card-val" style="color:${onTrack?'var(--color-positive,#27ae60)':'var(--color-negative,#e74c3c)'};">${fc(projected)}</div>
+        <div class="st-card-sub" style="color:${onTrack?'var(--color-positive,#27ae60)':'var(--color-negative,#e74c3c)'};">${onTrack?'✓ On track':'Short '+fc0(Math.abs(gTarget-projected))}</div>
+      </div>`;
+    }).join('');
+    const rq = reqWeekly(totalVal, gTarget, 7, gYears);
+    return `<div class="st-cards" style="margin:10px 0;">${cards}</div>
+    <p style="font-size:0.75rem;color:var(--text-secondary);">
+      Total portfolio: <strong>${fc(totalVal)}</strong> · Avg contribution: <strong>~${fc0(avgWeekly)}/week</strong>
+      ${actualRet!==null?` · Actual return: <strong>${actualRet.toFixed(1)}%/yr</strong>`:''}
+      <br>At 7% you need <strong>${fc0(Math.max(0,rq))}/week</strong> — currently ${avgWeekly>=rq?'<span style="color:var(--color-positive,#27ae60);">✓ on pace</span>':'<span style="color:var(--color-negative,#e74c3c);">need '+fc0(Math.max(0,rq-avgWeekly))+' more/week</span>'}.
+    </p>`;
+  })() : '';
+
+  el.innerHTML = `
+  <div class="st-section-head" style="margin-top:0;">By Platform</div>
+  ${platformSection||'<p style="color:var(--text-secondary);font-size:0.82rem;">No platform data found.</p>'}
+
+  <div class="st-section-head">By Asset Type</div>
+  ${typeSection||'<p style="color:var(--text-secondary);font-size:0.82rem;">No asset type data found.</p>'}
+
+  <div class="st-section-head">🏆 Grand Total Goal</div>
+  <div style="margin-bottom:14px;">
+    <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:10px;">Total portfolio value: <strong style="color:var(--text-primary);">${fc(totalVal)}</strong></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:0.82rem;margin-bottom:${gTarget?'10px':'0'};">
+      <span style="color:var(--text-secondary);">Target ($)</span>
+      <input type="number" min="0" step="10000" value="${gTarget||''}" placeholder="e.g. 2000000"
+        onchange="window.stSaveGrand('target',this.value);window.renderGoal();"
+        style="width:140px;padding:5px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;">
+      <span style="color:var(--text-secondary);">in</span>
+      <input type="number" min="1" max="50" step="1" value="${gYears}" placeholder="20"
+        onchange="window.stSaveGrand('years',this.value);window.renderGoal();"
+        style="width:60px;padding:5px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;">
+      <span style="color:var(--text-secondary);">years</span>
+    </div>
+    ${grandCards}
+  </div>
+  <p style="font-size:0.68rem;color:var(--text-secondary);margin-top:10px;font-style:italic;">
+    Projections use compound growth math. Actual returns vary. Not financial advice.
+    ${actualRet!==null?`Your actual annualised return is calculated from your real buy transactions and current prices.`:''}
+  </p>`;
+}
+
+// ══════════════════════════════════════════════
+//  9. PORTFOLIO REBALANCER (Stocks)
+// ══════════════════════════════════════════════
+const ST_REBAL_KEY    = 'stRebalTargets';
+const ST_REBAL_CONTRIBS = 'stRebalContribs';
+
+function stLoadRebalTargets()  { try{return JSON.parse(localStorage.getItem(ST_REBAL_KEY)||'{}');}catch(e){return {};} }
+function stSaveRebalTargets(t) { localStorage.setItem(ST_REBAL_KEY, JSON.stringify(t)); }
+function stLoadRebalContribs() { try{return JSON.parse(localStorage.getItem(ST_REBAL_CONTRIBS)||'{}');}catch(e){return {};} }
+function stSaveRebalContribs(c){ localStorage.setItem(ST_REBAL_CONTRIBS, JSON.stringify(c)); }
+
+window.stSaveRebalTarget      = (k,v)      => { const t=stLoadRebalTargets(); t[k]=parseFloat(v)||0; stSaveRebalTargets(t); };
+window.stSaveRebalInner       = (plat,tp,v)=> { const t=stLoadRebalTargets(); const k=`${plat}||${tp}`; t[k]=parseFloat(v)||0; stSaveRebalTargets(t); };
+window.stSaveRebalContrib     = (k,v)      => { const c=stLoadRebalContribs(); c[k]=parseFloat(v)||0; stSaveRebalContribs(c); };
+
+window.renderStRebal = function renderStRebal() {
+  const el = document.getElementById('stRebalContent');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px;">Loading...</p>';
+  setTimeout(() => _stBuildRebal(el), 30);
+};
+
+function _stBuildRebal(el) {
+  const items    = getAllItems().filter(i => getStats(i).totalSharesOwned > 0);
+  const targets  = stLoadRebalTargets();
+  const contribs = stLoadRebalContribs();
+  const COLORS   = ['#3498db','#e74c3c','#f39c12','#9b59b6','#27ae60','#1abc9c','#e67e22','#16a085'];
+
+  // ── Aggregate by platform ──
+  const byPlatform = {};
+  items.forEach(i => {
+    const s    = getStats(i);
+    const val  = s.currentValue||0;
+    const plat = (i.transactions&&i.transactions[0]&&i.transactions[0].platform)||'Uncategorized';
+    const tp   = i.type||(i.mutualFund?'Mutual Fund':'Stock');
+    if (!byPlatform[plat]) byPlatform[plat] = { total:0, types:{} };
+    byPlatform[plat].total += val;
+    byPlatform[plat].types[tp] = (byPlatform[plat].types[tp]||0)+val;
+  });
+
+  const totalPortfolio = Object.values(byPlatform).reduce((s,p)=>s+p.total,0);
+  const platforms = Object.keys(byPlatform).sort((a,b)=>byPlatform[b].total-byPlatform[a].total);
+
+  // ── Target sum check ──
+  const tgtSum = platforms.reduce((s,p)=>s+(parseFloat(targets[`plat_${p}`])||0),0);
+  const tgtWarn = tgtSum>0 && Math.abs(tgtSum-100)>0.5
+    ? `<div style="background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.8rem;color:var(--color-negative,#e74c3c);">⚠️ Platform targets sum to ${tgtSum.toFixed(1)}% — must add up to 100%.</div>` : '';
+
+  // ── Phase 1 — Platform allocation bars ──
+  let phase1 = '';
+  platforms.forEach((plat, idx) => {
+    const val    = byPlatform[plat].total;
+    const curPct = totalPortfolio>0?(val/totalPortfolio)*100:0;
+    const tgtPct = parseFloat(targets[`plat_${plat}`])||0;
+    const diff   = curPct - tgtPct;
+    const color  = COLORS[idx%COLORS.length];
+
+    let badge = '';
+    if (!tgtPct)            badge = `<span class="st-pill st-pill-blue">No target</span>`;
+    else if(Math.abs(diff)<=2) badge = `<span class="st-pill st-pill-green">✓ On target</span>`;
+    else if(diff>0)         badge = `<span class="st-pill st-pill-red">▲ ${diff.toFixed(1)}% over</span>`;
+    else                    badge = `<span class="st-pill" style="background:rgba(39,174,96,0.12);color:#1E7C3A;">▼ ${Math.abs(diff).toFixed(1)}% under · needs ${fc0(Math.abs((tgtPct/100)*totalPortfolio-val))}</span>`;
+
+    // Inner asset breakdown
+    const platTotal = byPlatform[plat].total;
+    let innerRows = Object.entries(byPlatform[plat].types).sort((a,b)=>b[1]-a[1]).map(([tp,v]) => {
+      const cPct  = platTotal>0?(v/platTotal)*100:0;
+      const iTgt  = parseFloat(targets[`${plat}||${tp}`])||0;
+      const iDiff = cPct-iTgt;
+      const iBadge = !iTgt ? '' : Math.abs(iDiff)<=3
+        ? `<span style="font-size:0.68rem;color:var(--color-positive,#27ae60);">✓</span>`
+        : iDiff>0 ? `<span style="font-size:0.68rem;color:var(--color-negative,#e74c3c);">▲${iDiff.toFixed(1)}%</span>`
+        : `<span style="font-size:0.68rem;color:var(--color-positive,#27ae60);">▼${Math.abs(iDiff).toFixed(1)}%</span>`;
+      return `<tr>
+        <td style="padding:4px 8px;color:var(--text-secondary);font-size:0.78rem;">${tp}</td>
+        <td style="padding:4px 8px;text-align:right;font-size:0.78rem;">${fc0(v)}</td>
+        <td style="padding:4px 8px;text-align:right;font-size:0.78rem;">${cPct.toFixed(1)}%</td>
+        <td style="padding:4px 8px;text-align:right;">
+          <input type="number" min="0" max="100" step="1" value="${iTgt||''}" placeholder="0"
+            onchange="window.stSaveRebalInner('${plat}','${tp}',this.value)"
+            style="width:50px;padding:3px 6px;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.75rem;text-align:center;">%
+        </td>
+        <td style="padding:4px 8px;text-align:center;">${iBadge}</td>
+      </tr>`;
+    }).join('');
+
+    const innerTable = Object.keys(byPlatform[plat].types).length ? `
+    <details style="margin-top:8px;">
+      <summary style="font-size:0.78rem;color:var(--text-secondary);cursor:pointer;user-select:none;padding:4px 0;">
+        Asset type breakdown within ${plat} — expand to set targets
+      </summary>
+      <table style="width:100%;border-collapse:collapse;margin-top:6px;">
+        <thead><tr>
+          <th style="padding:4px 8px;text-align:left;font-size:0.72rem;color:var(--text-secondary);">Type</th>
+          <th style="padding:4px 8px;text-align:right;font-size:0.72rem;color:var(--text-secondary);">Value</th>
+          <th style="padding:4px 8px;text-align:right;font-size:0.72rem;color:var(--text-secondary);">Current %</th>
+          <th style="padding:4px 8px;text-align:right;font-size:0.72rem;color:var(--text-secondary);">Target %</th>
+          <th style="padding:4px 8px;text-align:center;font-size:0.72rem;color:var(--text-secondary);">Status</th>
+        </tr></thead>
+        <tbody>${innerRows}</tbody>
+      </table>
+    </details>` : '';
+
+    phase1 += `
+    <div style="margin-bottom:20px;padding-bottom:20px;border-bottom:0.5px solid var(--border-color);">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:4px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="width:12px;height:12px;border-radius:3px;background:${color};display:inline-block;flex-shrink:0;"></span>
+          <strong style="font-size:0.9rem;">${plat}</strong>${badge}
+        </div>
+        <div style="font-size:0.82rem;color:var(--text-secondary);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span>Current: <strong>${fc0(val)}</strong> (${curPct.toFixed(1)}%)</span>
+          <span>Target:</span>
+          <input type="number" min="0" max="100" step="1" value="${tgtPct||''}" placeholder="0%"
+            onchange="window.stSaveRebalTarget('plat_${plat}',this.value)"
+            style="width:60px;padding:5px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;text-align:center;">%
+          ${tgtPct?`<span>= ${fc0((tgtPct/100)*totalPortfolio)}</span>`:''}
+        </div>
+      </div>
+      <div style="background:var(--border-color);border-radius:999px;height:12px;position:relative;overflow:visible;margin:6px 0 4px;">
+        <div style="width:${Math.min(100,curPct)}%;height:100%;border-radius:999px;background:${color};opacity:0.75;transition:width 0.5s;"></div>
+        ${tgtPct?`<div style="position:absolute;top:-4px;bottom:-4px;left:${Math.min(100,tgtPct)}%;width:2px;background:var(--text-primary);opacity:0.35;border-radius:2px;"></div>`:''}
+      </div>
+      ${innerTable}
+    </div>`;
+  });
+
+  // ── Phase 2 — Contribution plan ──
+  const underweight = platforms.filter(p => {
+    const tgtPct = parseFloat(targets[`plat_${p}`])||0;
+    const curVal = byPlatform[p].total;
+    return tgtPct>0 && ((tgtPct/100)*totalPortfolio - curVal) > 50;
+  });
+
+  let contribInputs = platforms.map((plat,idx) => {
+    const saved  = contribs[plat]||0;
+    const color  = COLORS[idx%COLORS.length];
+    const uw     = underweight.includes(plat);
+    const gap    = uw ? ((parseFloat(targets[`plat_${plat}`])||0)/100)*totalPortfolio - byPlatform[plat].total : 0;
+
+    // Asset-type suggestion within platform
+    const platTypes  = byPlatform[plat].types;
+    const platTotal  = byPlatform[plat].total;
+    let suggestType  = null, suggestGap = 0;
+    const hasInner   = Object.keys(platTypes).some(tp => (parseFloat(targets[`${plat}||${tp}`])||0)>0);
+    if (hasInner) {
+      Object.entries(platTypes).forEach(([tp,v]) => {
+        const iTgt = parseFloat(targets[`${plat}||${tp}`])||0;
+        if (!iTgt) return;
+        const cur = platTotal>0?(v/platTotal)*100:0;
+        const g   = iTgt-cur;
+        if (g>suggestGap) { suggestGap=g; suggestType=tp; }
+      });
+    } else {
+      // Auto: smallest type
+      const smallest = Object.entries(platTypes).sort((a,b)=>a[1]-b[1])[0];
+      if (smallest) { suggestType=smallest[0]; suggestGap=0; }
+    }
+
+    const hint = uw ? `<span style="font-size:0.7rem;color:var(--color-positive,#27ae60);">↑ under by ${fc0(gap)}</span>` : '';
+    const suggest = suggestType && saved>0
+      ? `<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:3px;">→ Buy <strong style="color:var(--text-primary);">${suggestType}</strong> this week${hasInner&&suggestGap>0?` (${suggestGap.toFixed(1)}% below target)`:' (most underrepresented)'}</div>`
+      : '';
+
+    return `<div style="margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block;flex-shrink:0;"></span>
+        <span style="font-size:0.85rem;min-width:140px;">${plat}</span>
+        <span style="font-size:0.82rem;color:var(--text-secondary);">$</span>
+        <input type="number" min="0" step="50" value="${saved||''}" placeholder="0"
+          onchange="window.stSaveRebalContrib('${plat}',this.value)"
+          style="width:100px;padding:5px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;text-align:center;">
+        <span style="font-size:0.8rem;color:var(--text-secondary);">/week</span>
+        ${hint}
+      </div>
+      ${suggest}
+    </div>`;
+  }).join('');
+
+  const totalContrib = platforms.reduce((s,p)=>s+(contribs[p]||0),0);
+  const totalGap     = underweight.reduce((p,plat) => {
+    return p + ((parseFloat(targets[`plat_${plat}`])||0)/100)*totalPortfolio - byPlatform[plat].total;
+  }, 0);
+  const weeklyToUnder = underweight.reduce((s,p)=>s+(contribs[p]||0),0);
+  const weeksToRebal  = weeklyToUnder>0 ? Math.ceil(totalGap/weeklyToUnder) : null;
+
+  const contribSummary = totalContrib>0 ? `
+  <div style="margin-top:14px;padding:12px 14px;background:rgba(39,174,96,0.06);border:1px solid rgba(39,174,96,0.2);border-radius:10px;">
+    <div style="font-size:0.82rem;font-weight:700;margin-bottom:4px;">
+      This week: <span style="color:var(--color-positive,#27ae60);">${fc0(totalContrib)} total</span>
+      ${weeksToRebal?` · Est. <strong>${weeksToRebal} weeks</strong> to reach target allocation`:''}
+      ${totalGap<=50?'<span style="color:var(--color-positive,#27ae60);"> · ✓ Already on target!</span>':''}
+    </div>
+  </div>` : `<p style="font-size:0.8rem;color:var(--text-secondary);margin-top:10px;font-style:italic;">Enter this week's contribution per platform to see your buy plan and estimated weeks to rebalance.</p>`;
+
+  el.innerHTML = `
+  <div>
+    <div class="st-section-head" style="margin-top:0;">Phase 1 · Current Allocation by Platform</div>
+    <p style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:12px;">Set a target % per platform. Expand any platform to set asset-type targets within it. All targets save as you type.</p>
+    ${tgtWarn}${phase1}
+  </div>
+  <div style="margin-top:20px;padding-top:20px;border-top:2px solid var(--border-color);">
+    <div class="st-section-head" style="margin-top:0;">Phase 2 · This Week's Contribution</div>
+    <p style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:12px;">Enter what you're investing this week per platform. The tool shows which asset type to buy within each platform based on your targets.</p>
+    ${contribInputs}
+    ${contribSummary}
+  </div>
+  <p style="font-size:0.68rem;color:var(--text-secondary);margin-top:14px;font-style:italic;">Estimates only. Not financial advice.</p>`;
+}
+
+window.renderGoal    = window.renderGoal    || function(){};
+window.renderStRebal = window.renderStRebal || function(){};
 window.togglePanel       = togglePanel;
 window.toggleCompact     = toggleCompact;
 window._stRenderSnapshot = renderSnapshot;
