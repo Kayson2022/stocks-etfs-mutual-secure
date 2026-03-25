@@ -11066,10 +11066,20 @@ function injectToolbar() {
     { id:'stRecurPanel',    key:'recur',    title:'🔁 Recurring Buys',          sub:'Schedule automatic reminders for weekly/bi-weekly/monthly purchases.', contentId:'stRecurContent' },
   ];
 
-  // Insert toolbar after tabs
+  // Insert toolbar after tabs — try multiple insertion points
   const tabs = document.querySelector('.tabs');
-  if (tabs) tabs.after(row);
-  else document.body.prepend(row);
+  const portfolioSummary = document.getElementById('portfolio-summary');
+  const appContainer = document.getElementById('app-container');
+
+  if (tabs) {
+    tabs.after(row);
+  } else if (portfolioSummary) {
+    portfolioSummary.before(row);
+  } else if (appContainer) {
+    appContainer.prepend(row);
+  } else {
+    document.body.prepend(row);
+  }
 
   // Create each panel and insert right after the toolbar row — hidden
   panelDefs.forEach(def => {
@@ -11121,8 +11131,31 @@ function init() {
     setTimeout(init, 600);
   }
 }
-setTimeout(init, 1500);
-window.addEventListener('load', () => setTimeout(init, 1000));
+
+// Poll aggressively — try every 500ms for up to 30 seconds
+let _initAttempts = 0;
+function tryInit() {
+  _initAttempts++;
+  if (document.getElementById('stToolbarRow')) return; // already done
+  if (window.stockTracker && document.querySelector('.tabs')) {
+    init();
+    return;
+  }
+  if (_initAttempts < 60) setTimeout(tryInit, 500);
+}
+setTimeout(tryInit, 800);
+window.addEventListener('load', () => setTimeout(tryInit, 500));
+// Also hook into auth state changes — inject toolbar as soon as user logs in
+document.addEventListener('DOMContentLoaded', () => {
+  const appContainer = document.getElementById('app-container');
+  if (!appContainer) return;
+  const observer = new MutationObserver(() => {
+    if (appContainer.style.display !== 'none' && !document.getElementById('stToolbarRow')) {
+      setTimeout(tryInit, 300);
+    }
+  });
+  observer.observe(appContainer, { attributes: true, attributeFilter: ['style'] });
+});
 
 // Expose panel functions globally for keyboard shortcut hint updates
 // ══════════════════════════════════════════════
