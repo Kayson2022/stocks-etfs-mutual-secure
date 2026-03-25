@@ -2813,6 +2813,18 @@ body.dark-mode .modal-content {
 <button class="tab" onclick="window.stockTracker.switchTab('watchlist')">👀 Watchlist</button>
 
 </div>
+
+<!-- ── Enhancement Toolbar — always visible, no JS timing dependency ── -->
+<div id="stToolbarRow" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px 4px;">
+  <button class="st-toolbar-btn" data-st-panel="snapshot" onclick="togglePanel('snapshot',renderSnapshot)">📊 Snapshot</button>
+  <button class="st-toolbar-btn" data-st-panel="tax" onclick="togglePanel('tax',renderTax)">🧾 Tax Summary</button>
+  <button class="st-toolbar-btn" data-st-panel="cal" onclick="togglePanel('cal',renderCalendar)">📅 Calendar</button>
+  <button class="st-toolbar-btn" data-st-panel="whatif" onclick="togglePanel('whatif',renderWhatIf)">🔮 What-If</button>
+  <button class="st-toolbar-btn" data-st-panel="goal" onclick="togglePanel('goal',renderGoal)">🎯 Goal</button>
+  <button class="st-toolbar-btn" data-st-panel="rebal" onclick="togglePanel('rebal',renderStRebal)">⚖️ Rebalance</button>
+  <button class="st-toolbar-btn" data-st-panel="recur" onclick="togglePanel('recur',renderRecurring)">🔁 Recurring</button>
+  <button class="st-toolbar-btn" data-st-panel="compact" onclick="toggleCompact()" id="stCompactBtn">⊞ Compact</button>
+</div>
 <div class="tab-content active" id="stocks-tab">
 <div class="portfolio-summary" id="portfolio-summary" style="display: none;">
 <div class="portfolio-inner">
@@ -11039,23 +11051,10 @@ window._stDeleteRecur = function(idx) {
 //  TOOLBAR INJECTION
 // ══════════════════════════════════════════════
 function injectToolbar() {
-  if (document.getElementById('stToolbarRow')) return;
+  // Toolbar row is now static HTML — just create the panels and restore state
+  const row = document.getElementById('stToolbarRow');
+  if (!row) return;
 
-  // Create toolbar row
-  const row = document.createElement('div');
-  row.id = 'stToolbarRow';
-  row.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px 4px;';
-  row.innerHTML = `
-    <button class="st-toolbar-btn" data-st-panel="snapshot" onclick="togglePanel('snapshot',renderSnapshot)">📊 Snapshot</button>
-    <button class="st-toolbar-btn" data-st-panel="tax" onclick="togglePanel('tax',renderTax)">🧾 Tax Summary</button>
-    <button class="st-toolbar-btn" data-st-panel="cal" onclick="togglePanel('cal',renderCalendar)">📅 Calendar</button>
-    <button class="st-toolbar-btn" data-st-panel="whatif" onclick="togglePanel('whatif',renderWhatIf)">🔮 What-If</button>
-    <button class="st-toolbar-btn" data-st-panel="goal" onclick="togglePanel('goal',renderGoal)">🎯 Goal</button>
-    <button class="st-toolbar-btn" data-st-panel="rebal" onclick="togglePanel('rebal',renderStRebal)">⚖️ Rebalance</button>
-    <button class="st-toolbar-btn" data-st-panel="recur" onclick="togglePanel('recur',renderRecurring)">🔁 Recurring</button>
-    <button class="st-toolbar-btn" data-st-panel="compact" onclick="toggleCompact()" id="stCompactBtn">⊞ Compact</button>`;
-
-  // Create all panels dynamically — zero DOM presence until needed
   const panelDefs = [
     { id:'stSnapshotPanel', key:'snapshot', title:'📊 Portfolio Snapshot',     sub:'Live breakdown of your holdings by platform, asset type, and performance.', contentId:'stSnapshotContent' },
     { id:'stTaxPanel',      key:'tax',      title:'🧾 Tax Summary',             sub:'Realized P/L, short vs long-term breakdown, and open lot analysis. Estimates only — consult a tax professional.', contentId:'stTaxContent' },
@@ -11066,24 +11065,8 @@ function injectToolbar() {
     { id:'stRecurPanel',    key:'recur',    title:'🔁 Recurring Buys',          sub:'Schedule automatic reminders for weekly/bi-weekly/monthly purchases.', contentId:'stRecurContent' },
   ];
 
-  // Insert toolbar after tabs — try multiple insertion points
-  const tabs = document.querySelector('.tabs');
-  const portfolioSummary = document.getElementById('portfolio-summary');
-  const appContainer = document.getElementById('app-container');
-
-  if (tabs) {
-    tabs.after(row);
-  } else if (portfolioSummary) {
-    portfolioSummary.before(row);
-  } else if (appContainer) {
-    appContainer.prepend(row);
-  } else {
-    document.body.prepend(row);
-  }
-
-  // Create each panel and insert right after the toolbar row — hidden
   panelDefs.forEach(def => {
-    if (document.getElementById(def.id)) return; // already exists
+    if (document.getElementById(def.id)) return;
     const panel = document.createElement('div');
     panel.id = def.id;
     panel.className = 'st-panel';
