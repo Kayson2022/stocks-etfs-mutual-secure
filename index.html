@@ -2855,6 +2855,43 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
   }
 });
 </script>
+
+<!-- All panel divs as static HTML — no JS timing dependency -->
+<div id="stSnapshotPanel" class="st-panel">
+  <div class="st-panel-title">📊 Portfolio Snapshot</div>
+  <div class="st-panel-sub">Live breakdown of your holdings by platform, asset type, and performance.</div>
+  <div id="stSnapshotContent"></div>
+</div>
+<div id="stTaxPanel" class="st-panel">
+  <div class="st-panel-title">🧾 Tax Summary</div>
+  <div class="st-panel-sub">Realized P/L, short vs long-term breakdown, and open lot analysis. Estimates only — consult a tax professional.</div>
+  <div id="stTaxContent"></div>
+</div>
+<div id="stCalPanel" class="st-panel">
+  <div class="st-panel-title">📅 Contribution Calendar</div>
+  <div class="st-panel-sub">52-week heatmap of your buy/sell activity.</div>
+  <div id="stCalContent"></div>
+</div>
+<div id="stWhatIfPanel" class="st-panel">
+  <div class="st-panel-title">🔮 What-If Simulator</div>
+  <div class="st-panel-sub">Project your portfolio value if you invested more each week.</div>
+  <div id="stWhatIfContent"></div>
+</div>
+<div id="stGoalPanel" class="st-panel">
+  <div class="st-panel-title">🎯 Goal Projection</div>
+  <div class="st-panel-sub">Set target amounts and timelines by platform, asset type, and total portfolio.</div>
+  <div id="stGoalContent"></div>
+</div>
+<div id="stRebalPanel" class="st-panel">
+  <div class="st-panel-title">⚖️ Portfolio Rebalancer</div>
+  <div class="st-panel-sub">Set target allocations by platform and asset type within each platform.</div>
+  <div id="stRebalContent"></div>
+</div>
+<div id="stRecurPanel" class="st-panel">
+  <div class="st-panel-title">🔁 Recurring Buys</div>
+  <div class="st-panel-sub">Schedule automatic reminders for weekly/bi-weekly/monthly purchases.</div>
+  <div id="stRecurContent"></div>
+</div>
 <div class="tab-content active" id="stocks-tab">
 <div class="portfolio-summary" id="portfolio-summary" style="display: none;">
 <div class="portfolio-inner">
@@ -10148,8 +10185,8 @@ setTimeout(tryInitLazy, 1000);
      ══════════════════════════════════════════════════════════ -->
 <style>
 /* ── shared panel ── */
-.st-panel { display:none; background:var(--bg-secondary); border-radius:12px; margin:12px 16px 20px; padding:20px; border:1px solid var(--border-color); }
-.st-panel.open { display:block; }
+.st-panel { display:none !important; background:var(--bg-secondary); border-radius:12px; margin:12px 16px 20px; padding:20px; border:1px solid var(--border-color); }
+.st-panel.open { display:block !important; }
 #stToolbarRow { display:flex; flex-wrap:wrap; gap:6px; padding:8px 16px 4px; }
 .st-panel-title { font-size:1rem; font-weight:700; color:var(--text-primary); margin-bottom:4px; }
 .st-panel-sub { font-size:0.75rem; color:var(--text-secondary); margin-bottom:16px; }
@@ -10230,18 +10267,17 @@ const PANELS = {
 window.togglePanel = function togglePanel(key, renderFn) {
   const id = PANELS[key];
   const el = document.getElementById(id);
-  if (!el) return;
+  if (!el) { console.warn('Panel not found:', id); return; }
   const isOpen = el.classList.contains('open');
   // Close all panels
   Object.values(PANELS).forEach(pid => {
     const p = document.getElementById(pid);
-    if (p) { p.classList.remove('open'); p.style.display = 'none'; }
+    if (p) { p.classList.remove('open'); }
   });
   // Update toolbar button states
   document.querySelectorAll('[data-st-panel]').forEach(b => b.classList.remove('active'));
   if (!isOpen) {
     el.classList.add('open');
-    el.style.display = 'block'; // override inline display:none
     el.scrollIntoView({behavior:'smooth', block:'start'});
     document.querySelectorAll(`[data-st-panel="${key}"]`).forEach(b => b.classList.add('active'));
     if (renderFn) renderFn();
