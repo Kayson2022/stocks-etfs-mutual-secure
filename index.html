@@ -10392,6 +10392,70 @@ window.renderSnapshot = function renderSnapshot() {
       <td style="padding:6px 8px;text-align:right;font-weight:700;${colorN(p.pct)}">${p.pct>=0?'+':''}${p.pct.toFixed(2)}%</td>
     </tr>`).join('');
 
+  // ── Sector allocation ──
+  const bySector = {};
+  items.forEach(item => {
+    const s = getStats(item);
+    const val = s.currentValue||0;
+    if (val <= 0) return;
+    const sector = item.industry || item.sector || 'Unknown';
+    bySector[sector] = (bySector[sector]||0) + val;
+  });
+  const sectorEntries = Object.entries(bySector).sort((a,b)=>b[1]-a[1]);
+  const SECTOR_COLORS = [
+    '#3498db','#e74c3c','#f39c12','#9b59b6','#27ae60',
+    '#1abc9c','#e67e22','#95a5a6','#2980b9','#c0392b',
+    '#d35400','#16a085','#8e44ad','#2c3e50','#f1c40f'
+  ];
+
+  const sectorRows = sectorEntries.map(([sector,val],i) => {
+    const pct = totalValue>0?(val/totalValue)*100:0;
+    return `<tr>
+      <td style="padding:5px 8px;">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${SECTOR_COLORS[i%SECTOR_COLORS.length]};margin-right:6px;flex-shrink:0;"></span>${sector}
+      </td>
+      <td style="padding:5px 8px;text-align:right;font-weight:700;">${fc(val)}</td>
+      <td style="padding:5px 8px;text-align:right;">${pct.toFixed(1)}%</td>
+      <td style="padding:5px 8px;min-width:80px;">
+        <div style="background:var(--border-color);border-radius:999px;height:6px;overflow:hidden;">
+          <div style="width:${pct}%;height:100%;background:${SECTOR_COLORS[i%SECTOR_COLORS.length]};border-radius:999px;"></div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const hasSectorData = sectorEntries.length > 0 &&
+    !sectorEntries.every(([s]) => s === 'Unknown' || s === 'N/A');
+
+  const sectorSection = `
+  <div style="margin-top:20px;padding-top:20px;border-top:2px solid var(--border-color);">
+    <div class="st-section-head" style="margin-top:0;">Sector Allocation</div>
+    ${!hasSectorData ? `
+      <p style="font-size:0.8rem;color:var(--text-secondary);text-align:center;padding:16px;">
+        No sector data yet — sector info loads automatically when you add or refresh stocks.
+      </p>` : `
+    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="flex:0 0 auto;">
+        <canvas id="stSectorDonut" width="200" height="200" style="max-width:200px;max-height:200px;"></canvas>
+      </div>
+      <div style="flex:1;min-width:220px;overflow-x:auto;">
+        <table class="st-table" style="min-width:280px;">
+          <thead><tr>
+            <th>Sector</th>
+            <th style="text-align:right">Value</th>
+            <th style="text-align:right">%</th>
+            <th>Bar</th>
+          </tr></thead>
+          <tbody>${sectorRows}</tbody>
+        </table>
+      </div>
+    </div>
+    ${sectorEntries.some(([s])=>s==='Unknown'||s==='N/A') ? `
+      <p style="font-size:0.68rem;color:var(--text-secondary);margin-top:8px;font-style:italic;">
+        Some symbols show "Unknown" — refresh prices to load sector data from Finnhub.
+      </p>` : ''}`}
+  </div>`;
+
   el.innerHTML = `
   ${cards}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex-wrap:wrap;">
@@ -10419,7 +10483,47 @@ window.renderSnapshot = function renderSnapshot() {
       <table class="st-table"><thead><tr><th>Symbol</th><th style="text-align:right">Unrealized</th><th style="text-align:right">Return %</th></tr></thead>
       <tbody>${botRows}</tbody></table>
     </div>
-  </div>`;
+  </div>
+  ${sectorSection}`;
+
+  // Draw donut chart after HTML is injected
+  if (hasSectorData) {
+    requestAnimationFrame(() => {
+      const canvas = document.getElementById('stSectorDonut');
+      if (!canvas || typeof Chart === 'undefined') return;
+      // Destroy existing if any
+      const existing = Chart.getChart(canvas);
+      if (existing) existing.destroy();
+      new Chart(canvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: sectorEntries.map(([s]) => s),
+          datasets: [{
+            data: sectorEntries.map(([,v]) => v),
+            backgroundColor: SECTOR_COLORS.slice(0, sectorEntries.length),
+            borderWidth: 2,
+            borderColor: 'var(--bg-secondary)',
+            hoverOffset: 6,
+          }]
+        },
+        options: {
+          responsive: false,
+          cutout: '62%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const pct = totalValue > 0 ? ((ctx.parsed/totalValue)*100).toFixed(1) : 0;
+                  return ` ${fc(ctx.parsed)} (${pct}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    });
+  }
 }
 
 // ══════════════════════════════════════════════
