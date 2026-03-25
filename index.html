@@ -10478,7 +10478,7 @@ window.renderCalendar = function renderCalendar() {
       const d = t.date ? t.date.split('T')[0] : null;
       if (!d) return;
       const txDate = new Date(d); txDate.setHours(0,0,0,0);
-      const daysAgo = Math.floor((today - txDate)/(1000*60*60*24));
+      const daysAgo = Math.floor((today - txDate)/(1000*60*60*1000*24));
       if (daysAgo > 364) return;
       if (!activity[d]) activity[d] = {buys:0,sells:0,amount:0,symbols:[]};
       if (t.type==='buy')  { activity[d].buys++;  activity[d].amount += (t.shares||0)*(t.price||0); }
@@ -10533,9 +10533,9 @@ window.renderCalendar = function renderCalendar() {
   monthLabels += '</div>';
 
   // Summary stats
-  const totalBuys = Object.values(activity).reduce((s,a)=>s+a.buys,0);
+  const totalBuys   = Object.values(activity).reduce((s,a)=>s+a.buys,0);
   const totalAmount = Object.values(activity).reduce((s,a)=>s+a.amount,0);
-  const activeDays = Object.keys(activity).length;
+  const activeDays  = Object.keys(activity).length;
 
   el.innerHTML = `
   <div class="st-cards" style="margin-bottom:16px;">
@@ -10560,7 +10560,188 @@ window.renderCalendar = function renderCalendar() {
       ${monthLabels}
       <div class="st-heatmap">${cols}</div>
     </div>
+  </div>
+
+  <!-- ── Earnings & Ex-Dividend Calendar ── -->
+  <div id="stEarningsCalSection" style="margin-top:24px;padding-top:20px;border-top:2px solid var(--border-color);">
+    <div class="st-section-head" style="margin-top:0;">Earnings &amp; Ex-Dividend Dates</div>
+    <p style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:12px;">
+      Upcoming events for your holdings — next 90 days. Fetched live from Finnhub.
+    </p>
+    <div id="stEarningsContent">
+      <div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:0.82rem;">
+        Loading upcoming events…
+      </div>
+    </div>
   </div>`;
+
+  // Fetch earnings & dividend data after heatmap renders
+  _fetchEarningsCalendar();
+}
+
+async function _fetchEarningsCalendar() {
+  const contentEl = document.getElementById('stEarningsContent');
+  if (!contentEl) return;
+
+  const symbols = [...new Set(getAllItems()
+    .filter(i => getStats(i).totalSharesOwned > 0)
+    .map(i => i.symbol))];
+
+  if (!symbols.length) {
+    contentEl.innerHTML = `<p style="font-size:0.8rem;color:var(--text-secondary);text-align:center;padding:12px;">No active holdings found.</p>`;
+    return;
+  }
+
+  const today   = new Date(); today.setHours(0,0,0,0);
+  const in90    = new Date(today); in90.setDate(today.getDate()+90);
+  const todayTs = Math.floor(today.getTime()/1000);
+  const in90Ts  = Math.floor(in90.getTime()/1000);
+  const todayStr = today.toISOString().split('T')[0];
+  const in90Str  = in90.toISOString().split('T')[0];
+
+  const events = [];
+  const delay = ms => new Promise(r => setTimeout(r, ms));
+
+  // Yahoo Finance quoteSummary — free, no key, one call per symbol
+  // modules=calendarEvents gives earningsDate, exDividendDate, dividendDate, dividendRate
+  for (let i = 0; i < symbols.length; i++) {
+    const sym = symbols[i];
+    try {
+      const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(sym)}?modules=calendarEvents,summaryDetail`;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const result = data?.quoteSummary?.result?.[0];
+      if (!result) continue;
+
+      // ── Earnings date ──
+      const cal = result.calendarEvents;
+      const earningsDates = cal?.earnings?.earningsDate || [];
+      earningsDates.forEach(ed => {
+        const ts  = ed.raw || ed;
+        const date = new Date(ts * 1000); date.setHours(0,0,0,0);
+        const ds  = date.toISOString().split('T')[0];
+        if (ds >= todayStr && ds <= in90Str) {
+          const epsEst = cal?.earnings?.earningsAverage?.raw;
+          events.push({
+            symbol: sym,
+            type: 'earnings',
+            date: ds,
+            detail: epsEst != null ? `EPS est. ${epsEst >= 0 ? '+' : ''}$${Math.abs(epsEst).toFixed(2)}` : '',
+            hour: ''
+          });
+        }
+      });
+
+      // ── Ex-dividend date ──
+      const sumDetail = result.summaryDetail;
+      const exDivTs   = sumDetail?.exDividendDate?.raw;
+      const divRate   = sumDetail?.dividendRate?.raw;
+      const divYield  = sumDetail?.dividendYield?.raw;
+      if (exDivTs) {
+        const exDate = new Date(exDivTs * 1000); exDate.setHours(0,0,0,0);
+        const ds = exDate.toISOString().split('T')[0];
+        if (ds >= todayStr && ds <= in90Str) {
+          events.push({
+            symbol: sym,
+            type: 'exdiv',
+            date: ds,
+            detail: divRate ? `$${divRate.toFixed(3)}/share annually` : divYield ? `${(divYield*100).toFixed(2)}% yield` : '',
+            payDate: ''
+          });
+        }
+      }
+    } catch(e) {
+      console.warn(`Calendar fetch failed for ${sym}:`, e.message);
+    }
+    // Polite delay between requests — Yahoo is lenient but we don't want to hammer it
+    if (i < symbols.length - 1) await delay(150);
+  }
+
+  if (!events.length) {
+    contentEl.innerHTML = `
+    <div style="text-align:center;padding:20px;background:var(--bg-color);border-radius:10px;border:1px solid var(--border-color);">
+      <div style="font-size:1.2rem;margin-bottom:6px;">✅</div>
+      <div style="font-size:0.85rem;font-weight:700;color:var(--text-primary);">No upcoming events in the next 90 days</div>
+      <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:4px;">No earnings reports or ex-dividend dates found for your active holdings.</div>
+    </div>`;
+    return;
+  }
+
+  // Sort by date then render
+  events.sort((a,b) => a.date.localeCompare(b.date));
+
+  const byDate = {};
+  events.forEach(e => {
+    if (!byDate[e.date]) byDate[e.date] = [];
+    byDate[e.date].push(e);
+  });
+
+  const dayNames   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  function daysFromNow(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00');
+    return Math.round((d - today)/(1000*60*60*24));
+  }
+  function friendlyDate(dateStr) {
+    const d    = new Date(dateStr + 'T12:00:00');
+    const diff = daysFromNow(dateStr);
+    const label = `${dayNames[d.getDay()]} ${monthNames[d.getMonth()]} ${d.getDate()}`;
+    if (diff === 0) return `${label} <span style="color:var(--color-positive,#27ae60);font-weight:700;">· Today</span>`;
+    if (diff === 1) return `${label} <span style="color:var(--color-positive,#27ae60);">· Tomorrow</span>`;
+    if (diff <= 7)  return `${label} <span style="color:#f39c12;">· In ${diff} days</span>`;
+    return `${label} <span style="color:var(--text-secondary);">· In ${diff} days</span>`;
+  }
+
+  const rows = Object.entries(byDate).map(([date, evts]) => {
+    const pills = evts.map(e => {
+      if (e.type === 'earnings') {
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="padding:3px 10px;border-radius:999px;font-size:0.72rem;font-weight:700;background:rgba(52,152,219,0.12);color:#185FA5;">📊 Earnings</span>
+          <span style="font-weight:700;font-size:0.85rem;">${e.symbol}</span>
+          ${e.detail?`<span style="font-size:0.78rem;color:var(--text-secondary);">${e.detail}</span>`:''}
+        </div>`;
+      } else {
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="padding:3px 10px;border-radius:999px;font-size:0.72rem;font-weight:700;background:rgba(39,174,96,0.12);color:#1E7C3A;">💰 Ex-Div</span>
+          <span style="font-weight:700;font-size:0.85rem;">${e.symbol}</span>
+          ${e.detail?`<span style="font-size:0.78rem;color:var(--color-positive,#27ae60);font-weight:700;">${e.detail}</span>`:''}
+        </div>`;
+      }
+    }).join('');
+
+    return `<div style="padding:12px 14px;background:var(--bg-color);border:1px solid var(--border-color);border-radius:10px;margin-bottom:8px;">
+      <div style="font-size:0.78rem;font-weight:700;color:var(--text-primary);margin-bottom:8px;">${friendlyDate(date)}</div>
+      ${pills}
+    </div>`;
+  }).join('');
+
+  const earnCount = events.filter(e=>e.type==='earnings').length;
+  const divCount  = events.filter(e=>e.type==='exdiv').length;
+
+  contentEl.innerHTML = `
+  <div class="st-cards" style="margin-bottom:14px;">
+    <div class="st-card" style="border-left:3px solid #3498db;">
+      <div class="st-card-label">Earnings reports</div>
+      <div class="st-card-val">${earnCount}</div>
+      <div class="st-card-sub">Next 90 days</div>
+    </div>
+    <div class="st-card" style="border-left:3px solid #27ae60;">
+      <div class="st-card-label">Ex-dividend dates</div>
+      <div class="st-card-val">${divCount}</div>
+      <div class="st-card-sub">Next 90 days</div>
+    </div>
+    <div class="st-card" style="border-left:3px solid #f39c12;">
+      <div class="st-card-label">Symbols checked</div>
+      <div class="st-card-val">${symbols.length}</div>
+      <div class="st-card-sub">Active positions</div>
+    </div>
+  </div>
+  ${rows}
+  <p style="font-size:0.68rem;color:var(--text-secondary);margin-top:10px;font-style:italic;">
+    Data from Yahoo Finance. No API key required. Ex-dividend dates are forward-looking — verify before trading.
+  </p>`;
 }
 
 // ══════════════════════════════════════════════
