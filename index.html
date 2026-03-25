@@ -1787,12 +1787,20 @@ button {
 
 /* Responsive */
 @media (max-width: 900px){
-  #portfolio-summary .portfolio-inner{ flex-direction: column; }
+  #portfolio-summary .portfolio-inner{ flex-direction: column; gap: 12px; }
+  #portfolio-summary .summary-main{ min-width: 0; flex: none; width: 100%; }
+  #portfolio-summary .summary-grid{ flex: none; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #portfolio-summary .summary-toggle{ margin-left: 0; width: fit-content; }
-  #portfolio-summary .summary-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #portfolio-summary .summary-total .summary-value{ font-size: 1.95rem; }
+  /* Utility buttons inside summary card — tighter on mobile */
+  #portfolio-summary .utility-buttons-grid{ margin-top: 12px; }
 }
 @media (max-width: 520px){
+  #portfolio-summary .summary-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #portfolio-summary .summary-total .summary-value{ font-size: 1.65rem; }
+  #portfolio-summary.portfolio-summary{ padding: 14px 14px 12px; }
+}
+@media (max-width: 380px){
   #portfolio-summary .summary-grid{ grid-template-columns: 1fr; }
 }
 
