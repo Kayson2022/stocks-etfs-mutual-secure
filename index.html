@@ -2823,6 +2823,7 @@ body.dark-mode .modal-content {
   <button class="st-toolbar-btn" data-st-panel="goal">🎯 Goal</button>
   <button class="st-toolbar-btn" data-st-panel="rebal">⚖️ Rebalance</button>
   <button class="st-toolbar-btn" data-st-panel="recur">🔁 Recurring</button>
+  <button class="st-toolbar-btn" data-st-panel="alerts">🔔 Smart Alerts</button>
   <button class="st-toolbar-btn" data-st-panel="compact" id="stCompactBtn">⊞ Compact</button>
 </div>
 
@@ -2841,6 +2842,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     goal:     'renderGoal',
     rebal:    'renderStRebal',
     recur:    'renderRecurring',
+    alerts:   'renderSmartAlerts',
   };
   if (key === 'compact') {
     if (typeof window.toggleCompact === 'function') window.toggleCompact();
@@ -2891,6 +2893,11 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
   <div class="st-panel-title">🔁 Recurring Buys</div>
   <div class="st-panel-sub">Schedule automatic reminders for weekly/bi-weekly/monthly purchases.</div>
   <div id="stRecurContent"></div>
+</div>
+<div id="stAlertsPanel" class="st-panel">
+  <div class="st-panel-title">🔔 Smart Alert Suggestions</div>
+  <div class="st-panel-sub">Auto-suggested price alerts based on your cost basis, gain targets, and stop-loss levels. One click to add.</div>
+  <div id="stAlertsContent"></div>
 </div>
 <div class="tab-content active" id="stocks-tab">
 <div class="portfolio-summary" id="portfolio-summary" style="display: none;">
@@ -10399,6 +10406,7 @@ const PANELS = {
   recur:    'stRecurPanel',
   goal:     'stGoalPanel',
   rebal:    'stRebalPanel',
+  alerts:   'stAlertsPanel',
 };
 
 window.togglePanel = function togglePanel(key, renderFn) {
@@ -12116,6 +12124,395 @@ window.stToggleCardNews = async function(id, symbol) {
     content.innerHTML = `<div style="font-size:0.75rem;color:var(--color-negative,#e74c3c);padding:6px 0;">Failed to load news: ${e.message}</div>`;
   }
 };
+// ══════════════════════════════════════════════
+//  FEATURE #5 — SMART ALERT SUGGESTIONS
+// ══════════════════════════════════════════════
+// Suggestion schema: { id, symbol, label, description, condition, price,
+//                      type:'single', category:'gain'|'loss'|'breakeven'|'52w' }
+// On "Add": pushed into tracker.priceAlerts with same schema as savePriceAlert()
+// Dismissed IDs stored in FS under key 'dismissedAlertSuggestions'
+
+const _saFinnhubCache = {};  // symbol → { h, l } 52-week data
+
+async function _saFetch52w(symbol) {
+  if (_saFinnhubCache[symbol]) return _saFinnhubCache[symbol];
+  const t = getTracker();
+  const key = t && (t.finnhubApiKey || (t.settings && t.settings.finnhubApiKey));
+  if (!key) return null;
+  try {
+    const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${key}`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    // Finnhub quote: h=high price of the day, l=low — we need 52w; use metric endpoint
+    const r2 = await fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all&token=${key}`);
+    if (!r2.ok) return null;
+    const m = await r2.json();
+    const metric = m && m.metric;
+    if (!metric) return null;
+    const result = {
+      high52w: metric['52WeekHigh'] || metric['52WkHigh'] || null,
+      low52w:  metric['52WeekLow']  || metric['52WkLow']  || null,
+    };
+    _saFinnhubCache[symbol] = result;
+    return result;
+  } catch(e) { return null; }
+}
+
+function _saGenerateSuggestions(items, existingAlerts, dismissed) {
+  const suggestions = [];
+  const dismissedSet = new Set(dismissed || []);
+
+  for (const item of items) {
+    const s = getStats(item);
+    if (!s || s.totalSharesOwned <= 0) continue;
+    const symbol   = item.symbol;
+    const price    = item.price || 0;
+    const avgCost  = s.averageCostBasis || 0;
+    if (avgCost <= 0 || price <= 0) continue;
+
+    const currentGainPct = ((price - avgCost) / avgCost) * 100;
+
+    // Helper: has this exact alert already been set?
+    const alreadySet = (condition, targetPrice) =>
+      existingAlerts.some(a =>
+        a.symbol === symbol &&
+        !a.triggered &&
+        a.condition === condition &&
+        a.type === 'single' &&
+        Math.abs((a.price || 0) - targetPrice) < 0.01
+      );
+
+    // Helper: build suggestion object
+    const makeSug = (category, condition, targetPrice, label, description) => {
+      const id = `${symbol}_${category}_${Math.round(targetPrice * 100)}`;
+      if (dismissedSet.has(id)) return null;
+      if (alreadySet(condition, targetPrice)) return null;
+      if (targetPrice <= 0) return null;
+      return { id, symbol, category, condition, price: targetPrice, label, description,
+               type: 'single', currentPrice: price, avgCost };
+    };
+
+    // ── Gain targets (above current price only) ──
+    const gainTargets = [
+      { pct: 10,  label: '+10% gain target' },
+      { pct: 20,  label: '+20% gain target' },
+      { pct: 50,  label: '+50% gain target' },
+      { pct: 100, label: '2× gain (double)' },
+    ];
+    for (const g of gainTargets) {
+      const target = avgCost * (1 + g.pct / 100);
+      if (target > price) {  // only suggest alerts above current price
+        const s2 = makeSug(`gain${g.pct}`, 'above', parseFloat(target.toFixed(2)),
+          `${symbol} ${g.label}`,
+          `Alert when ${symbol} rises ${g.pct}% above your avg cost of ${fc(avgCost)} → ${fc(target)}`);
+        if (s2) suggestions.push(s2);
+      }
+    }
+
+    // ── Stop-loss targets (below current price only) ──
+    const stopTargets = [
+      { pct: 10, label: '−10% stop-loss' },
+      { pct: 20, label: '−20% stop-loss' },
+    ];
+    for (const g of stopTargets) {
+      const target = avgCost * (1 - g.pct / 100);
+      if (target < price && target > 0) {
+        const s2 = makeSug(`loss${g.pct}`, 'below', parseFloat(target.toFixed(2)),
+          `${symbol} ${g.label}`,
+          `Alert when ${symbol} drops ${g.pct}% below your avg cost of ${fc(avgCost)} → ${fc(target)}`);
+        if (s2) suggestions.push(s2);
+      }
+    }
+
+    // ── Break-even alert (only if currently underwater) ──
+    if (currentGainPct < -1) {
+      const s2 = makeSug('breakeven', 'above', parseFloat(avgCost.toFixed(2)),
+        `${symbol} break-even`,
+        `Alert when ${symbol} recovers to your avg cost of ${fc(avgCost)} (currently ${currentGainPct.toFixed(1)}% down)`);
+      if (s2) suggestions.push(s2);
+    }
+  }
+
+  return suggestions;
+}
+
+function _saRenderCard(sug, onAdd, onDismiss) {
+  const categoryColors = {
+    gain10: '#27ae60', gain20: '#27ae60', gain50: '#f39c12', gain100: '#8e44ad',
+    loss10: '#e67e22', loss20: '#e74c3c',
+    breakeven: '#3498db',
+    hi52: '#8e44ad', lo52: '#3498db',
+  };
+  const color = categoryColors[sug.category] || 'var(--text-secondary)';
+  const icons = {
+    gain10: '📈', gain20: '📈', gain50: '🚀', gain100: '🌙',
+    loss10: '⚠️', loss20: '🛑',
+    breakeven: '⚖️',
+    hi52: '🏔️', lo52: '🏝️',
+  };
+  const icon = icons[sug.category] || '🔔';
+  const condLabel = sug.condition === 'above' ? '↑ above' : '↓ below';
+
+  const div = document.createElement('div');
+  div.dataset.sugId = sug.id;
+  div.style.cssText = `
+    display:flex;align-items:flex-start;gap:10px;padding:12px 14px;
+    background:var(--bg-secondary);border:1px solid var(--border-color);
+    border-left:3px solid ${color};border-radius:8px;margin-bottom:8px;
+  `;
+  div.innerHTML = `
+    <div style="font-size:1.3rem;line-height:1;margin-top:2px;">${icon}</div>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+        <span style="font-weight:700;font-size:0.88rem;color:var(--text-primary);">${sug.symbol}</span>
+        <span style="font-size:0.75rem;font-weight:600;color:${color};background:${color}1a;padding:1px 7px;border-radius:999px;">${sug.label}</span>
+      </div>
+      <div style="font-size:0.78rem;color:var(--text-secondary);line-height:1.4;margin-bottom:6px;">${sug.description}</div>
+      <div style="font-size:0.78rem;color:var(--text-secondary);">
+        Alert <strong style="color:var(--text-primary);">${condLabel} ${fc(sug.price)}</strong>
+        &nbsp;·&nbsp; Current: <strong style="color:var(--text-primary);">${fc(sug.currentPrice)}</strong>
+        &nbsp;·&nbsp; Avg cost: <strong style="color:var(--text-primary);">${fc(sug.avgCost)}</strong>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">
+      <button class="sa-add-btn add-btn" style="padding:5px 12px;font-size:0.78rem;white-space:nowrap;">+ Add Alert</button>
+      <button class="sa-dismiss-btn" style="padding:4px 10px;font-size:0.73rem;background:none;border:1px solid var(--border-color);border-radius:5px;color:var(--text-secondary);cursor:pointer;white-space:nowrap;">Dismiss</button>
+    </div>
+  `;
+  div.querySelector('.sa-add-btn').addEventListener('click', () => onAdd(sug, div));
+  div.querySelector('.sa-dismiss-btn').addEventListener('click', () => onDismiss(sug.id, div));
+  return div;
+}
+
+window.renderSmartAlerts = async function renderSmartAlerts() {
+  const el = document.getElementById('stAlertsContent');
+  if (!el) return;
+
+  el.innerHTML = `<div style="text-align:center;padding:28px;color:var(--text-secondary);font-size:0.85rem;">
+    <div style="font-size:1.5rem;margin-bottom:8px;">⏳</div>Analysing your holdings…</div>`;
+
+  await fsEnsureLoaded();
+  const t = getTracker();
+  if (!t) { el.innerHTML = '<p style="color:var(--text-secondary);padding:20px;">Tracker not ready.</p>'; return; }
+
+  const items     = getAllItems();
+  const dismissed = FS.getSync('dismissedAlertSuggestions', []);
+  const existing  = t.priceAlerts || [];
+
+  // Fetch 52-week data for all active holdings in parallel
+  const activeItems = items.filter(i => getStats(i).totalSharesOwned > 0);
+  const w52Results  = await Promise.all(activeItems.map(i => _saFetch52w(i.symbol)));
+
+  // Inject 52-week suggestions after fetch
+  const dismissedSet = new Set(dismissed);
+  const extra52w = [];
+  activeItems.forEach((item, idx) => {
+    const w = w52Results[idx];
+    if (!w) return;
+    const symbol = item.symbol;
+    const price  = item.price || 0;
+    if (!price) return;
+
+    const alreadySet = (condition, targetPrice) =>
+      existing.some(a => a.symbol === symbol && !a.triggered &&
+        a.condition === condition && a.type === 'single' &&
+        Math.abs((a.price || 0) - targetPrice) < 0.01);
+
+    if (w.high52w && price < w.high52w * 0.97) {
+      const id = `${symbol}_hi52_${Math.round(w.high52w * 100)}`;
+      if (!dismissedSet.has(id) && !alreadySet('above', parseFloat(w.high52w.toFixed(2)))) {
+        const s = getStats(item);
+        extra52w.push({
+          id, symbol, category: 'hi52', condition: 'above',
+          price: parseFloat(w.high52w.toFixed(2)),
+          label: '52-week high alert',
+          description: `Alert when ${symbol} breaks its 52-week high of ${fc(w.high52w)}`,
+          type: 'single', currentPrice: price, avgCost: s.averageCostBasis || 0,
+        });
+      }
+    }
+    if (w.low52w && price > w.low52w * 1.03) {
+      const id = `${symbol}_lo52_${Math.round(w.low52w * 100)}`;
+      if (!dismissedSet.has(id) && !alreadySet('below', parseFloat(w.low52w.toFixed(2)))) {
+        const s = getStats(item);
+        extra52w.push({
+          id, symbol, category: 'lo52', condition: 'below',
+          price: parseFloat(w.low52w.toFixed(2)),
+          label: '52-week low alert',
+          description: `Alert when ${symbol} breaks its 52-week low of ${fc(w.low52w)}`,
+          type: 'single', currentPrice: price, avgCost: s.averageCostBasis || 0,
+        });
+      }
+    }
+  });
+
+  const suggestions = [
+    ..._saGenerateSuggestions(activeItems, existing, dismissed),
+    ...extra52w,
+  ];
+
+  // Group by symbol
+  const bySymbol = {};
+  for (const s of suggestions) {
+    if (!bySymbol[s.symbol]) bySymbol[s.symbol] = [];
+    bySymbol[s.symbol].push(s);
+  }
+
+  // ── Add alert handler ──
+  async function onAdd(sug, cardEl) {
+    const alertObj = {
+      id: crypto.randomUUID(),
+      symbol:     sug.symbol,
+      type:       'single',
+      condition:  sug.condition,
+      price:      sug.price,
+      priceLower: null,
+      priceUpper: null,
+      triggered:  false,
+      timestamp:  new Date().toISOString(),
+    };
+    t.priceAlerts = t.priceAlerts || [];
+    t.priceAlerts.push(alertObj);
+    try {
+      await t.saveData();
+      cardEl.style.transition = 'opacity 0.3s';
+      cardEl.style.opacity    = '0';
+      setTimeout(() => {
+        cardEl.remove();
+        _saCheckEmpty(el);
+      }, 300);
+      // Show brief confirmation inline
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#27ae60;color:#fff;padding:10px 18px;border-radius:8px;font-size:0.85rem;font-weight:600;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);';
+      toast.textContent = `✓ Alert added for ${sug.symbol} at ${fc(sug.price)}`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2800);
+    } catch(e) {
+      t.priceAlerts.pop();
+      console.error('Failed to save alert', e);
+    }
+  }
+
+  // ── Dismiss handler ──
+  function onDismiss(id, cardEl) {
+    const d = FS.getSync('dismissedAlertSuggestions', []);
+    if (!d.includes(id)) {
+      FS.set('dismissedAlertSuggestions', [...d, id]);
+    }
+    cardEl.style.transition = 'opacity 0.3s';
+    cardEl.style.opacity    = '0';
+    setTimeout(() => {
+      cardEl.remove();
+      _saCheckEmpty(el);
+    }, 300);
+  }
+
+  // ── Render ──
+  el.innerHTML = '';
+
+  // Controls row
+  const controls = document.createElement('div');
+  controls.style.cssText = 'display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;';
+  controls.innerHTML = `
+    <div style="font-size:0.78rem;color:var(--text-secondary);">
+      Suggestions based on your avg cost basis. <strong>${suggestions.length}</strong> found across <strong>${Object.keys(bySymbol).length}</strong> holdings.
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <select id="saFilterCat" style="font-size:0.78rem;padding:4px 8px;border-radius:5px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);cursor:pointer;">
+        <option value="">All types</option>
+        <option value="gain">📈 Gain targets</option>
+        <option value="loss">🛑 Stop-loss</option>
+        <option value="breakeven">⚖️ Break-even</option>
+        <option value="52w">📊 52-week</option>
+      </select>
+      <button id="saResetDismissed" style="font-size:0.75rem;padding:4px 10px;border-radius:5px;border:1px solid var(--border-color);background:none;color:var(--text-secondary);cursor:pointer;">↺ Reset dismissed</button>
+    </div>
+  `;
+  el.appendChild(controls);
+
+  if (!suggestions.length) {
+    const empty = document.createElement('div');
+    empty.id = 'saEmptyMsg';
+    empty.style.cssText = 'text-align:center;padding:36px 20px;color:var(--text-secondary);';
+    empty.innerHTML = `<div style="font-size:2rem;margin-bottom:10px;">✅</div>
+      <div style="font-size:0.9rem;font-weight:600;color:var(--text-primary);margin-bottom:6px;">All caught up!</div>
+      <div style="font-size:0.82rem;">No new suggestions — all alerts are already set, or have been dismissed.</div>`;
+    el.appendChild(empty);
+    _saBindControls(el, bySymbol, suggestions, onAdd, onDismiss);
+    return;
+  }
+
+  // Cards container
+  const container = document.createElement('div');
+  container.id = 'saCardsContainer';
+  el.appendChild(container);
+
+  // Render cards grouped by symbol
+  for (const [sym, sugs] of Object.entries(bySymbol)) {
+    const group = document.createElement('div');
+    group.dataset.saGroup = sym;
+    group.style.cssText = 'margin-bottom:18px;';
+    group.innerHTML = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin-bottom:6px;padding-left:2px;">${sym}</div>`;
+    for (const s of sugs) {
+      group.appendChild(_saRenderCard(s, onAdd, onDismiss));
+    }
+    container.appendChild(group);
+  }
+
+  _saBindControls(el, bySymbol, suggestions, onAdd, onDismiss);
+};
+
+function _saCheckEmpty(el) {
+  const remaining = el.querySelectorAll('[data-sug-id]');
+  if (!remaining.length) {
+    const container = document.getElementById('saCardsContainer');
+    if (container) container.remove();
+    let empty = document.getElementById('saEmptyMsg');
+    if (!empty) {
+      empty = document.createElement('div');
+      empty.id = 'saEmptyMsg';
+      empty.style.cssText = 'text-align:center;padding:36px 20px;color:var(--text-secondary);';
+      empty.innerHTML = `<div style="font-size:2rem;margin-bottom:10px;">✅</div>
+        <div style="font-size:0.9rem;font-weight:600;color:var(--text-primary);margin-bottom:6px;">All caught up!</div>
+        <div style="font-size:0.82rem;">No more suggestions — refresh to re-check.</div>`;
+      el.appendChild(empty);
+    }
+  }
+}
+
+function _saBindControls(el, bySymbol, suggestions, onAdd, onDismiss) {
+  const filterSel = document.getElementById('saFilterCat');
+  if (filterSel) {
+    filterSel.addEventListener('change', () => {
+      const val = filterSel.value;
+      el.querySelectorAll('[data-sug-id]').forEach(card => {
+        const id  = card.dataset.sugId || '';
+        const sym = id.split('_')[0];
+        const cat = id.replace(sym + '_', '').replace(/_\d+$/, '');
+        let show = true;
+        if (val === 'gain')     show = cat.startsWith('gain');
+        else if (val === 'loss') show = cat.startsWith('loss');
+        else if (val === 'breakeven') show = cat === 'breakeven';
+        else if (val === '52w') show = cat === 'hi52' || cat === 'lo52';
+        card.style.display = show ? '' : 'none';
+      });
+      // Hide empty groups
+      el.querySelectorAll('[data-sa-group]').forEach(g => {
+        const visible = [...g.querySelectorAll('[data-sug-id]')].some(c => c.style.display !== 'none');
+        g.style.display = visible ? '' : 'none';
+      });
+    });
+  }
+
+  const resetBtn = document.getElementById('saResetDismissed');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      FS.set('dismissedAlertSuggestions', []);
+      window.renderSmartAlerts();
+    });
+  }
+}
+
 window.togglePanel       = togglePanel;
 window.toggleCompact     = toggleCompact;
 window._stRenderSnapshot = renderSnapshot;
@@ -12127,6 +12524,7 @@ window.renderWhatIf      = renderWhatIf;
 window._stRenderRecurring = renderRecurring;
 window.renderRecurring   = renderRecurring;
 window.renderTax         = renderTax;
+window.renderSmartAlerts = renderSmartAlerts;
 
 })();
 </script>
