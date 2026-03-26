@@ -9906,11 +9906,15 @@ body.dark-mode #sticky-mini-bar { background: rgba(34,37,46,0.95); }
       ta.className = 'card-note-input';
       ta.rows = 2;
       ta.placeholder = '📝 Add a note (buy rationale, target price…)';
-      // Load from Firestore (via in-memory cache)
-      const notes = FS.getSync('notes', {});
-      ta.value = notes[id] || '';
+      // Load from Firestore cache (via window.FS) if available, else localStorage fallback
+      const notes = (window.FS && window.FS.getSync) ? window.FS.getSync('notes', {}) : {};
+      ta.value = notes[id] || localStorage.getItem('note_' + id) || '';
       ta.addEventListener('input', debounce(() => {
-        FS.update('notes', n => { const obj = {...(n||{})}; obj[id] = ta.value; return obj; });
+        if (window.FS && window.FS.update) {
+          window.FS.update('notes', n => { const obj = {...(n||{})}; obj[id] = ta.value; return obj; });
+        } else {
+          localStorage.setItem('note_' + id, ta.value);
+        }
       }, 500));
       wrap.appendChild(ta);
       // Append before card-actions or at end
@@ -10062,7 +10066,7 @@ async function applyCurrency(code, locale) {
     }
 
     // Save preference
-    FS.set('currency', { code, locale });
+    if (window.FS) window.FS.set('currency', { code, locale });
 
     // Re-render everything so all values show in new currency
     if (window.stockTracker && typeof window.stockTracker.renderContent === 'function') {
@@ -10089,7 +10093,9 @@ function initCurrencySelector() {
 
     // Restore saved preference
     try {
-        const saved = FS.getSync('currency', null);
+        const saved = (window.FS && window.FS.getSync)
+            ? window.FS.getSync('currency', null)
+            : JSON.parse(localStorage.getItem('stockTracker_currency') || 'null');
         if (saved && saved.code) {
             const matchOpt = Array.from(sel.options).find(o => o.value.startsWith(saved.code + '|'));
             if (matchOpt) sel.value = matchOpt.value;
@@ -10349,7 +10355,7 @@ function _fsCommit() {
 }
 
 // Public API — all features use these instead of localStorage
-const FS = {
+const FS = window.FS = {
   async get(key, fallback = null) {
     if (!_fsLoaded) await fsEnsureLoaded();
     const val = (_fsData || {})[key];
