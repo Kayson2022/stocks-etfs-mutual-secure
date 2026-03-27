@@ -479,7 +479,7 @@
         /* --- Asset Cards --- */
         .stocks-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
             gap: 24px;
         }
         .stock-card, .fund-card, .watchlist-card {
@@ -720,7 +720,7 @@
 
         .group-content {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
             gap: 24px;
             /* FIX: Increased max-height to a very large value to prevent cutoff */
             max-height: 50000px; 
@@ -4168,11 +4168,11 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             }
             loadConfig() {
                 this.config = {
-                    refreshIntervalMs: parseInt(localStorage.getItem('refreshIntervalMs')) || 90000,
-                    finnhubApiKey: localStorage.getItem('finnhubApiKey') || "",
-                    alphaVantageKey: localStorage.getItem('alphaVantageApiKey') || "",
-                    fmpApiKey: localStorage.getItem('fmpApiKey') || "",
-                    marketstackApiKey: localStorage.getItem('marketstackApiKey') || ""
+                    refreshIntervalMs: 90000,
+                    finnhubApiKey: "",
+                    alphaVantageKey: "",
+                    fmpApiKey: "",
+                    marketstackApiKey: ""
                 };
             }
 
@@ -7150,9 +7150,9 @@ getOldestTransactionDate(item) {
             openSettingsModal() {
                 this._updatePushBtn();
                 if (this.elements.settingsModal) this.elements.settingsModal.style.display = 'flex';
-                if (this.elements.modalFinnhubKey) this.elements.modalFinnhubKey.value = localStorage.getItem('finnhubApiKey') || this.config.finnhubApiKey;
-                if (this.elements.modalAlphaVantageKey) this.elements.modalAlphaVantageKey.value = localStorage.getItem('alphaVantageApiKey') || this.config.alphaVantageKey;
-                if (this.elements.modalFmpKey) this.elements.modalFmpKey.value = localStorage.getItem('fmpApiKey') || this.config.fmpApiKey;
+                if (this.elements.modalFinnhubKey) this.elements.modalFinnhubKey.value = this.config.finnhubApiKey;
+                if (this.elements.modalAlphaVantageKey) this.elements.modalAlphaVantageKey.value = this.config.alphaVantageKey;
+                if (this.elements.modalFmpKey) this.elements.modalFmpKey.value = this.config.fmpApiKey;
                 if (this.elements.modalRefreshInterval) this.elements.modalRefreshInterval.value = this.config.refreshIntervalMs / 1000;
             }
             closeSettingsModal() { if (this.elements.settingsModal) this.elements.settingsModal.style.display = 'none'; }
@@ -7182,15 +7182,8 @@ getOldestTransactionDate(item) {
                     return;
                 }
 
-                // Persist refresh interval locally
+                // Update refresh interval in config
                 this.config.refreshIntervalMs = refreshInterval * 1000;
-                localStorage.setItem("refreshIntervalMs", this.config.refreshIntervalMs.toString());
-
-                // Persist API keys locally so Settings modal doesn't revert to old values
-                localStorage.setItem("finnhubApiKey", finnhubKey);
-                localStorage.setItem("alphaVantageApiKey", alphaVantageKey);
-                localStorage.setItem("fmpApiKey", fmpKey);
-                localStorage.setItem("marketstackApiKey", marketstackKey);
 
                 // Update local config immediately so app uses new keys even if Firestore fails
                 this.config.finnhubApiKey = finnhubKey;
