@@ -13425,23 +13425,63 @@ window.stWatchlistAutoSuggest = async function(id, symbol) {
 
     if (!suggestions.length) { if(btn){btn.textContent='🔔 Suggest';btn.disabled=false;} return; }
 
-    // Show mini popover
+    // Remove any existing popover first
     const popoverId = `suggest-pop-${id}`;
-    let pop = document.getElementById(popoverId);
-    if (!pop) {
-      pop = document.createElement('div');
-      pop.id = popoverId;
-      pop.style.cssText = 'position:absolute;z-index:999;background:var(--bg-color,#fff);border:1px solid var(--border-color);border-radius:9px;padding:10px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:220px;';
-      btn.parentElement.style.position = 'relative';
-      btn.parentElement.appendChild(pop);
-    }
-    pop.innerHTML = suggestions.map(s=>`
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--border-color);">
-        <span style="font-size:0.75rem;color:var(--text-primary);">${s.label}</span>
-        <button onclick="window.stAddSuggestedAlert('${id}','${symbol}',${JSON.stringify(s).replace(/"/g,'&quot;')});document.getElementById('${popoverId}').remove();"
-          style="padding:2px 8px;border-radius:5px;border:none;background:var(--accent-primary,#3498db);color:#fff;font-size:0.68rem;cursor:pointer;font-weight:700;">Add</button>
-      </div>`).join('') + `<button onclick="document.getElementById('${popoverId}').remove()" style="margin-top:6px;width:100%;padding:3px;border-radius:5px;border:1px solid var(--border-color);background:transparent;cursor:pointer;font-size:0.72rem;color:var(--text-secondary);">Close</button>`;
-    pop.style.display = 'block';
+    document.getElementById(popoverId)?.remove();
+
+    // Build popover in document.body so it's never clipped by card overflow:hidden
+    const pop = document.createElement('div');
+    pop.id = popoverId;
+
+    // Position below the button using viewport coords
+    const btnRect = btn.getBoundingClientRect();
+    const isDark  = document.body.classList.contains('dark-mode');
+    const bg      = isDark ? '#1e2130' : '#ffffff';
+    const border  = isDark ? '#3a3f52' : '#dde1e8';
+    const textCol = isDark ? '#e8eaf0' : '#1a1d2e';
+
+    pop.style.cssText = [
+      'position:fixed',
+      `top:${Math.min(btnRect.bottom + 6, window.innerHeight - 220)}px`,
+      `left:${Math.max(4, Math.min(btnRect.left, window.innerWidth - 260))}px`,
+      'z-index:99999',
+      `background:${bg}`,
+      `border:1px solid ${border}`,
+      'border-radius:10px',
+      'padding:12px',
+      'box-shadow:0 8px 24px rgba(0,0,0,0.18)',
+      'min-width:240px',
+      'max-width:280px',
+    ].join(';');
+
+    pop.innerHTML =
+      `<div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:${isDark?'#8892b0':'#6b7280'};margin-bottom:8px;">
+         🔔 Suggested Alerts — ${symbol}
+       </div>` +
+      suggestions.map(s =>
+        `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:0.5px solid ${border};">
+           <span style="font-size:0.78rem;color:${textCol};flex:1;padding-right:8px;">${s.label}</span>
+           <button onclick="window.stAddSuggestedAlert('${id}','${symbol}',${JSON.stringify(s).replace(/"/g,'&quot;')});document.getElementById('${popoverId}').remove();"
+             style="padding:3px 10px;border-radius:5px;border:none;background:#3498db;color:#fff;font-size:0.72rem;cursor:pointer;font-weight:700;flex-shrink:0;">Add</button>
+         </div>`
+      ).join('') +
+      `<button onclick="document.getElementById('${popoverId}').remove()"
+         style="margin-top:8px;width:100%;padding:5px;border-radius:6px;border:1px solid ${border};background:transparent;cursor:pointer;font-size:0.75rem;color:${isDark?'#8892b0':'#6b7280'};">
+         Close
+       </button>`;
+
+    document.body.appendChild(pop);
+
+    // Close on outside click
+    setTimeout(() => {
+      function closeOnOutside(e) {
+        if (!pop.contains(e.target) && e.target !== btn) {
+          pop.remove();
+          document.removeEventListener('click', closeOnOutside, true);
+        }
+      }
+      document.addEventListener('click', closeOnOutside, true);
+    }, 50);
   } catch(e) { console.error(e); }
   if (btn) { btn.textContent = '🔔 Suggest'; btn.disabled = false; }
 };
