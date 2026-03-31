@@ -3955,48 +3955,46 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
 
 // --- Historical Data Fetch (Uses Alpha Vantage) ---
             async fetchHistoricalData(symbol) {
-                // Try Finnhub first (free, no rate limit issues for candle data)
-                const finnhubKey = this.config.finnhubApiKey || '';
-                if (finnhubKey) {
+                // Yahoo Finance v8 chart API — free, no key required, full history
+                try {
+                    const now    = Math.floor(Date.now() / 1000);
+                    const from   = now - 6 * 365 * 24 * 60 * 60; // 6 years back
+                    const url    = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&period1=${from}&period2=${now}`;
+                    const res    = await fetch(url, { cache: 'no-store' });
+                    if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
+                    const json   = await res.json();
+                    const result = json?.chart?.result?.[0];
+                    if (!result) throw new Error('No chart result from Yahoo');
+                    const timestamps = result.timestamp || [];
+                    const closes     = result.indicators?.quote?.[0]?.close || [];
+                    if (!timestamps.length) throw new Error('Empty Yahoo chart data');
+                    // Convert to Alpha Vantage-compatible { 'YYYY-MM-DD': { '4. close': '...' } }
+                    const data = {};
+                    timestamps.forEach((ts, i) => {
+                        if (closes[i] == null) return;
+                        const date = new Date(ts * 1000).toISOString().split('T')[0];
+                        data[date] = { '4. close': String(closes[i]) };
+                    });
+                    return { success: true, data, source: 'yahoo' };
+                } catch(e) {
+                    console.warn('Yahoo Finance chart fetch failed:', e.message);
+                }
+
+                // Fallback: Alpha Vantage (if key is set)
+                if (this.config.alphaVantageKey && this.config.alphaVantageKey !== 'YOUR_ALPHA_VANTAGE_KEY') {
                     try {
-                        const now   = Math.floor(Date.now() / 1000);
-                        const from  = now - 5 * 365 * 24 * 60 * 60; // 5 years back
-                        const url   = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${now}&token=${finnhubKey}`;
-                        const res   = await fetch(url);
-                        if (res.ok) {
-                            const json = await res.json();
-                            if (json.s === 'ok' && Array.isArray(json.t) && json.t.length > 0) {
-                                // Convert Finnhub candle format to Alpha Vantage-compatible format
-                                const data = {};
-                                json.t.forEach((ts, i) => {
-                                    const date = new Date(ts * 1000).toISOString().split('T')[0];
-                                    data[date] = { '4. close': String(json.c[i]) };
-                                });
-                                return { success: true, data, source: 'finnhub' };
-                            }
-                        }
+                        const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${this.config.alphaVantageKey}`;
+                        const response = await fetch(url);
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        const json = await response.json();
+                        if (!json['Time Series (Daily)']) throw new Error(json['Information'] || json['Error Message'] || 'No data');
+                        return { success: true, data: json['Time Series (Daily)'], source: 'alphavantage' };
                     } catch(e) {
-                        console.warn('Finnhub candle fetch failed, trying Alpha Vantage:', e.message);
+                        console.warn('Alpha Vantage fallback failed:', e.message);
                     }
                 }
 
-                // Fall back to Alpha Vantage
-                if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
-                    return { success: false, reason: 'No chart data source available. Add a Finnhub or Alpha Vantage key in ⚙️ Settings.' };
-                }
-                const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${this.config.alphaVantageKey}`;
-                try {
-                    const response = await fetch(url);
-                    if (!response.ok) return { success: false, reason: `HTTP Error: ${response.status}` };
-                    const json = await response.json();
-                    if (json['Error Message'] || !json['Time Series (Daily)']) {
-                        return { success: false, reason: json['Information'] || json['Error Message'] || 'Alpha Vantage rate limit hit — wait 1 minute and try again.' };
-                    }
-                    return { success: true, data: json['Time Series (Daily)'], source: 'alphavantage' };
-                } catch (error) {
-                    console.error(`Error fetching historical data for ${symbol}:`, error);
-                    return { success: false, symbol, reason: error.message };
-                }
+                return { success: false, reason: 'Could not load chart data. Check your internet connection.' };
             }
             
             // --- NEW: Finnhub News Fetch (Primary News Source) ---
@@ -6236,10 +6234,7 @@ getOldestTransactionDate(item) {
                         historicalData = this.chartDataCache[symbol];
                     } else {
                         // Check if Alpha Vantage Key is set before fetching
-                        if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
-                            drawError("Add Finnhub or Alpha Vantage key in ⚙️ Settings");
-                            return;
-                        }
+                        // No key guard needed — Yahoo Finance requires no key
                         
                         this.showLoading(true, `Fetching chart data for ${symbol}...`);
                         const result = await this.apiService.fetchHistoricalData(symbol);
