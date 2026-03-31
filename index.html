@@ -3955,20 +3955,44 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
 
 // --- Historical Data Fetch (Uses Alpha Vantage) ---
             async fetchHistoricalData(symbol) {
+                // Try Finnhub first (free, no rate limit issues for candle data)
+                const finnhubKey = this.config.finnhubApiKey || '';
+                if (finnhubKey) {
+                    try {
+                        const now   = Math.floor(Date.now() / 1000);
+                        const from  = now - 5 * 365 * 24 * 60 * 60; // 5 years back
+                        const url   = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${now}&token=${finnhubKey}`;
+                        const res   = await fetch(url);
+                        if (res.ok) {
+                            const json = await res.json();
+                            if (json.s === 'ok' && Array.isArray(json.t) && json.t.length > 0) {
+                                // Convert Finnhub candle format to Alpha Vantage-compatible format
+                                const data = {};
+                                json.t.forEach((ts, i) => {
+                                    const date = new Date(ts * 1000).toISOString().split('T')[0];
+                                    data[date] = { '4. close': String(json.c[i]) };
+                                });
+                                return { success: true, data, source: 'finnhub' };
+                            }
+                        }
+                    } catch(e) {
+                        console.warn('Finnhub candle fetch failed, trying Alpha Vantage:', e.message);
+                    }
+                }
+
+                // Fall back to Alpha Vantage
                 if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
-                    // Fail early if key is missing
-                    return { success: false, reason: "Alpha Vantage API Key is missing. Please set it in Settings to fetch historical data." };
+                    return { success: false, reason: 'No chart data source available. Add a Finnhub or Alpha Vantage key in ⚙️ Settings.' };
                 }
                 const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${this.config.alphaVantageKey}`;
                 try {
                     const response = await fetch(url);
                     if (!response.ok) return { success: false, reason: `HTTP Error: ${response.status}` };
                     const json = await response.json();
-                    // Check for API errors or rate limiting messages in the response
-                    if (json["Error Message"] || !json["Time Series (Daily)"]) {
-                        return { success: false, reason: json["Information"] || json["Error Message"] || 'Invalid API payload from Alpha Vantage. You might be hitting the free tier rate limit of 5 requests per minute.' };
+                    if (json['Error Message'] || !json['Time Series (Daily)']) {
+                        return { success: false, reason: json['Information'] || json['Error Message'] || 'Alpha Vantage rate limit hit — wait 1 minute and try again.' };
                     }
-                    return { success: true, data: json["Time Series (Daily)"] };
+                    return { success: true, data: json['Time Series (Daily)'], source: 'alphavantage' };
                 } catch (error) {
                     console.error(`Error fetching historical data for ${symbol}:`, error);
                     return { success: false, symbol, reason: error.message };
@@ -6213,7 +6237,7 @@ getOldestTransactionDate(item) {
                     } else {
                         // Check if Alpha Vantage Key is set before fetching
                         if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
-                            drawError("Alpha Vantage Key Missing. Cannot load chart data.");
+                            drawError("Add Finnhub or Alpha Vantage key in ⚙️ Settings");
                             return;
                         }
                         
@@ -13809,54 +13833,89 @@ window.stToggleNextDividend = async function(id, symbol) {
   content.innerHTML = '<div style="font-size:0.72rem;color:var(--text-secondary);padding:4px 0;">Fetching…</div>';
 
   try {
-    const today = new Date().toISOString().split('T')[0];
-    // Use stock/metric for ex-div date, declared date, payment date, and amount
-    const url  = `https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all&token=${key}`;
-    const res  = await fetch(url);
-    const data = await res.json();
-    const m    = data.metric || {};
+    const today   = new Date().toISOString().split('T')[0];
+    const future  = new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0];
+    const BASE    = 'https://finnhub.io/api/v1';
 
-    const exDate      = m.dividendExDate || m.lastDividendDate || null;
-    const payDate     = m.dividendPayDate || null;
-    const divAmt      = m.dividendPerShareTTM || m.dividendPerShareAnnual || null;
-    const divYield    = m['dividendYieldIndicatedAnnual'] || m.dividendYield5Y || null;
-    const freq        = m.payoutFrequency || null;
+    // Call both endpoints in parallel
+    const [metricRes, divRes] = await Promise.all([
+      fetch(`${BASE}/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all&token=${key}`),
+      fetch(`${BASE}/stock/dividend?symbol=${encodeURIComponent(symbol)}&from=${today}&to=${future}&token=${key}`)
+    ]);
 
-    // Also try the next ex-div date vs today
-    const isUpcoming  = exDate && exDate >= today;
+    const metricData = metricRes.ok ? await metricRes.json() : {};
+    const divData    = divRes.ok   ? await divRes.json()    : [];
+
+    const m = metricData.metric || {};
+
+    // From /stock/dividend — upcoming entries sorted by ex-date
+    const upcoming = Array.isArray(divData)
+      ? divData.filter(d => d.exDate && d.exDate >= today).sort((a,b) => a.exDate.localeCompare(b.exDate))
+      : [];
+
+    // Prefer upcoming dividend data, fall back to metric
+    const next       = upcoming[0] || null;
+    const exDate     = next?.exDate     || m.dividendExDate    || m.lastDividendDate || null;
+    const payDate    = next?.payDate    || m.dividendPayDate   || null;
+    const declDate   = next?.declaredDate                      || null;
+    const divAmt     = next?.amount     != null ? next.amount  : (m.dividendPerShareTTM || m.dividendPerShareAnnual || null);
+    const divYield   = m['dividendYieldIndicatedAnnual']       || m.dividendYield5Y    || null;
+    const freq       = m.payoutFrequency || null;
+    const freqLabel  = freq === 4 ? 'Quarterly' : freq === 12 ? 'Monthly' : freq === 2 ? 'Semi-Annual' : freq === 1 ? 'Annual' : '';
+
+    // Format date helper — turns "2025-03-15" into "Mar 15, 2025"
+    const fmtDate = str => {
+      if (!str) return null;
+      const d = new Date(str + 'T12:00:00');
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
 
     if (!exDate && !divAmt) {
       content.innerHTML = '<div style="font-size:0.75rem;color:var(--text-secondary);padding:6px 0;">No dividend data found. This stock may not pay dividends.</div>';
     } else {
-      const daysTo = exDate ? Math.round((new Date(exDate) - new Date()) / 86400000) : null;
-      const freqLabel = freq === 4 ? 'Quarterly' : freq === 12 ? 'Monthly' : freq === 2 ? 'Semi-Annual' : freq === 1 ? 'Annual' : '';
+      const daysToEx = exDate ? Math.round((new Date(exDate) - new Date()) / 86400000) : null;
+      const daysToPayDate = payDate ? Math.round((new Date(payDate) - new Date()) / 86400000) : null;
 
-      content.innerHTML = `
-        <div style="background:rgba(46,213,115,0.06);border:1px solid rgba(46,213,115,0.15);border-radius:7px;padding:10px 12px;">
-          ${exDate ? `
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-            <span style="font-size:0.68rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">Ex-Dividend Date</span>
-            <span style="font-family:monospace;font-size:0.78rem;font-weight:700;color:var(--text-primary);">${exDate}</span>
-          </div>
-          ${daysTo !== null ? `<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:6px;">
-            ${daysTo < 0 ? `🔴 Ex-date passed ${Math.abs(daysTo)}d ago` : daysTo === 0 ? '🔴 Ex-date is Today' : daysTo <= 7 ? `🟡 In ${daysTo} days` : `🟢 In ${daysTo} days`}
-          </div>` : ''}` : ''}
-          ${payDate ? `
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-            <span style="font-size:0.68rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">Payment Date</span>
-            <span style="font-family:monospace;font-size:0.78rem;color:var(--color-positive,#27ae60);font-weight:700;">${payDate}</span>
-          </div>` : ''}
-          ${divAmt ? `
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;">
-            <span style="font-size:0.68rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">Amount/Share</span>
-            <span style="font-size:0.78rem;font-weight:700;color:var(--color-positive,#27ae60);">$${Number(divAmt).toFixed(4)}</span>
-          </div>` : ''}
-          ${divYield ? `
-          <div style="display:flex;justify-content:space-between;align-items:baseline;">
-            <span style="font-size:0.68rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">Indicated Yield</span>
-            <span style="font-size:0.78rem;font-weight:700;color:var(--accent-primary);">${Number(divYield).toFixed(2)}%${freqLabel ? ' · ' + freqLabel : ''}</span>
-          </div>` : ''}
-        </div>`;
+      const rowStyle = 'display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;';
+      const lblStyle = 'font-size:0.67rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;';
+      const valStyle = 'font-family:monospace;font-size:0.78rem;font-weight:700;color:var(--text-primary);';
+
+      let html = `<div style="background:rgba(46,213,115,0.06);border:1px solid rgba(46,213,115,0.15);border-radius:7px;padding:10px 12px;">`;
+
+      if (exDate) {
+        const badge = daysToEx < 0
+          ? `<span style="font-size:0.65rem;color:var(--color-negative,#e74c3c);">passed</span>`
+          : daysToEx === 0 ? `<span style="font-size:0.65rem;color:#e74c3c;">Today</span>`
+          : daysToEx <= 7  ? `<span style="font-size:0.65rem;color:#f39c12;">in ${daysToEx}d</span>`
+          : `<span style="font-size:0.65rem;color:var(--text-secondary);">in ${daysToEx}d</span>`;
+        html += `<div style="${rowStyle}"><span style="${lblStyle}">Ex-Dividend Date</span><span style="${valStyle}">${fmtDate(exDate)} ${badge}</span></div>`;
+      }
+
+      if (payDate) {
+        const payBadge = daysToPayDate != null && daysToPayDate >= 0
+          ? `<span style="font-size:0.65rem;color:var(--color-positive,#27ae60);">in ${daysToPayDate}d</span>` : '';
+        html += `<div style="${rowStyle}"><span style="${lblStyle}">Payment Date</span><span style="${valStyle};color:var(--color-positive,#27ae60);">${fmtDate(payDate)} ${payBadge}</span></div>`;
+      }
+
+      if (declDate) {
+        html += `<div style="${rowStyle}"><span style="${lblStyle}">Declared Date</span><span style="${valStyle}">${fmtDate(declDate)}</span></div>`;
+      }
+
+      if (divAmt != null) {
+        html += `<div style="${rowStyle}"><span style="${lblStyle}">Amount / Share</span><span style="${valStyle};color:var(--color-positive,#27ae60);">$${Number(divAmt).toFixed(4)}</span></div>`;
+      }
+
+      if (divYield != null) {
+        html += `<div style="${rowStyle};margin-bottom:0;"><span style="${lblStyle}">Indicated Yield</span><span style="font-size:0.78rem;font-weight:700;color:var(--accent-primary);">${Number(divYield).toFixed(2)}%${freqLabel ? ' · ' + freqLabel : ''}</span></div>`;
+      }
+
+      html += `</div>`;
+
+      if (upcoming.length > 1) {
+        html += `<div style="font-size:0.68rem;color:var(--text-secondary);margin-top:5px;">+${upcoming.length-1} more dividend event${upcoming.length>2?'s':''} in next 12 months</div>`;
+      }
+
+      content.innerHTML = html;
     }
     content.dataset.loaded = '1';
   } catch(e) {
