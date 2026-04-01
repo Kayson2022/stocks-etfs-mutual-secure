@@ -2736,21 +2736,15 @@ body.dark-mode .modal-content {
 }
 
 /* ── Card expand trigger ──────────────────────────────── */
-.card-expand-trigger { display: block; }
-.card-expand-trigger::after {
-    content: '▼ tap to see chart';
-    display: block;
+.card-expand-trigger { display: block; cursor: pointer; }
+.card-expand-hint {
     text-align: center;
     font-size: 0.62rem;
     color: var(--text-secondary);
     opacity: 0.4;
     padding: 4px 0 2px;
     letter-spacing: 0.3px;
-    pointer-events: none;
-}
-.stock-card.expanded .card-expand-trigger::after,
-.fund-card.expanded .card-expand-trigger::after {
-    content: '▲ tap to collapse';
+    user-select: none;
 }
 
 </style>
@@ -6122,7 +6116,7 @@ renderPortfolioSummary() {
 
                     // 2. Updated HTML with sessionLabel
                     card.innerHTML = `
-                        <div class="card-expand-trigger" style="cursor:pointer;" onclick="event.stopPropagation();(function(el){var c=el.closest('.stock-card,.fund-card');if(!c||c.classList.contains('closed-position'))return;c.classList.toggle('expanded');if(c.classList.contains('expanded')&&window.stockTracker)window.stockTracker.renderCardChart(c.dataset.symbol);})(this)">
+                        <div class="card-expand-trigger" onclick="window.stToggleCardChart(this)">
                         <div class="stock-header">
                             <span class="${type}-symbol stock-symbol">${item.symbol}</span>
                             <button class="remove-btn" onclick="event.stopPropagation();window.stockTracker.removeItem('${item.id}', '${type}')">×</button>
@@ -6145,6 +6139,7 @@ renderPortfolioSummary() {
                             })()}</span>
                         </div>
                         <div class="stock-info">${stockInfoHTML}</div>
+                        <div class="card-expand-hint" id="hint-${item.id}">▼ tap to see chart</div>
                         </div>
                         ${cardChartHTML}
                         <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}` : ''}</div>
@@ -13954,6 +13949,28 @@ window.stToggleNextDividend = async function(id, symbol) {
     content.dataset.loaded = '1';
   } catch(e) {
     content.innerHTML = '<div style="font-size:0.75rem;color:var(--text-secondary);padding:6px 0;">Could not fetch dividend data.</div>';
+  }
+};
+
+
+// ── Card chart expand/collapse ─────────────────────────
+window.stToggleCardChart = function(triggerEl) {
+  const card = triggerEl.closest('.stock-card, .fund-card');
+  if (!card) return;
+  if (card.classList.contains('closed-position')) return;
+
+  const wasExpanded = card.classList.contains('expanded');
+  card.classList.toggle('expanded');
+
+  const hint = card.querySelector('.card-expand-hint');
+  if (hint) hint.textContent = wasExpanded ? '▼ tap to see chart' : '▲ tap to collapse';
+
+  if (!wasExpanded) {
+    // Just expanded — render chart
+    const symbol = card.dataset.symbol;
+    if (symbol && window.stockTracker) {
+      window.stockTracker.renderCardChart(symbol, '1Y');
+    }
   }
 };
 
