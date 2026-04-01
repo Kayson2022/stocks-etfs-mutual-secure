@@ -5956,7 +5956,7 @@ renderPortfolioSummary() {
 
                 itemList.forEach(item => {
                     const card = document.createElement('div');
-                    card.className = `${type}-card stock-card`; 
+                    card.className = `${type}-card stock-card expanded`; 
                     card.dataset.id = item.id;
                     card.dataset.type = type;
                     card.dataset.symbol = item.symbol;
@@ -5966,16 +5966,16 @@ renderPortfolioSummary() {
                     let cardChartHTML = `
                         <div class="card-chart-container">
                             <div class="chart-controls">
-                                <button class="chart-range-btn" data-range="1W">1W</button>
-                                <button class="chart-range-btn" data-range="1M">1M</button>
-                                <button class="chart-range-btn" data-range="6M">6M</button>
-                                <button class="chart-range-btn" data-range="YTD">YTD</button>
-                                <button class="chart-range-btn active" data-range="1Y">1Y</button>
-                                <button class="chart-range-btn" data-range="3Y">3Y</button>
-                                <button class="chart-range-btn" data-range="5Y">5Y</button>
-                                <button class="chart-range-btn" data-range="All">All</button>
+                                <button class="chart-range-btn" data-range="1W" onclick="event.stopPropagation();window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','1W')">1W</button>
+                                <button class="chart-range-btn" data-range="1M" onclick="event.stopPropagation();window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','1M')">1M</button>
+                                <button class="chart-range-btn" data-range="6M" onclick="event.stopPropagation();window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','6M')">6M</button>
+                                <button class="chart-range-btn" data-range="YTD" onclick="event.stopPropagation();window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','YTD')">YTD</button>
+                                <button class="chart-range-btn active" data-range="1Y" onclick="event.stopPropagation();window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','1Y')">1Y</button>
+                                <button class="chart-range-btn" data-range="3Y" onclick="event.stopPropagation();window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','3Y')">3Y</button>
+                                <button class="chart-range-btn" data-range="5Y" onclick="event.stopPropagation();window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','5Y')">5Y</button>
+                                <button class="chart-range-btn" data-range="All" onclick="event.stopPropagation();window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','All')">All</button>
                             </div>
-                            <canvas id="chart-${item.id}"></canvas>
+                            <canvas id="chart-${item.id}" onclick="event.stopPropagation()"></canvas>
                         </div>`;
                     
                     let isClosedPosition = false;
@@ -6162,6 +6162,12 @@ renderPortfolioSummary() {
                     `;
                     
                     container.appendChild(card);
+                    // Auto-render 1Y chart since cards are expanded by default
+                    // Stagger by index to avoid flooding Yahoo Finance
+                    if (type !== 'watchlist') {
+                        const idx = container.children.length - 1;
+                        setTimeout(() => this.renderCardChart(item.symbol, '1Y'), 200 + idx * 300);
+                    }
                 });
             }
 
