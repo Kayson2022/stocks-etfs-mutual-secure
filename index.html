@@ -6229,10 +6229,18 @@ getOldestTransactionDate(item) {
                     if(newActiveButton) newActiveButton.classList.add('active');
                 }
                 
-                // Destroy previous chart instance if it exists
+                // Destroy previous chart instance if it exists (both tracked and orphaned)
                 if (this.cardChartInstances[chartId]) {
                     this.cardChartInstances[chartId].destroy();
+                    this.cardChartInstances[chartId] = null;
                 }
+                // Also destroy any Chart.js instance on the canvas not in our registry
+                const existingChart = Chart.getChart(canvas);
+                if (existingChart) existingChart.destroy();
+
+                // Render lock — prevent duplicate concurrent renders for same card
+                if (canvas._renderPending) return;
+                canvas._renderPending = true;
 
                 try {
                     let historicalData;
@@ -6343,8 +6351,10 @@ getOldestTransactionDate(item) {
                             }
                         }
                     });
+                    canvas._renderPending = false;
 
                 } catch (error) {
+                    canvas._renderPending = false;
                     // Catch the error thrown if API key is missing or API limits hit.
                     console.error(`Chart rendering error for ${symbol}:`, error);
                     // The error message is already drawn in the catch block above (drawError) if needed.
