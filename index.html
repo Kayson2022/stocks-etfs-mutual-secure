@@ -2735,6 +2735,24 @@ body.dark-mode .modal-content {
     }
 }
 
+/* ── Card expand trigger ──────────────────────────────── */
+.card-expand-trigger { display: block; }
+.card-expand-trigger::after {
+    content: '▼ tap to see chart';
+    display: block;
+    text-align: center;
+    font-size: 0.62rem;
+    color: var(--text-secondary);
+    opacity: 0.4;
+    padding: 4px 0 2px;
+    letter-spacing: 0.3px;
+    pointer-events: none;
+}
+.stock-card.expanded .card-expand-trigger::after,
+.fund-card.expanded .card-expand-trigger::after {
+    content: '▲ tap to collapse';
+}
+
 </style>
 
 
@@ -4622,8 +4640,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             }
             
             handleCardAction(event) {
-                // 1. Check for specific buttons first
-                const clickedButton = event.target.closest('.transaction-btn, .edit-btn, .edit-transaction-btn, .delete-transaction-btn, .set-alert-btn, .move-to-portfolio-btn, .chart-range-btn');
+                // 1. Check for specific buttons first — anything that should NOT toggle card expand
+                const clickedButton = event.target.closest('.transaction-btn, .edit-btn, .edit-transaction-btn, .delete-transaction-btn, .set-alert-btn, .move-to-portfolio-btn, .chart-range-btn, .card-news-btn, .add-btn, [onclick]');
                 
                 // 2. FIX: Check for Transaction Header (Arrow) Click BEFORE checking for the general card click
                 const transactionHeader = event.target.closest('.transaction-header');
@@ -4656,13 +4674,11 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 }
 
                 // 4. Handle General Card Click (Expand/Collapse Chart)
-                // Only if we didn't click a button and didn't click the transaction header
-                if (!clickedButton && event.target.closest('.stock-card, .fund-card')) {
+                // Now handled by direct onclick on .card-expand-trigger div above
+                // This fallback handles clicks directly on the card body outside the trigger
+                if (!clickedButton && !event.target.closest('.card-news-section, [id^="pt-section-"], [id^="fund-section-"], [id^="earn-section-"], [id^="divnext-section-"], .card-actions, .transaction-details, .card-chart-container') && event.target.closest('.stock-card, .fund-card')) {
                     const card = event.target.closest('.stock-card, .fund-card');
-                    if (card) {
-                        // Don't expand closed positions on generic click
-                        if (card.classList.contains('closed-position')) return;
-
+                    if (card && !card.classList.contains('closed-position')) {
                         card.classList.toggle('expanded');
                         if (card.classList.contains('expanded')) {
                             this.renderCardChart(card.dataset.symbol);
@@ -6106,9 +6122,10 @@ renderPortfolioSummary() {
 
                     // 2. Updated HTML with sessionLabel
                     card.innerHTML = `
+                        <div class="card-expand-trigger" style="cursor:pointer;" onclick="event.stopPropagation();(function(el){var c=el.closest('.stock-card,.fund-card');if(!c||c.classList.contains('closed-position'))return;c.classList.toggle('expanded');if(c.classList.contains('expanded')&&window.stockTracker)window.stockTracker.renderCardChart(c.dataset.symbol);})(this)">
                         <div class="stock-header">
                             <span class="${type}-symbol stock-symbol">${item.symbol}</span>
-                            <button class="remove-btn" onclick="window.stockTracker.removeItem('${item.id}', '${type}')">×</button>
+                            <button class="remove-btn" onclick="event.stopPropagation();window.stockTracker.removeItem('${item.id}', '${type}')">×</button>
                         </div>
                         <div class="stock-price">${(() => {
                             const useAH = this.showAfterHours && item.priceExtended && item.marketState !== 'REGULAR';
@@ -6128,6 +6145,7 @@ renderPortfolioSummary() {
                             })()}</span>
                         </div>
                         <div class="stock-info">${stockInfoHTML}</div>
+                        </div>
                         ${cardChartHTML}
                         <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}` : ''}</div>
                         ${cardActionsHTML}
