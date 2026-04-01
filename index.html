@@ -6269,9 +6269,7 @@ getOldestTransactionDate(item) {
                         // Check if Alpha Vantage Key is set before fetching
                         // No key guard needed — Yahoo Finance requires no key
                         
-                        this.showLoading(true, `Fetching chart data for ${symbol}...`);
                         const result = await this.apiService.fetchHistoricalData(symbol);
-                        this.showLoading(false);
                         
                         if (!result.success) {
                             drawError(result.reason.includes('rate limit') ? "Rate Limit Hit. Wait a minute." : `API Error: ${result.reason}`);
