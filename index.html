@@ -1442,7 +1442,7 @@ input::placeholder, textarea::placeholder {
   border-radius: 18px !important;
   box-shadow: 0 14px 40px rgba(0,0,0,0.48);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   transform: translateZ(0);
 }
 
@@ -1451,10 +1451,12 @@ input::placeholder, textarea::placeholder {
 .watchlist-card::before {
   content: "";
   position: absolute;
-  inset: -1px;
+  inset: 0;
+  border-radius: 18px;
   background: radial-gradient(600px 220px at 10% 0%, rgba(0, 212, 255, 0.14), transparent 60%),
               radial-gradient(520px 200px at 90% 15%, rgba(0, 255, 198, 0.10), transparent 55%);
   pointer-events: none;
+  overflow: hidden;
 }
 
 .stock-card:hover,
@@ -2702,6 +2704,21 @@ body.dark-mode .modal-content {
   .modal-content { width: 96vw !important; max-width: 96vw !important; padding: 16px !important; }
   /* Toolbar panels full width */
   .st-panel { margin: 0 !important; border-radius: 0 !important; }
+  /* Chart range buttons — smaller on mobile */
+  .chart-controls { gap: 4px !important; flex-wrap: wrap !important; }
+  .chart-range-btn { padding: 4px 8px !important; font-size: 0.7rem !important; }
+  /* Make card-chart-container always visible on mobile — no overflow clip */
+  .stock-card .card-chart-container,
+  .fund-card .card-chart-container {
+    max-height: 260px !important;
+    opacity: 1 !important;
+    overflow: visible !important;
+  }
+  /* Ensure collapsible sections at bottom of card are fully visible */
+  .card-news-section, [id^="pt-section-"], [id^="fund-section-"],
+  [id^="earn-section-"], [id^="divnext-section-"] {
+    overflow: visible !important;
+  }
 }
 @media (max-width: 768px) {
   /* Fundamentals grid 1-col on tablet */
@@ -2711,6 +2728,8 @@ body.dark-mode .modal-content {
   #stJournalContent table { min-width: 520px; }
   /* Benchmark cards 2-col */
   #stBenchmarkContent .cards-grid { grid-template-columns: repeat(2,1fr) !important; }
+  /* Chart range buttons wrap on small tablets */
+  .stock-card .chart-controls, .fund-card .chart-controls { flex-wrap: wrap !important; }
 }
 
     .utility-buttons-grid { grid-template-columns: repeat(3, 1fr) !important; }
