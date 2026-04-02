@@ -3349,6 +3349,31 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     This is your full JavaScript block with the Firebase library
     version updated for better performance and stability.
     -->
+<script>
+// Card chart expand/collapse — plain script so onclick can reach it
+window.stToggleCardChart = function(triggerEl) {
+  var card = triggerEl.closest('.stock-card, .fund-card');
+  if (!card) return;
+  if (card.classList.contains('closed-position')) return;
+  var wasExpanded = card.classList.contains('expanded');
+  card.classList.toggle('expanded');
+  var hint = card.querySelector('.card-expand-hint');
+  if (hint) hint.textContent = wasExpanded ? '▼ tap to see chart' : '▲ tap to collapse';
+  if (!wasExpanded) {
+    var symbol = card.dataset.symbol;
+    // stockTracker may not exist yet — retry until it does
+    var tries = 0;
+    function tryRender() {
+      if (window.stockTracker && window.stockTracker.renderCardChart) {
+        window.stockTracker.renderCardChart(symbol, '1Y');
+      } else if (tries++ < 20) {
+        setTimeout(tryRender, 200);
+      }
+    }
+    tryRender();
+  }
+};
+</script>
 <script type="module">
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
                 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
@@ -4634,8 +4659,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             }
             
             handleCardAction(event) {
-                // 1. Check for specific buttons first — anything that should NOT toggle card expand
-                const clickedButton = event.target.closest('.transaction-btn, .edit-btn, .edit-transaction-btn, .delete-transaction-btn, .set-alert-btn, .move-to-portfolio-btn, .chart-range-btn, .card-news-btn, .add-btn, [onclick]');
+                // 1. Check for specific buttons first — these should NOT trigger card expand
+                const clickedButton = event.target.closest('.transaction-btn, .edit-btn, .edit-transaction-btn, .delete-transaction-btn, .set-alert-btn, .move-to-portfolio-btn, .chart-range-btn, .card-news-btn, .add-btn, .remove-btn');
                 
                 // 2. FIX: Check for Transaction Header (Arrow) Click BEFORE checking for the general card click
                 const transactionHeader = event.target.closest('.transaction-header');
@@ -4668,15 +4693,28 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 }
 
                 // 4. Handle General Card Click (Expand/Collapse Chart)
-                // Now handled by direct onclick on .card-expand-trigger div above
-                // This fallback handles clicks directly on the card body outside the trigger
-                if (!clickedButton && !event.target.closest('.card-news-section, [id^="pt-section-"], [id^="fund-section-"], [id^="earn-section-"], [id^="divnext-section-"], .card-actions, .transaction-details, .card-chart-container') && event.target.closest('.stock-card, .fund-card')) {
+                // Fires when clicking anywhere on card that isn't a button or collapsible section
+                if (!clickedButton && event.target.closest('.stock-card, .fund-card')) {
+                    // Ignore clicks on collapsible section rows, actions area, transactions
+                    const ignore = event.target.closest(
+                        '.card-news-section, [id^="pt-section-"], [id^="fund-section-"], ' +
+                        '[id^="earn-section-"], [id^="divnext-section-"], ' +
+                        '.card-actions, .transaction-details, .card-chart-container, ' +
+                        '.total-pl, .card-expand-hint'
+                    );
+                    if (ignore) return;
+
                     const card = event.target.closest('.stock-card, .fund-card');
-                    if (card && !card.classList.contains('closed-position')) {
-                        card.classList.toggle('expanded');
-                        if (card.classList.contains('expanded')) {
-                            this.renderCardChart(card.dataset.symbol);
-                        }
+                    if (!card || card.classList.contains('closed-position')) return;
+
+                    const wasExpanded = card.classList.contains('expanded');
+                    card.classList.toggle('expanded');
+
+                    const hint = card.querySelector('.card-expand-hint');
+                    if (hint) hint.textContent = wasExpanded ? '▼ tap to see chart' : '▲ tap to collapse';
+
+                    if (!wasExpanded) {
+                        this.renderCardChart(card.dataset.symbol, '1Y');
                     }
                     return;
                 }
@@ -6116,7 +6154,6 @@ renderPortfolioSummary() {
 
                     // 2. Updated HTML with sessionLabel
                     card.innerHTML = `
-                        <div class="card-expand-trigger" onclick="window.stToggleCardChart(this)">
                         <div class="stock-header">
                             <span class="${type}-symbol stock-symbol">${item.symbol}</span>
                             <button class="remove-btn" onclick="event.stopPropagation();window.stockTracker.removeItem('${item.id}', '${type}')">×</button>
@@ -6140,7 +6177,6 @@ renderPortfolioSummary() {
                         </div>
                         <div class="stock-info">${stockInfoHTML}</div>
                         <div class="card-expand-hint" id="hint-${item.id}">▼ tap to see chart</div>
-                        </div>
                         ${cardChartHTML}
                         <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}` : ''}</div>
                         ${cardActionsHTML}
@@ -13952,27 +13988,6 @@ window.stToggleNextDividend = async function(id, symbol) {
   }
 };
 
-
-// ── Card chart expand/collapse ─────────────────────────
-window.stToggleCardChart = function(triggerEl) {
-  const card = triggerEl.closest('.stock-card, .fund-card');
-  if (!card) return;
-  if (card.classList.contains('closed-position')) return;
-
-  const wasExpanded = card.classList.contains('expanded');
-  card.classList.toggle('expanded');
-
-  const hint = card.querySelector('.card-expand-hint');
-  if (hint) hint.textContent = wasExpanded ? '▼ tap to see chart' : '▲ tap to collapse';
-
-  if (!wasExpanded) {
-    // Just expanded — render chart
-    const symbol = card.dataset.symbol;
-    if (symbol && window.stockTracker) {
-      window.stockTracker.renderCardChart(symbol, '1Y');
-    }
-  }
-};
 
 })();
 </script>
