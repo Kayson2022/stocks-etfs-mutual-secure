@@ -4004,29 +4004,39 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
 
 // --- Historical Data Fetch (Uses Alpha Vantage) ---
             async fetchHistoricalData(symbol) {
-                // Yahoo Finance v8 chart API — free, no key required, full history
-                try {
-                    const now    = Math.floor(Date.now() / 1000);
-                    const from   = now - 6 * 365 * 24 * 60 * 60; // 6 years back
-                    const url    = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&period1=${from}&period2=${now}`;
-                    const res    = await fetch(url, { cache: 'no-store' });
-                    if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
-                    const json   = await res.json();
-                    const result = json?.chart?.result?.[0];
-                    if (!result) throw new Error('No chart result from Yahoo');
-                    const timestamps = result.timestamp || [];
-                    const closes     = result.indicators?.quote?.[0]?.close || [];
-                    if (!timestamps.length) throw new Error('Empty Yahoo chart data');
-                    // Convert to Alpha Vantage-compatible { 'YYYY-MM-DD': { '4. close': '...' } }
-                    const data = {};
-                    timestamps.forEach((ts, i) => {
-                        if (closes[i] == null) return;
-                        const date = new Date(ts * 1000).toISOString().split('T')[0];
-                        data[date] = { '4. close': String(closes[i]) };
-                    });
-                    return { success: true, data, source: 'yahoo' };
-                } catch(e) {
-                    console.warn('Yahoo Finance chart fetch failed:', e.message);
+                const now  = Math.floor(Date.now() / 1000);
+                const from = now - 6 * 365 * 24 * 60 * 60; // 6 years back
+                const yahooPath = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&period1=${from}&period2=${now}`;
+
+                // Try multiple CORS proxies in sequence
+                const proxies = [
+                    `https://corsproxy.io/?${yahooPath}`,
+                    `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooPath)}`,
+                    `https://thingproxy.freeboard.io/fetch/${yahooPath}`,
+                ];
+
+                for (const url of proxies) {
+                    try {
+                        const res  = await fetch(url, { cache: 'no-store' });
+                        if (!res.ok) continue;
+                        const json = await res.json();
+                        const result = json?.chart?.result?.[0];
+                        if (!result) continue;
+                        const timestamps = result.timestamp || [];
+                        const closes     = result.indicators?.quote?.[0]?.close || [];
+                        if (!timestamps.length) continue;
+                        const data = {};
+                        timestamps.forEach((ts, i) => {
+                            if (closes[i] == null) return;
+                            const date = new Date(ts * 1000).toISOString().split('T')[0];
+                            data[date] = { '4. close': String(closes[i]) };
+                        });
+                        if (Object.keys(data).length > 0) {
+                            return { success: true, data, source: 'yahoo' };
+                        }
+                    } catch(e) {
+                        console.warn(`Proxy failed (${url.split('?')[0]}):`, e.message);
+                    }
                 }
 
                 // Fallback: Alpha Vantage (if key is set)
@@ -4043,7 +4053,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     }
                 }
 
-                return { success: false, reason: 'Could not load chart data. Check your internet connection.' };
+                return { success: false, reason: 'Could not load chart data. Try again in a moment.' };
             }
             
             // --- NEW: Finnhub News Fetch (Primary News Source) ---
@@ -6224,6 +6234,20 @@ renderPortfolioSummary() {
                     `;
                     
                     container.appendChild(card);
+
+                    // Also attach directly to card for desktop reliability
+                    if (type !== 'watchlist') {
+                        card.addEventListener('click', function(e) {
+                            if (e.target.closest('button, input, select, a, label, .card-news-section, [id^="pt-section-"], [id^="fund-section-"], [id^="earn-section-"], [id^="divnext-section-"], .transaction-details, .card-chart-container')) return;
+                            var wasExpanded = card.classList.contains('expanded');
+                            card.classList.toggle('expanded');
+                            var hint = card.querySelector('.card-expand-hint');
+                            if (hint) hint.textContent = wasExpanded ? '▼ tap to see chart' : '▲ tap to collapse';
+                            if (!wasExpanded && window.stockTracker) {
+                                window.stockTracker.renderCardChart(card.dataset.symbol, '1Y');
+                            }
+                        });
+                    }
                 });
             }
 
