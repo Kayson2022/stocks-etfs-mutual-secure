@@ -2735,17 +2735,6 @@ body.dark-mode .modal-content {
     }
 }
 
-/* ── Card expand trigger ──────────────────────────────── */
-.card-expand-trigger { display: block; cursor: pointer; }
-.card-expand-hint {
-    text-align: center;
-    font-size: 0.62rem;
-    color: var(--text-secondary);
-    opacity: 0.4;
-    padding: 4px 0 2px;
-    letter-spacing: 0.3px;
-    user-select: none;
-}
 
 </style>
 
@@ -3349,31 +3338,6 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     This is your full JavaScript block with the Firebase library
     version updated for better performance and stability.
     -->
-<script>
-// Card chart expand/collapse — plain script so onclick can reach it
-window.stToggleCardChart = function(triggerEl) {
-  var card = triggerEl.closest('.stock-card, .fund-card');
-  if (!card) return;
-  if (card.classList.contains('closed-position')) return;
-  var wasExpanded = card.classList.contains('expanded');
-  card.classList.toggle('expanded');
-  var hint = card.querySelector('.card-expand-hint');
-  if (hint) hint.textContent = wasExpanded ? '▼ tap to see chart' : '▲ tap to collapse';
-  if (!wasExpanded) {
-    var symbol = card.dataset.symbol;
-    // stockTracker may not exist yet — retry until it does
-    var tries = 0;
-    function tryRender() {
-      if (window.stockTracker && window.stockTracker.renderCardChart) {
-        window.stockTracker.renderCardChart(symbol, '1Y');
-      } else if (tries++ < 20) {
-        setTimeout(tryRender, 200);
-      }
-    }
-    tryRender();
-  }
-};
-</script>
 <script type="module">
         // RECOMMENDATION: Updated Firebase to a newer, more stable version.
                 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
@@ -4004,56 +3968,21 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
 
 // --- Historical Data Fetch (Uses Alpha Vantage) ---
             async fetchHistoricalData(symbol) {
-                const now  = Math.floor(Date.now() / 1000);
-                const from = now - 6 * 365 * 24 * 60 * 60; // 6 years back
-                const yahooPath = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&period1=${from}&period2=${now}`;
-
-                // Try multiple CORS proxies in sequence
-                const proxies = [
-                    `https://corsproxy.io/?${yahooPath}`,
-                    `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooPath)}`,
-                    `https://thingproxy.freeboard.io/fetch/${yahooPath}`,
-                ];
-
-                for (const url of proxies) {
-                    try {
-                        const res  = await fetch(url, { cache: 'no-store' });
-                        if (!res.ok) continue;
-                        const json = await res.json();
-                        const result = json?.chart?.result?.[0];
-                        if (!result) continue;
-                        const timestamps = result.timestamp || [];
-                        const closes     = result.indicators?.quote?.[0]?.close || [];
-                        if (!timestamps.length) continue;
-                        const data = {};
-                        timestamps.forEach((ts, i) => {
-                            if (closes[i] == null) return;
-                            const date = new Date(ts * 1000).toISOString().split('T')[0];
-                            data[date] = { '4. close': String(closes[i]) };
-                        });
-                        if (Object.keys(data).length > 0) {
-                            return { success: true, data, source: 'yahoo' };
-                        }
-                    } catch(e) {
-                        console.warn(`Proxy failed (${url.split('?')[0]}):`, e.message);
-                    }
+                if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
+                    return { success: false, reason: "Alpha Vantage Key Missing. Please set it in Settings." };
                 }
-
-                // Fallback: Alpha Vantage (if key is set)
-                if (this.config.alphaVantageKey && this.config.alphaVantageKey !== 'YOUR_ALPHA_VANTAGE_KEY') {
-                    try {
-                        const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${this.config.alphaVantageKey}`;
-                        const response = await fetch(url);
-                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                        const json = await response.json();
-                        if (!json['Time Series (Daily)']) throw new Error(json['Information'] || json['Error Message'] || 'No data');
-                        return { success: true, data: json['Time Series (Daily)'], source: 'alphavantage' };
-                    } catch(e) {
-                        console.warn('Alpha Vantage fallback failed:', e.message);
+                const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${this.config.alphaVantageKey}`;
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) return { success: false, reason: `HTTP Error: ${response.status}` };
+                    const json = await response.json();
+                    if (json["Error Message"] || !json["Time Series (Daily)"]) {
+                        return { success: false, reason: json["Information"] || json["Error Message"] || 'Invalid API payload from Alpha Vantage.' };
                     }
+                    return { success: true, data: json["Time Series (Daily)"] };
+                } catch (error) {
+                    return { success: false, symbol, reason: error.message };
                 }
-
-                return { success: false, reason: 'Could not load chart data. Try again in a moment.' };
             }
             
             // --- NEW: Finnhub News Fetch (Primary News Source) ---
@@ -4670,7 +4599,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             
             handleCardAction(event) {
                 // 1. Check for specific buttons first — these should NOT trigger card expand
-                const clickedButton = event.target.closest('.transaction-btn, .edit-btn, .edit-transaction-btn, .delete-transaction-btn, .set-alert-btn, .move-to-portfolio-btn, .chart-range-btn, .card-news-btn, .add-btn, .remove-btn');
+                const clickedButton = event.target.closest('.transaction-btn, .edit-btn, .edit-transaction-btn, .delete-transaction-btn, .set-alert-btn, .move-to-portfolio-btn, .chart-range-btn');
                 
                 // 2. FIX: Check for Transaction Header (Arrow) Click BEFORE checking for the general card click
                 const transactionHeader = event.target.closest('.transaction-header');
@@ -4703,28 +4632,14 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 }
 
                 // 4. Handle General Card Click (Expand/Collapse Chart)
-                // Fires when clicking anywhere on card that isn't a button or collapsible section
                 if (!clickedButton && event.target.closest('.stock-card, .fund-card')) {
-                    // Ignore clicks on collapsible section rows, actions area, transactions
-                    const ignore = event.target.closest(
-                        '.card-news-section, [id^="pt-section-"], [id^="fund-section-"], ' +
-                        '[id^="earn-section-"], [id^="divnext-section-"], ' +
-                        '.card-actions, .transaction-details, .card-chart-container, ' +
-                        '.total-pl, .card-expand-hint'
-                    );
-                    if (ignore) return;
-
                     const card = event.target.closest('.stock-card, .fund-card');
-                    if (!card || card.classList.contains('closed-position')) return;
-
-                    const wasExpanded = card.classList.contains('expanded');
-                    card.classList.toggle('expanded');
-
-                    const hint = card.querySelector('.card-expand-hint');
-                    if (hint) hint.textContent = wasExpanded ? '▼ tap to see chart' : '▲ tap to collapse';
-
-                    if (!wasExpanded) {
-                        this.renderCardChart(card.dataset.symbol, '1Y');
+                    if (card) {
+                        if (card.classList.contains('closed-position')) return;
+                        card.classList.toggle('expanded');
+                        if (card.classList.contains('expanded')) {
+                            this.renderCardChart(card.dataset.symbol);
+                        }
                     }
                     return;
                 }
@@ -6037,14 +5952,14 @@ renderPortfolioSummary() {
                     let cardChartHTML = `
                         <div class="card-chart-container">
                             <div class="chart-controls">
-                                <button class="chart-range-btn" data-range="1W" onclick="event.stopPropagation();(function(b){var c=b.closest('.stock-card,.fund-card');if(c)c.classList.add('expanded');})(this);window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','1W')">1W</button>
-                                <button class="chart-range-btn" data-range="1M" onclick="event.stopPropagation();(function(b){var c=b.closest('.stock-card,.fund-card');if(c)c.classList.add('expanded');})(this);window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','1M')">1M</button>
-                                <button class="chart-range-btn" data-range="6M" onclick="event.stopPropagation();(function(b){var c=b.closest('.stock-card,.fund-card');if(c)c.classList.add('expanded');})(this);window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','6M')">6M</button>
-                                <button class="chart-range-btn" data-range="YTD" onclick="event.stopPropagation();(function(b){var c=b.closest('.stock-card,.fund-card');if(c)c.classList.add('expanded');})(this);window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','YTD')">YTD</button>
-                                <button class="chart-range-btn active" data-range="1Y" onclick="event.stopPropagation();(function(b){var c=b.closest('.stock-card,.fund-card');if(c)c.classList.add('expanded');})(this);window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','1Y')">1Y</button>
-                                <button class="chart-range-btn" data-range="3Y" onclick="event.stopPropagation();(function(b){var c=b.closest('.stock-card,.fund-card');if(c)c.classList.add('expanded');})(this);window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','3Y')">3Y</button>
-                                <button class="chart-range-btn" data-range="5Y" onclick="event.stopPropagation();(function(b){var c=b.closest('.stock-card,.fund-card');if(c)c.classList.add('expanded');})(this);window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','5Y')">5Y</button>
-                                <button class="chart-range-btn" data-range="All" onclick="event.stopPropagation();(function(b){var c=b.closest('.stock-card,.fund-card');if(c)c.classList.add('expanded');})(this);window.stockTracker&&window.stockTracker.renderCardChart('${item.symbol}','All')">All</button>
+                                <button class="chart-range-btn" data-range="1W">1W</button>
+                                <button class="chart-range-btn" data-range="1M">1M</button>
+                                <button class="chart-range-btn" data-range="6M">6M</button>
+                                <button class="chart-range-btn" data-range="YTD">YTD</button>
+                                <button class="chart-range-btn active" data-range="1Y">1Y</button>
+                                <button class="chart-range-btn" data-range="3Y">3Y</button>
+                                <button class="chart-range-btn" data-range="5Y">5Y</button>
+                                <button class="chart-range-btn" data-range="All">All</button>
                             </div>
                             <canvas id="chart-${item.id}" onclick="event.stopPropagation()"></canvas>
                         </div>`;
@@ -6186,7 +6101,6 @@ renderPortfolioSummary() {
                             })()}</span>
                         </div>
                         <div class="stock-info">${stockInfoHTML}</div>
-                        <div class="card-expand-hint" id="hint-${item.id}">▼ tap to see chart</div>
                         ${cardChartHTML}
                         <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}` : ''}</div>
                         ${cardActionsHTML}
@@ -6235,19 +6149,6 @@ renderPortfolioSummary() {
                     
                     container.appendChild(card);
 
-                    // Also attach directly to card for desktop reliability
-                    if (type !== 'watchlist') {
-                        card.addEventListener('click', function(e) {
-                            if (e.target.closest('button, input, select, a, label, .card-news-section, [id^="pt-section-"], [id^="fund-section-"], [id^="earn-section-"], [id^="divnext-section-"], .transaction-details, .card-chart-container')) return;
-                            var wasExpanded = card.classList.contains('expanded');
-                            card.classList.toggle('expanded');
-                            var hint = card.querySelector('.card-expand-hint');
-                            if (hint) hint.textContent = wasExpanded ? '▼ tap to see chart' : '▲ tap to collapse';
-                            if (!wasExpanded && window.stockTracker) {
-                                window.stockTracker.renderCardChart(card.dataset.symbol, '1Y');
-                            }
-                        });
-                    }
                 });
             }
 
@@ -6328,9 +6229,14 @@ getOldestTransactionDate(item) {
                         historicalData = this.chartDataCache[symbol];
                     } else {
                         // Check if Alpha Vantage Key is set before fetching
-                        // No key guard needed — Yahoo Finance requires no key
-                        
+                        if (!this.config.alphaVantageKey || this.config.alphaVantageKey === 'YOUR_ALPHA_VANTAGE_KEY') {
+                            drawError("Alpha Vantage Key Missing. Cannot load chart data.");
+                            return;
+                        }
+
+                        this.showLoading(true, `Fetching chart data for ${symbol}...`);
                         const result = await this.apiService.fetchHistoricalData(symbol);
+                        this.showLoading(false);
                         
                         if (!result.success) {
                             drawError(result.reason.includes('rate limit') ? "Rate Limit Hit. Wait a minute." : `API Error: ${result.reason}`);
@@ -14030,36 +13936,5 @@ window.stToggleNextDividend = async function(id, symbol) {
 })();
 </script>
 
-<script>
-// Document-level card expand — works regardless of event delegation issues
-document.addEventListener('click', function(e) {
-    // Skip if clicking a button, input, or known interactive element
-    if (e.target.closest('button, input, select, a, label, .card-news-section, [id^="pt-section-"], [id^="fund-section-"], [id^="earn-section-"], [id^="divnext-section-"], .transaction-details, .card-chart-container')) return;
-
-    // Find if we clicked inside a stock/fund card
-    var card = e.target.closest('.stock-card, .fund-card');
-    if (!card) return;
-    if (card.classList.contains('closed-position')) return;
-
-    var wasExpanded = card.classList.contains('expanded');
-    card.classList.toggle('expanded');
-
-    var hint = card.querySelector('.card-expand-hint');
-    if (hint) hint.textContent = wasExpanded ? '▼ tap to see chart' : '▲ tap to collapse';
-
-    if (!wasExpanded) {
-        var symbol = card.dataset.symbol;
-        if (!symbol) return;
-        var tries = 0;
-        (function tryRender() {
-            if (window.stockTracker && window.stockTracker.renderCardChart) {
-                window.stockTracker.renderCardChart(symbol, '1Y');
-            } else if (++tries < 30) {
-                setTimeout(tryRender, 200);
-            }
-        })();
-    }
-}, true); // capture phase — fires before anything can stop it
-</script>
 </body>
 </html>
