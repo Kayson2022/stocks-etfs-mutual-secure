@@ -619,6 +619,15 @@
             transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out, margin-top 0.5s ease-in-out;
             margin-top: 0;
         }
+        .card-tap-hint {
+            text-align: center;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            opacity: 0.45;
+            padding: 6px 0 2px;
+            letter-spacing: 0.3px;
+            user-select: none;
+        }
         .stock-card.expanded .card-chart-container,
         .fund-card.expanded .card-chart-container {
             max-height: 300px; /* Adjust as needed */
@@ -4657,6 +4666,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     if (card) {
                         if (card.classList.contains('closed-position')) return;
                         card.classList.toggle('expanded');
+                        const hint = card.querySelector('.card-tap-hint');
+                        if (hint) hint.textContent = card.classList.contains('expanded') ? '▲ tap to collapse' : '▼ tap card to see chart';
                         if (card.classList.contains('expanded')) {
                             this.renderCardChart(card.dataset.symbol);
                         }
@@ -6121,6 +6132,7 @@ renderPortfolioSummary() {
                             })()}</span>
                         </div>
                         <div class="stock-info">${stockInfoHTML}</div>
+                        <div class="card-tap-hint">▼ tap card to see chart</div>
                         ${cardChartHTML}
                         <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}` : ''}</div>
                         ${cardActionsHTML}
