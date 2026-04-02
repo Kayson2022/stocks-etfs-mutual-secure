@@ -14006,5 +14006,36 @@ window.stToggleNextDividend = async function(id, symbol) {
 })();
 </script>
 
+<script>
+// Document-level card expand — works regardless of event delegation issues
+document.addEventListener('click', function(e) {
+    // Skip if clicking a button, input, or known interactive element
+    if (e.target.closest('button, input, select, a, label, .card-news-section, [id^="pt-section-"], [id^="fund-section-"], [id^="earn-section-"], [id^="divnext-section-"], .transaction-details, .card-chart-container')) return;
+
+    // Find if we clicked inside a stock/fund card
+    var card = e.target.closest('.stock-card, .fund-card');
+    if (!card) return;
+    if (card.classList.contains('closed-position')) return;
+
+    var wasExpanded = card.classList.contains('expanded');
+    card.classList.toggle('expanded');
+
+    var hint = card.querySelector('.card-expand-hint');
+    if (hint) hint.textContent = wasExpanded ? '▼ tap to see chart' : '▲ tap to collapse';
+
+    if (!wasExpanded) {
+        var symbol = card.dataset.symbol;
+        if (!symbol) return;
+        var tries = 0;
+        (function tryRender() {
+            if (window.stockTracker && window.stockTracker.renderCardChart) {
+                window.stockTracker.renderCardChart(symbol, '1Y');
+            } else if (++tries < 30) {
+                setTimeout(tryRender, 200);
+            }
+        })();
+    }
+}, true); // capture phase — fires before anything can stop it
+</script>
 </body>
 </html>
