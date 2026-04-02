@@ -12883,16 +12883,17 @@ function _bmIndex(series) {
 
 // Build portfolio value indexed series from window._tlFullHistory
 function _bmPortfolioSeries(rangeKey) {
-  const hist = window._tlFullHistory || [];
+  const tracker = window.stockTracker;
+  // Use portfolioHistory (stored in Firestore, populated on load)
+  const hist = (tracker && tracker.portfolioHistory) ? tracker.portfolioHistory : [];
   if (hist.length === 0) return null;
   const now = new Date();
   const cutoffs = { '1Y': 365, '3Y': 365*3, '5Y': 365*5 };
   const days = cutoffs[rangeKey] || 365;
   const cutoff = new Date(now.getTime() - days * 24*60*60*1000);
-  // Weekly sampling to match benchmark frequency
   const filtered = hist.filter(p => new Date(p.date) >= cutoff);
   if (filtered.length < 2) return null;
-  // Sample ~weekly
+  // Sample ~weekly to match benchmark frequency
   const step = Math.max(1, Math.floor(filtered.length / 52));
   const sampled = filtered.filter((_, i) => i % step === 0 || i === filtered.length - 1);
   return sampled;
@@ -12954,7 +12955,7 @@ window.renderBenchmark = async function renderBenchmark() {
         <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent-primary,#3498db);margin-bottom:4px;">📈 Your Portfolio</div>
         <div style="font-size:1.4rem;font-weight:800;color:${colorR(portReturn)};">${fmtR(portReturn)}</div>
         <div style="font-size:0.72rem;color:var(--text-secondary);margin-top:2px;">${rangeKey} total return</div>
-        ${!hasPortfolio ? '<div style="font-size:0.7rem;color:var(--color-negative,#e74c3c);margin-top:4px;">⚠ Load chart history first (click 1Y on main chart)</div>' : ''}
+        ${!hasPortfolio ? '<div style="font-size:0.7rem;color:var(--color-negative,#e74c3c);margin-top:4px;">⚠ Not enough portfolio history yet. History builds daily as prices refresh.</div>' : ''}
       </div>`;
 
     const bmCards = BENCHMARKS.map((b, i) => {
