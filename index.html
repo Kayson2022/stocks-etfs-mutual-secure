@@ -6126,7 +6126,7 @@ renderPortfolioSummary() {
                         ${cardActionsHTML}
                         ${type !== 'watchlist' ? `
                         <div class="card-news-section" id="news-section-${item.id}" style="margin-top:10px;border-top:1px solid var(--border-color);padding-top:8px;">
-                          <button class="card-news-btn" onclick="window.stToggleCardNews('${item.id}','${item.symbol}')"
+                          <button class="card-news-btn" onclick="event.stopPropagation();window.stToggleCardNews('${item.id}','${item.symbol}')"
                             style="width:100%;text-align:left;background:transparent;border:none;cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-secondary);padding:4px 0;display:flex;align-items:center;gap:6px;">
                             <span>📰 News</span>
                             <span id="news-chevron-${item.id}" style="font-size:0.65rem;transition:transform 0.2s;">▶</span>
@@ -6134,7 +6134,7 @@ renderPortfolioSummary() {
                           <div id="news-content-${item.id}" style="display:none;margin-top:8px;"></div>
                         </div>
                         <div id="pt-section-${item.id}" style="margin-top:6px;border-top:1px solid var(--border-color);padding-top:8px;">
-                          <button onclick="window.stTogglePriceTarget('${item.id}','${item.symbol}',${item.price||0})"
+                          <button onclick="event.stopPropagation();window.stTogglePriceTarget('${item.id}','${item.symbol}',${item.price||0})"
                             style="width:100%;text-align:left;background:transparent;border:none;cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-secondary);padding:4px 0;display:flex;align-items:center;gap:6px;">
                             <span>🎯 Price Targets</span>
                             <span id="pt-chevron-${item.id}" style="font-size:0.65rem;transition:transform 0.2s;">▶</span>
@@ -6142,7 +6142,7 @@ renderPortfolioSummary() {
                           <div id="pt-content-${item.id}" style="display:none;margin-top:8px;"></div>
                         </div>
                         <div id="fund-section-${item.id}" style="margin-top:6px;border-top:1px solid var(--border-color);padding-top:8px;">
-                          <button onclick="window.stToggleFundamentals('${item.id}','${item.symbol}')"
+                          <button onclick="event.stopPropagation();window.stToggleFundamentals('${item.id}','${item.symbol}')"
                             style="width:100%;text-align:left;background:transparent;border:none;cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-secondary);padding:4px 0;display:flex;align-items:center;gap:6px;">
                             <span>📊 Fundamentals</span>
                             <span id="fund-chevron-${item.id}" style="font-size:0.65rem;transition:transform 0.2s;">▶</span>
@@ -6150,7 +6150,7 @@ renderPortfolioSummary() {
                           <div id="fund-content-${item.id}" style="display:none;margin-top:8px;"></div>
                         </div>
                         <div id="earn-section-${item.id}" style="margin-top:6px;border-top:1px solid var(--border-color);padding-top:8px;">
-                          <button onclick="window.stToggleNextEarnings('${item.id}','${item.symbol}')"
+                          <button onclick="event.stopPropagation();window.stToggleNextEarnings('${item.id}','${item.symbol}')"
                             style="width:100%;text-align:left;background:transparent;border:none;cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-secondary);padding:4px 0;display:flex;align-items:center;gap:6px;">
                             <span>📅 Next Earnings</span>
                             <span id="earn-chevron-${item.id}" style="font-size:0.65rem;transition:transform 0.2s;">▶</span>
@@ -6158,7 +6158,7 @@ renderPortfolioSummary() {
                           <div id="earn-content-${item.id}" style="display:none;margin-top:8px;"></div>
                         </div>
                         <div id="divnext-section-${item.id}" style="margin-top:6px;border-top:1px solid var(--border-color);padding-top:8px;">
-                          <button onclick="window.stToggleNextDividend('${item.id}','${item.symbol}')"
+                          <button onclick="event.stopPropagation();window.stToggleNextDividend('${item.id}','${item.symbol}')"
                             style="width:100%;text-align:left;background:transparent;border:none;cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-secondary);padding:4px 0;display:flex;align-items:center;gap:6px;">
                             <span>💰 Next Dividend</span>
                             <span id="divnext-chevron-${item.id}" style="font-size:0.65rem;transition:transform 0.2s;">▶</span>
@@ -13832,121 +13832,119 @@ window.stToggleNextDividend = async function(id, symbol) {
   var t = getTracker();
   var key = (t && t.config && t.config.finnhubApiKey) || '';
   if (!key) {
-    content.innerHTML = '<div style="font-size:0.75rem;color:var(--text-secondary);padding:6px 0;">Add a Finnhub API key in Settings to fetch dividend dates.</div>';
+    content.innerHTML = '<div style="font-size:0.75rem;color:var(--text-secondary);padding:6px 0;">Add a Finnhub API key in Settings to fetch dividend data.</div>';
     return;
   }
 
   content.innerHTML = '<div style="font-size:0.72rem;color:var(--text-secondary);padding:4px 0;">Fetching...</div>';
 
   try {
-    var today  = new Date().toISOString().split('T')[0];
-    var future = new Date(Date.now() + 365*24*60*60*1000).toISOString().split('T')[0];
-    var past   = new Date(Date.now() - 3*365*24*60*60*1000).toISOString().split('T')[0];
-    var BASE   = 'https://finnhub.io/api/v1';
+    var BASE = 'https://finnhub.io/api/v1';
 
-    var responses = await Promise.all([
-      fetch(BASE + '/stock/metric?symbol=' + encodeURIComponent(symbol) + '&metric=all&token=' + key),
-      fetch(BASE + '/stock/dividend?symbol=' + encodeURIComponent(symbol) + '&from=' + today + '&to=' + future + '&token=' + key),
-      fetch(BASE + '/stock/dividend?symbol=' + encodeURIComponent(symbol) + '&from=' + past + '&to=' + today + '&token=' + key)
-    ]);
-
-    var metricData   = responses[0].ok ? await responses[0].json() : {};
-    var upcomingData = responses[1].ok ? await responses[1].json() : [];
-    var histData     = responses[2].ok ? await responses[2].json() : [];
-
+    // Only use /stock/metric — free tier endpoint (stock/dividend is paid)
+    var metricRes = await fetch(BASE + '/stock/metric?symbol=' + encodeURIComponent(symbol) + '&metric=all&token=' + key);
+    var metricData = metricRes.ok ? await metricRes.json() : {};
     var m = metricData.metric || {};
 
-    var histDivs = Array.isArray(histData)
-      ? histData.filter(function(d) { return d.payDate || d.exDate; })
-               .sort(function(a,b) { return (b.payDate||b.exDate).localeCompare(a.payDate||a.exDate); })
-      : [];
+    // Get stored dividends from the app's own data for prediction
+    var storedItem = null;
+    if (t && t.stocks) storedItem = t.stocks.find(function(s) { return s.symbol === symbol; });
+    if (!storedItem && t && t.mutualFunds) storedItem = t.mutualFunds.find(function(f) { return f.symbol === symbol; });
+    var storedDivs = (storedItem && storedItem.dividends) ? storedItem.dividends.slice().sort(function(a,b) {
+      return new Date(b.date) - new Date(a.date);
+    }) : [];
 
-    // Detect pay frequency from historical gap
+    // Detect pay frequency from stored dividend dates
     var freq = null;
-    if (histDivs.length >= 2) {
-      var dates = histDivs.map(function(d) { return new Date(d.payDate || d.exDate); })
-                          .filter(function(d) { return !isNaN(d); })
-                          .sort(function(a,b) { return b-a; });
+    if (storedDivs.length >= 2) {
+      var dates = storedDivs.map(function(d) { return new Date(d.date); }).filter(function(d) { return !isNaN(d); });
       var gaps = [];
-      for (var gi = 0; gi < Math.min(dates.length-1, 4); gi++) {
+      for (var gi = 0; gi < Math.min(dates.length-1, 6); gi++) {
         gaps.push(Math.round((dates[gi] - dates[gi+1]) / 86400000));
       }
       var avgGap = gaps.reduce(function(s,g) { return s+g; }, 0) / gaps.length;
-      if (avgGap < 45)  freq = { days: 30,  label: 'Monthly' };
-      else if (avgGap < 120) freq = { days: 91,  label: 'Quarterly' };
-      else if (avgGap < 240) freq = { days: 182, label: 'Semi-Annual' };
-      else freq = { days: 365, label: 'Annual' };
+      if (avgGap < 45)        freq = { days: 30,  label: 'Monthly' };
+      else if (avgGap < 120)  freq = { days: 91,  label: 'Quarterly' };
+      else if (avgGap < 240)  freq = { days: 182, label: 'Semi-Annual' };
+      else                    freq = { days: 365, label: 'Annual' };
+    } else {
+      // Fall back to Finnhub payout frequency
+      var pf = m.payoutFrequency;
+      if (pf === 12)      freq = { days: 30,  label: 'Monthly' };
+      else if (pf === 4)  freq = { days: 91,  label: 'Quarterly' };
+      else if (pf === 2)  freq = { days: 182, label: 'Semi-Annual' };
+      else if (pf === 1)  freq = { days: 365, label: 'Annual' };
     }
 
-    // Predict next pay date
-    var predictedPayDate = null;
-    if (histDivs.length > 0 && freq) {
-      var lastDate = new Date(histDivs[0].payDate || histDivs[0].exDate);
-      var predicted = new Date(lastDate.getTime() + freq.days * 86400000);
-      predictedPayDate = predicted > new Date() ? predicted : new Date(predicted.getTime() + freq.days * 86400000);
+    // Predict next pay date from last stored dividend + frequency
+    var predictedDate = null;
+    var lastDivDate = storedDivs.length > 0 ? new Date(storedDivs[0].date) : null;
+    if (!lastDivDate && m.lastDividendDate) lastDivDate = new Date(m.lastDividendDate + 'T12:00:00');
+    if (lastDivDate && freq) {
+      var pred = new Date(lastDivDate.getTime() + freq.days * 86400000);
+      predictedDate = pred > new Date() ? pred : new Date(pred.getTime() + freq.days * 86400000);
     }
 
-    var upcoming = Array.isArray(upcomingData)
-      ? upcomingData.filter(function(d) { return d.exDate && d.exDate >= today; })
-                   .sort(function(a,b) { return a.exDate.localeCompare(b.exDate); })
-      : [];
-
-    var next     = upcoming[0] || null;
-    var exDate   = (next && next.exDate) || m.dividendExDate || m.lastDividendDate || null;
-    var payDate  = (next && next.payDate) || m.dividendPayDate || null;
-    var divAmt   = (next && next.amount != null) ? next.amount : (m.dividendPerShareTTM || m.dividendPerShareAnnual || null);
+    var exDate   = m.dividendExDate || m.lastDividendDate || null;
+    var divAmt   = m.dividendPerShareTTM || m.dividendPerShareAnnual || null;
     var divYield = m.dividendYieldIndicatedAnnual || m.dividendYield5Y || null;
-    var freqLabel = freq ? freq.label : (m.payoutFrequency === 4 ? 'Quarterly' : m.payoutFrequency === 12 ? 'Monthly' : '');
 
-    var fmtDate = function(d) {
-      if (!d) return null;
-      var dt = new Date((typeof d === 'string' ? d + 'T12:00:00' : d));
-      return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    };
-    var daysUntil = function(s) {
-      if (!s) return null;
-      return Math.round((new Date(s + 'T12:00:00') - new Date()) / 86400000);
-    };
-    var badge = function(days) {
-      if (days == null) return '';
-      if (days < 0) return ' <span style="font-size:0.65rem;color:#e74c3c;">(passed)</span>';
-      if (days === 0) return ' <span style="font-size:0.65rem;color:#e74c3c;">(Today!)</span>';
-      if (days <= 7)  return ' <span style="font-size:0.65rem;color:#f39c12;">(in ' + days + 'd)</span>';
-      return ' <span style="font-size:0.65rem;color:var(--text-secondary);">(in ' + days + 'd)</span>';
-    };
-
-    if (!exDate && !divAmt && !histDivs.length) {
+    if (!exDate && !divAmt && storedDivs.length === 0) {
       content.innerHTML = '<div style="font-size:0.75rem;color:var(--text-secondary);padding:6px 0;">No dividend data found. This stock may not pay dividends.</div>';
       content.dataset.loaded = '1';
       return;
     }
 
-    var row = function(lbl, val, extra) {
-      if (!val) return '';
-      return '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;"><span style="font-size:0.67rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">' + lbl + '</span><span style="font-family:monospace;font-size:0.78rem;font-weight:700;color:var(--text-primary);">' + val + (extra||'') + '</span></div>';
+    var fmtDate = function(d) {
+      if (!d) return null;
+      var dt = (typeof d === 'string') ? new Date(d + 'T12:00:00') : d;
+      return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+    var daysUntil = function(d) {
+      if (!d) return null;
+      var dt = (typeof d === 'string') ? new Date(d + 'T12:00:00') : d;
+      return Math.round((dt - new Date()) / 86400000);
+    };
+    var badge = function(days) {
+      if (days == null) return '';
+      if (days < 0)   return ' <span style="font-size:0.65rem;color:#e74c3c;">(passed)</span>';
+      if (days === 0) return ' <span style="font-size:0.65rem;color:#e74c3c;">(Today!)</span>';
+      if (days <= 14) return ' <span style="font-size:0.65rem;color:#f39c12;">(in ' + days + 'd)</span>';
+      return ' <span style="font-size:0.65rem;color:var(--text-secondary);">(in ' + days + 'd)</span>';
     };
 
     var html = '<div style="background:rgba(46,213,115,0.06);border:1px solid rgba(46,213,115,0.15);border-radius:7px;padding:10px 12px;">';
-    if (exDate) html += row('Ex-Dividend Date', fmtDate(exDate), badge(daysUntil(exDate)));
 
-    if (payDate) {
-      html += row('Payment Date', '<span style="color:var(--color-positive,#27ae60);">' + fmtDate(payDate) + '</span>', badge(daysUntil(payDate)));
-    } else if (predictedPayDate) {
-      var dys = Math.round((predictedPayDate - new Date()) / 86400000);
-      html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;"><span style="font-size:0.67rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">Est. Next Payment</span><span style="font-family:monospace;font-size:0.78rem;font-weight:700;color:var(--color-positive,#27ae60);">' + fmtDate(predictedPayDate) + ' <span style="font-size:0.65rem;color:#f39c12;">~' + dys + 'd · predicted</span></span></div>';
+    // Ex-dividend date from Finnhub metric
+    if (exDate) {
+      var exDays = daysUntil(exDate);
+      html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;"><span style="font-size:0.67rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">Last Ex-Div Date</span><span style="font-family:monospace;font-size:0.78rem;font-weight:700;color:var(--text-primary);">' + fmtDate(exDate) + badge(exDays) + '</span></div>';
     }
 
-    if (divAmt != null) html += row('Amount / Share', '<span style="color:var(--color-positive,#27ae60);">$' + Number(divAmt).toFixed(4) + '</span>');
-    if (divYield != null) html += '<div style="display:flex;justify-content:space-between;margin-bottom:0;"><span style="font-size:0.67rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">Indicated Yield</span><span style="font-size:0.78rem;font-weight:700;color:var(--accent-primary);">' + Number(divYield).toFixed(2) + '%' + (freqLabel ? ' · ' + freqLabel : '') + '</span></div>';
+    // Predicted next payment
+    if (predictedDate) {
+      var predDays = daysUntil(predictedDate);
+      html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;"><span style="font-size:0.67rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">Est. Next Payment</span><span style="font-family:monospace;font-size:0.78rem;font-weight:700;color:var(--color-positive,#27ae60);">' + fmtDate(predictedDate) + ' <span style="font-size:0.65rem;color:#f39c12;">(~' + predDays + 'd, predicted)</span></span></div>';
+    }
+
+    // Amount and yield
+    if (divAmt != null) {
+      html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;"><span style="font-size:0.67rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">Amount / Share</span><span style="font-size:0.78rem;font-weight:700;color:var(--color-positive,#27ae60);">$' + Number(divAmt).toFixed(4) + (freq ? ' · ' + freq.label : '') + '</span></div>';
+    }
+    if (divYield != null) {
+      html += '<div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font-size:0.67rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">Indicated Yield</span><span style="font-size:0.78rem;font-weight:700;color:var(--accent-primary);">' + Number(divYield).toFixed(2) + '%</span></div>';
+    }
     html += '</div>';
 
-    if (histDivs.length > 0) {
-      html += '<div style="margin-top:8px;font-size:0.68rem;color:var(--text-secondary);"><div style="font-weight:700;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.3px;">Recent Payments</div>' +
-        histDivs.slice(0,3).map(function(d) {
-          return '<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:0.5px solid var(--border-color);"><span>' + fmtDate(d.payDate || d.exDate) + '</span><span style="color:var(--color-positive,#27ae60);">' + (d.amount ? '$' + Number(d.amount).toFixed(4) : '') + '</span></div>';
-        }).join('') +
-        (freq ? '<div style="margin-top:4px;color:var(--accent-primary);">Pattern: ' + freq.label + ' (~every ' + freq.days + 'd)</div>' : '') +
-      '</div>';
+    // Show last 3 stored dividend payments
+    if (storedDivs.length > 0) {
+      html += '<div style="margin-top:8px;font-size:0.68rem;color:var(--text-secondary);">';
+      html += '<div style="font-weight:700;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.3px;">Your Recorded Payments</div>';
+      storedDivs.slice(0, 3).forEach(function(d) {
+        html += '<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:0.5px solid var(--border-color);"><span>' + fmtDate(d.date) + '</span><span style="color:var(--color-positive,#27ae60);">$' + (d.totalAmount ? Number(d.totalAmount).toFixed(2) : '') + '</span></div>';
+      });
+      if (freq) html += '<div style="margin-top:4px;color:var(--accent-primary);">Pattern: ' + freq.label + ' (~every ' + freq.days + 'd)</div>';
+      html += '</div>';
     }
 
     content.innerHTML = html;
@@ -13955,7 +13953,6 @@ window.stToggleNextDividend = async function(id, symbol) {
     content.innerHTML = '<div style="font-size:0.75rem;color:var(--text-secondary);padding:6px 0;">Could not fetch dividend data.</div>';
   }
 };
-
 })();
 </script>
 
