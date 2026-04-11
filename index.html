@@ -9,7 +9,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Live Stocks &amp; Funds Tracker</title>
 <link href="data:," rel="icon"/>
 <!-- PWA Manifest -->
@@ -1259,30 +1259,6 @@
         .backup-ok   { background: rgba(0,184,148,0.12); color: #00b894; border: 1px solid rgba(0,184,148,0.25); }
         .backup-fail { background: rgba(231,76,60,0.12);  color: #e74c3c; border: 1px solid rgba(231,76,60,0.25); }
         .backup-busy { background: rgba(108,92,231,0.12); color: #6c5ce7; border: 1px solid rgba(108,92,231,0.25); }
-        /* ── PWA Standalone Mode Fix ──
-           Prevents the "everything is tiny" bug when installed as a PWA on Android.
-           Forces the root font size to 16px baseline and ensures the layout
-           uses the full screen width correctly in standalone display mode. */
-        @media all and (display-mode: standalone) {
-            html {
-                font-size: 16px !important;
-            }
-            body {
-                min-height: 100vh;
-                min-height: -webkit-fill-available;
-                overflow-x: hidden;
-            }
-            .container {
-                padding: 16px !important;
-            }
-        }
-        /* iOS Safari PWA safe area support */
-        @supports (padding-top: env(safe-area-inset-top)) {
-            body {
-                padding-top: env(safe-area-inset-top);
-                padding-bottom: env(safe-area-inset-bottom);
-            }
-        }
 
 </style>
 <style id="neon-theme-overrides">
