@@ -1661,7 +1661,7 @@ button {
 /* ==== STEP: Prototype-style Portfolio Summary Banner (safe with JS className overwrites) ==== */
 #portfolio-summary.portfolio-summary{
   position: relative;
-  overflow: hidden;
+  overflow: clip;
   border-radius: 22px;
   padding: 18px 18px 16px;
   margin: 14px 0 14px;
@@ -2718,6 +2718,12 @@ body.dark-mode .modal-content {
 
     /* Small countdown */
     .small-countdown { font-size: 0.75rem; padding: 5px 10px; bottom: 8px; left: 8px; }
+
+    /* Sleep-at-Night + Coast FIRE — stack to 1 col on small phones */
+    #san-coast-grid {
+        grid-template-columns: 1fr !important;
+    }
+
 }
 
 /* ── Tablets (481px – 768px) ── */
@@ -2754,6 +2760,26 @@ body.dark-mode .modal-content {
   [id^="earn-section-"], [id^="divnext-section-"] {
     overflow: visible !important;
   }
+}
+
+/* Settings modal mobile overrides — scoped, must come last */
+@media (max-width: 480px) {
+    #settingsModal .modal-content {
+        max-height: 85dvh !important;
+        max-height: 85vh !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        padding-bottom: 32px !important;
+    }
+    #settingsModal .add-btn {
+        width: auto !important;
+        min-width: 0 !important;
+        min-height: 44px !important;
+    }
+    #settingsModal #modal-save-settings-btn {
+        width: 100% !important;
+        margin-top: 8px !important;
+    }
 }
 @media (max-width: 768px) {
   /* Fundamentals grid 1-col on tablet */
@@ -3067,7 +3093,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 </div>
 <!-- Sleep-at-Night + Coast FIRE — OUTSIDE portfolio-inner, spans full card width -->
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;" id="san-coast-grid">
 
   <!-- SLEEP AT NIGHT -->
   <div style="position:relative;padding:10px 14px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
@@ -3327,7 +3353,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 </div>
 <div class="modal" id="settingsModal" style="display: none;">
-<div class="modal-content" style="max-height:90vh;max-height:90dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;">
+<div class="modal-content" style="max-height:88vh;max-height:88dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;">
 <button class="close-modal-btn" id="closeSettingsBtn">×</button>
 <h3 class="modal-title">Settings</h3>
 <div class="transaction-input-group">
