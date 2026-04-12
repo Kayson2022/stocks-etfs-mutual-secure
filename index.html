@@ -15536,23 +15536,27 @@ window.submitPortfolioQuestion = async function() {
 
     // Use the app's own calculateTransactionStats — same function the cards use
     // This guarantees the numbers match exactly what's shown on screen
-    const holdingsSummary = allItems.map(item => {
-      const stats = calcStats(item);
+    const holdingsRaw = allItems.map(item => {
+      const stats     = calcStats(item);
       const shares    = stats.totalSharesOwned || 0;
       const costBasis = stats.costOfRemainingShares || 0;
       const costPerSh = shares > 0 ? costBasis / shares : 0;
-      const currentVal = shares * (item.price||0);
+      const currentVal= shares * (item.price||0);
       const unrealPL  = stats.unrealizedPL ?? (currentVal - costBasis);
-      const unrealPct = stats.unrealizedPLPercent ?? (costBasis > 0 ? (unrealPL/costBasis)*100 : 0);
+      const unrealPct = costBasis > 0 ? (unrealPL/costBasis)*100 : 0;
       const divTotal  = (item.dividends||[]).reduce((s,d)=>s+(parseFloat(d.totalAmount)||0),0);
       const todayChg  = item.changePercent ?? item.percentChange ?? 0;
       const sector    = item.sector || item.finnhubSector || 'Unknown';
-      return `${item.symbol} (${sector}): ${shares.toFixed(3)} shares @ ${fc(item.price)} | cost/sh ${fc(costPerSh)} | total cost basis ${fc(costBasis)} | current value ${fc(currentVal)} | unrealized P/L ${fc(unrealPL)} (${unrealPct.toFixed(1)}%) | today ${todayChg>=0?'+':''}${todayChg.toFixed(2)}% | dividends ${fc(divTotal)}`;
-    }).sort((a,b) => {
-      // Sort by unrealized P/L % descending so AI sees ranking clearly
-      const getPct = s => parseFloat(s.match(/\(([+-]?\d+\.?\d*)%\)/)?.[1]||0);
-      return getPct(b) - getPct(a);
-    }).join('\n');
+      const line = `${item.symbol} (${sector}): ${shares.toFixed(3)} shares @ ${fc(item.price)} | cost/sh ${fc(costPerSh)} | cost basis ${fc(costBasis)} | current value ${fc(currentVal)} | unrealized P/L ${fc(unrealPL)} | unrealized % ${unrealPct.toFixed(1)}% | today ${todayChg>=0?'+':''}${todayChg.toFixed(2)}% | dividends ${fc(divTotal)}`;
+      return { line, unrealPL, unrealPct };
+    });
+
+    // Send both rankings explicitly so AI answers $ and % correctly
+    const holdingsSummary =
+      'RANKED BY DOLLAR GAIN (highest $ first):\n' +
+      [...holdingsRaw].sort((a,b)=>b.unrealPL-a.unrealPL).map(h=>h.line).join('\n') +
+      '\n\nRANKED BY % GAIN (highest % first):\n' +
+      [...holdingsRaw].sort((a,b)=>b.unrealPct-a.unrealPct).map(h=>h.line).join('\n');
 
     const portHist = (tracker.portfolioHistory||[]).slice(-30);
     // Use calculateTransactionStats for accurate totals too
@@ -15562,7 +15566,7 @@ window.submitPortfolioQuestion = async function() {
     const startVal = portHist.length>0?Number(portHist[0].value||0):totalCost;
     const ret30d = startVal>0?((totalVal-startVal)/startVal*100).toFixed(2):null;
 
-    const systemPrompt = `You are a personal financial analyst AI with direct access to the user's live portfolio data. The data below is GROUND TRUTH — computed directly from their transaction records using FIFO accounting. Always use these exact numbers. Never guess or use prior knowledge about stock prices. Be concise (under 150 words), direct, and answer with the specific numbers from the data. Do not use markdown bold (**) in your response.
+    const systemPrompt = `You are a personal financial analyst AI with direct access to the user's live portfolio data. The data below is GROUND TRUTH — computed directly from their transaction records using FIFO accounting. Always use these exact numbers. Never guess or use prior knowledge about stock prices. Do not use markdown bold (**) in your response. IMPORTANT: When asked about "highest gain" or "best performer", always answer BOTH by dollar amount AND by percentage, since they often have different winners. Label them clearly: "By dollar gain: X" and "By percentage gain: Y". Be concise (under 180 words).
 
 PORTFOLIO SNAPSHOT (as of ${new Date().toLocaleDateString()}):
 Total Portfolio Value: ${fc(totalVal)}
