@@ -14376,7 +14376,7 @@ Portfolio Data:
 
 Write in English. Be direct and educational. No bullet lists — flowing paragraphs only. Keep it under 200 words.`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://ai-proxy.YOUR-SUBDOMAIN.workers.dev', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -14663,7 +14663,7 @@ Dividend Portfolio Summary:
 
 Write in English. Be specific and encouraging but honest. Under 180 words.`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://ai-proxy.YOUR-SUBDOMAIN.workers.dev', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
@@ -15421,7 +15421,7 @@ ${summaries}
 
 Be direct and educational. Under 250 words total. No bullet points — short paragraphs per stock.`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://ai-proxy.YOUR-SUBDOMAIN.workers.dev', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
@@ -15575,7 +15575,7 @@ ${holdingsSummary}
 ${portHist.length>1?`RECENT PORTFOLIO HISTORY (last ${portHist.length} days):
 ${portHist.slice(-7).map(h=>`${h.date}: ${fc(h.value)}`).join('\n')}`:''}`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('https://ai-proxy.YOUR-SUBDOMAIN.workers.dev', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
