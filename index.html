@@ -15528,38 +15528,41 @@ window.submitPortfolioQuestion = async function() {
     const allItems = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
     const fc = n => '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 
+    // Helper: clone transactions before calling calculateTransactionStats
+    // because the function mutates the buys array in place
+    const calcStats = (item) => tracker.calculateTransactionStats(
+      JSON.parse(JSON.stringify(item.transactions||[])), item.price||0
+    );
+
+    // Use the app's own calculateTransactionStats — same function the cards use
+    // This guarantees the numbers match exactly what's shown on screen
     const holdingsSummary = allItems.map(item => {
-      const buys  = JSON.parse(JSON.stringify((item.transactions||[]).filter(t=>t.type==='buy')));
-      const sells = (item.transactions||[]).filter(t=>t.type==='sell');
-      sells.forEach(sell => { let need=sell.shares; for(const lot of buys){if(need<=0)break;const u=Math.min(need,lot.shares);lot.shares-=u;need-=u;} });
-      const shares = Math.max(0, buys.reduce((s,b)=>s+b.shares,0));
-      const totalCost = buys.reduce((s,b)=>s+b.shares*b.price,0);
-      const costPerShare = shares>0?totalCost/shares:0;
-      const currentVal = shares*(item.price||0);
-      const unrealPL = currentVal - shares*costPerShare;
-      const unrealPct = costPerShare>0?(item.price-costPerShare)/costPerShare*100:0;
-      const divTotal = (item.dividends||[]).reduce((s,d)=>s+(parseFloat(d.totalAmount)||0),0);
-      const todayChg = item.changePercent??item.percentChange??0;
-      const sector = item.sector||item.finnhubSector||'Unknown';
-      return `${item.symbol} (${sector}): ${shares.toFixed(3)} shares @ ${fc(item.price)} | cost basis ${fc(costPerShare)}/sh | current value ${fc(currentVal)} | unrealized P/L ${fc(unrealPL)} (${unrealPct.toFixed(1)}%) | today ${todayChg>=0?'+':''}${todayChg.toFixed(2)}% | dividends received ${fc(divTotal)}`;
+      const stats = calcStats(item);
+      const shares    = stats.totalSharesOwned || 0;
+      const costBasis = stats.costOfRemainingShares || 0;
+      const costPerSh = shares > 0 ? costBasis / shares : 0;
+      const currentVal = shares * (item.price||0);
+      const unrealPL  = stats.unrealizedPL ?? (currentVal - costBasis);
+      const unrealPct = stats.unrealizedPLPercent ?? (costBasis > 0 ? (unrealPL/costBasis)*100 : 0);
+      const divTotal  = (item.dividends||[]).reduce((s,d)=>s+(parseFloat(d.totalAmount)||0),0);
+      const todayChg  = item.changePercent ?? item.percentChange ?? 0;
+      const sector    = item.sector || item.finnhubSector || 'Unknown';
+      return `${item.symbol} (${sector}): ${shares.toFixed(3)} shares @ ${fc(item.price)} | cost/sh ${fc(costPerSh)} | total cost basis ${fc(costBasis)} | current value ${fc(currentVal)} | unrealized P/L ${fc(unrealPL)} (${unrealPct.toFixed(1)}%) | today ${todayChg>=0?'+':''}${todayChg.toFixed(2)}% | dividends ${fc(divTotal)}`;
+    }).sort((a,b) => {
+      // Sort by unrealized P/L % descending so AI sees ranking clearly
+      const getPct = s => parseFloat(s.match(/\(([+-]?\d+\.?\d*)%\)/)?.[1]||0);
+      return getPct(b) - getPct(a);
     }).join('\n');
 
     const portHist = (tracker.portfolioHistory||[]).slice(-30);
-    const totalVal = allItems.reduce((s,item)=>{
-      const sh=(item.transactions||[]).filter(t=>t.type==='buy').reduce((a,b)=>a+b.shares,0)-(item.transactions||[]).filter(t=>t.type==='sell').reduce((a,b)=>a+b.shares,0);
-      return s+Math.max(0,sh)*(item.price||0);
-    },0);
-    const totalCost = allItems.reduce((s,item)=>{
-      const buys=JSON.parse(JSON.stringify((item.transactions||[]).filter(t=>t.type==='buy')));
-      const sells=(item.transactions||[]).filter(t=>t.type==='sell');
-      sells.forEach(sell=>{let need=sell.shares;for(const lot of buys){if(need<=0)break;const u=Math.min(need,lot.shares);lot.shares-=u;need-=u;}});
-      return s+buys.reduce((ss,b)=>ss+b.shares*b.price,0);
-    },0);
+    // Use calculateTransactionStats for accurate totals too
+    const totalVal  = allItems.reduce((s,item) => s + (calcStats(item).totalSharesOwned||0) * (item.price||0), 0);
+    const totalCost = allItems.reduce((s,item) => s + (calcStats(item).costOfRemainingShares||0), 0);
     const totalDivs = allItems.reduce((s,item)=>s+(item.dividends||[]).reduce((ss,d)=>ss+(parseFloat(d.totalAmount)||0),0),0);
     const startVal = portHist.length>0?Number(portHist[0].value||0):totalCost;
     const ret30d = startVal>0?((totalVal-startVal)/startVal*100).toFixed(2):null;
 
-    const systemPrompt = `You are a personal financial analyst AI with direct access to the user's live portfolio data. Answer questions precisely using the data provided. Always cite specific numbers from the data. Be concise (under 150 words), direct, and helpful. If a question requires information not in the data, say so clearly rather than guessing.
+    const systemPrompt = `You are a personal financial analyst AI with direct access to the user's live portfolio data. The data below is GROUND TRUTH — computed directly from their transaction records using FIFO accounting. Always use these exact numbers. Never guess or use prior knowledge about stock prices. Be concise (under 150 words), direct, and answer with the specific numbers from the data. Do not use markdown bold (**) in your response.
 
 PORTFOLIO SNAPSHOT (as of ${new Date().toLocaleDateString()}):
 Total Portfolio Value: ${fc(totalVal)}
@@ -15569,7 +15572,7 @@ Total Dividends Received: ${fc(totalDivs)}
 ${ret30d!==null?`30-Day Return: ${ret30d}%`:''}
 Number of Holdings: ${allItems.length}
 
-HOLDINGS DETAIL:
+HOLDINGS DETAIL (sorted by unrealized P/L % descending — first entry = highest gainer):
 ${holdingsSummary}
 
 ${portHist.length>1?`RECENT PORTFOLIO HISTORY (last ${portHist.length} days):
