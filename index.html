@@ -3032,23 +3032,6 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-badge">Realized P/L: <span class="summary-value" id="total-pl-realized">$0.00</span></div>
 <button class="summary-toggle" id="toggle-ah-btn" type="button">🌑 Show After-Hours</button>
 </div>
-<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-  <div style="flex:1;min-width:180px;padding:8px 12px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
-    <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:3px;">😴 Sleep-at-Night Index <span title="Score 0-100: low portfolio volatility + high dividend income = high score = sleep easy" style="cursor:help;opacity:0.7;">(?)</span></div>
-    <div id="san-value" style="font-size:0.95rem;font-weight:800;color:#27ae60;">--</div>
-    <div id="san-detail" style="font-size:0.62rem;color:rgba(255,255,255,0.5);margin-top:1px;">Hit Live Update to calculate</div>
-  </div>
-  <div style="flex:1;min-width:180px;padding:8px 12px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
-    <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:3px;">🏖 Coast FIRE Progress <span title="How close your portfolio is to never needing another contribution — set goal in Settings" style="cursor:help;opacity:0.7;">(?)</span></div>
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-      <div style="flex:1;background:rgba(0,0,0,0.3);border-radius:999px;height:7px;overflow:hidden;">
-        <div id="coast-bar" style="height:100%;border-radius:999px;background:#3498db;width:0%;transition:width 0.8s;"></div>
-      </div>
-      <span id="coast-pct" style="font-size:0.8rem;font-weight:800;color:rgba(255,255,255,0.9);min-width:36px;text-align:right;">--%</span>
-    </div>
-    <div id="coast-detail" style="font-size:0.62rem;color:rgba(255,255,255,0.5);">Set goal in ⚙️ Settings</div>
-  </div>
-</div>
 </div>
 <div class="summary-grid">
 <div class="summary-item">
@@ -3076,6 +3059,24 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-item-value"><span class="summary-value" id="fund-count-value">0</span></div>
 </div>
 </div>
+</div>
+<!-- Sleep-at-Night + Coast FIRE — OUTSIDE portfolio-inner, spans full card width -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+  <div style="padding:10px 14px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
+    <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">😴 Sleep-at-Night Index <span title="Score 0-100: low portfolio volatility + high dividend income = high score = sleep easy" style="cursor:help;opacity:0.7;">(?)</span></div>
+    <div id="san-value" style="font-size:0.95rem;font-weight:800;color:#27ae60;">--</div>
+    <div id="san-detail" style="font-size:0.62rem;color:rgba(255,255,255,0.5);margin-top:2px;">Hit Live Update to calculate</div>
+  </div>
+  <div style="padding:10px 14px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
+    <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">🏖 Coast FIRE Progress <span title="How close your portfolio is to never needing another contribution — set goal in Settings" style="cursor:help;opacity:0.7;">(?)</span></div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+      <div style="flex:1;background:rgba(0,0,0,0.3);border-radius:999px;height:8px;overflow:hidden;">
+        <div id="coast-bar" style="height:100%;border-radius:999px;background:#3498db;width:0%;transition:width 0.8s;"></div>
+      </div>
+      <span id="coast-pct" style="font-size:0.8rem;font-weight:800;color:rgba(255,255,255,0.9);min-width:38px;text-align:right;">--%</span>
+    </div>
+    <div id="coast-detail" style="font-size:0.62rem;color:rgba(255,255,255,0.5);">Set goal in ⚙️ Settings</div>
+  </div>
 </div>
 <div class="utility-buttons-grid">
 <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
