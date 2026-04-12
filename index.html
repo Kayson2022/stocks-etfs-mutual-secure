@@ -3037,7 +3037,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <button class="summary-toggle" id="toggle-ah-btn" type="button">🌑 Show After-Hours</button>
 </div>
 <!-- Sleep-at-Night Index + Coast FIRE row -->
-<div id="san-fire-row" style="display:none;margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+<div id="san-fire-row" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
   <div style="flex:1;min-width:200px;padding:10px 14px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:10px;">
     <div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">😴 Sleep-at-Night Index</div>
     <div id="san-value" style="font-size:1.1rem;font-weight:800;color:var(--color-positive,#27ae60);">--</div>
@@ -5529,8 +5529,7 @@ renderPortfolioSummary() {
                 // Combines volatility (from portfolioHistory) with dividend income stability.
                 // High dividends + low volatility = green. High volatility + low dividends = red.
                 (function updateSleepAtNight() {
-                    const row = document.getElementById('san-fire-row');
-                    if (row) row.style.display = 'flex';
+                    const row = document.getElementById('san-fire-row'); // always visible
                     const sanEl     = document.getElementById('san-value');
                     const sanDetail = document.getElementById('san-detail');
                     const hist = (tracker && tracker.portfolioHistory) ? tracker.portfolioHistory : [];
