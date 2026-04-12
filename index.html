@@ -3090,43 +3090,45 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 </div>
 </div>
-<!-- Sleep-at-Night Index + Coast FIRE -->
-<div id="san-fire-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;position:relative;z-index:2;">
+</div><!-- end portfolio-summary -->
+<!-- Sleep-at-Night Index + Coast FIRE — OUTSIDE portfolio-summary -->
+<div id="san-fire-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
 
   <!-- Sleep-at-Night -->
-  <div style="flex:1;min-width:220px;padding:10px 14px;background:rgba(0,0,0,0.25);border:1px solid rgba(148,163,184,0.2);border-radius:10px;">
+  <div style="flex:1;min-width:220px;padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-      <span style="font-size:0.62rem;color:rgba(226,232,240,0.7);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">😴 Sleep-at-Night Index</span>
+      <span style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">😴 Sleep-at-Night Index</span>
       <span title="Score 0–100 combining your portfolio volatility and dividend income. Low volatility + high dividends = high score = sleep easy. Needs 10+ days of history to show volatility score."
-        style="font-size:0.65rem;color:rgba(148,163,184,0.6);cursor:help;border:1px solid rgba(148,163,184,0.25);border-radius:999px;padding:1px 6px;">?</span>
+        style="font-size:0.65rem;color:var(--text-secondary);cursor:help;border:1px solid var(--border-color);border-radius:999px;padding:1px 6px;">?</span>
     </div>
-    <div id="san-value" style="font-size:1.05rem;font-weight:800;color:#27ae60;margin-bottom:4px;">--</div>
-    <div id="san-detail" style="font-size:0.68rem;color:rgba(226,232,240,0.55);line-height:1.4;">Hit 🔄 Live Update to calculate</div>
-    <div style="font-size:0.62rem;color:rgba(148,163,184,0.45);margin-top:5px;border-top:1px solid rgba(148,163,184,0.1);padding-top:5px;">
+    <div id="san-value" style="font-size:1.05rem;font-weight:800;color:var(--color-positive,#27ae60);margin-bottom:4px;">--</div>
+    <div id="san-detail" style="font-size:0.68rem;color:var(--text-secondary);line-height:1.4;">Hit 🔄 Live Update to calculate</div>
+    <div style="font-size:0.62rem;color:var(--text-secondary);margin-top:5px;border-top:1px solid var(--border-color);padding-top:5px;">
       🟢 75+ Peaceful · 🟡 50+ Moderate · 🟠 25+ Restless · 🔴 Alarming
     </div>
   </div>
 
   <!-- Coast FIRE -->
-  <div style="flex:1;min-width:220px;padding:10px 14px;background:rgba(0,0,0,0.25);border:1px solid rgba(148,163,184,0.2);border-radius:10px;">
+  <div style="flex:1;min-width:220px;padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-      <span style="font-size:0.62rem;color:rgba(226,232,240,0.7);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">🏖 Coast FIRE Progress</span>
+      <span style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">🏖 Coast FIRE Progress</span>
       <span title="The $ amount your portfolio needs TODAY so it can grow to your retirement goal purely from 9% compound growth — with zero new contributions needed. Setup: ⚙️ Settings → enter Retirement Goal + Years Until Retirement."
-        style="font-size:0.65rem;color:rgba(148,163,184,0.6);cursor:help;border:1px solid rgba(148,163,184,0.25);border-radius:999px;padding:1px 6px;">?</span>
+        style="font-size:0.65rem;color:var(--text-secondary);cursor:help;border:1px solid var(--border-color);border-radius:999px;padding:1px 6px;">?</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
-      <div style="flex:1;background:rgba(0,0,0,0.35);border-radius:999px;height:10px;overflow:hidden;">
+      <div style="flex:1;background:var(--bg-tertiary);border-radius:999px;height:10px;overflow:hidden;">
         <div id="coast-bar" style="height:100%;border-radius:999px;background:#3498db;width:0%;transition:width 0.8s ease;"></div>
       </div>
-      <span id="coast-pct" style="font-size:0.85rem;font-weight:800;color:rgba(226,232,240,0.9);min-width:40px;text-align:right;">--%</span>
+      <span id="coast-pct" style="font-size:0.85rem;font-weight:800;color:var(--text-primary);min-width:40px;text-align:right;">--%</span>
     </div>
-    <div id="coast-detail" style="font-size:0.68rem;color:rgba(226,232,240,0.55);line-height:1.4;">
-      ⚙️ <strong style="color:rgba(226,232,240,0.75);">Setup:</strong> Click Settings → enter Retirement Goal ($) + Years Until Retirement → Save.
+    <div id="coast-detail" style="font-size:0.68rem;color:var(--text-secondary);line-height:1.4;">
+      ⚙️ <strong>Setup:</strong> Click Settings → enter Retirement Goal ($) + Years Until Retirement → Save.
     </div>
   </div>
 
 </div>
-<div class="utility-buttons-grid" style="position:relative;z-index:2;">
+<!-- Utility buttons also OUTSIDE portfolio-summary -->
+<div class="utility-buttons-grid">
 <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
 <button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
 <div class="import-wrapper">
@@ -3152,9 +3154,6 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
 <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
 <button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
-</div>
-</div>
-</div><!-- end portfolio-summary -->
 <div class="search-section">
 <div class="input-wrapper">
 <input class="search-input" id="stockInput" placeholder="Enter stock symbol (e.g., AAPL)" type="text"/>
