@@ -15546,7 +15546,7 @@ window.submitPortfolioQuestion = async function() {
       const unrealPct = costBasis > 0 ? (unrealPL/costBasis)*100 : 0;
       const divTotal  = (item.dividends||[]).reduce((s,d)=>s+(parseFloat(d.totalAmount)||0),0);
       const todayChg  = item.changePercent ?? item.percentChange ?? 0;
-      const sector    = item.sector || item.finnhubSector || 'Unknown';
+      const sector    = item.industry || item.sector || item.finnhubSector || item.gsector || 'Unknown';
       const line = `${item.symbol} (${sector}): ${shares.toFixed(3)} shares @ ${fc(item.price)} | cost/sh ${fc(costPerSh)} | cost basis ${fc(costBasis)} | current value ${fc(currentVal)} | unrealized P/L ${fc(unrealPL)} | unrealized % ${unrealPct.toFixed(1)}% | today ${todayChg>=0?'+':''}${todayChg.toFixed(2)}% | dividends ${fc(divTotal)}`;
       return { line, unrealPL, unrealPct };
     });
@@ -15566,6 +15566,22 @@ window.submitPortfolioQuestion = async function() {
     const startVal = portHist.length>0?Number(portHist[0].value||0):totalCost;
     const ret30d = startVal>0?((totalVal-startVal)/startVal*100).toFixed(2):null;
 
+    // Build sector breakdown using same logic as the Snapshot panel
+    const sectorMap = {};
+    allItems.forEach(item => {
+      const st  = calcStats(item);
+      const val = (st.totalSharesOwned||0) * (item.price||0);
+      if (val <= 0) return;
+      const sec = item.industry || item.sector || item.finnhubSector || item.gsector || 'Unknown';
+      sectorMap[sec] = (sectorMap[sec]||0) + val;
+    });
+    const sectorTotal = Object.values(sectorMap).reduce((s,v)=>s+v,0);
+    const sectorBreakdown = Object.entries(sectorMap)
+      .sort((a,b)=>b[1]-a[1])
+      .map(([sec,val])=>`${sec}: ${fc(val)} (${sectorTotal>0?(val/sectorTotal*100).toFixed(1):0}%)`)
+      .join('\n');
+    const hasRealSectors = Object.keys(sectorMap).some(s => s !== 'Unknown');
+
     const systemPrompt = `You are a personal financial analyst AI with direct access to the user's live portfolio data. The data below is GROUND TRUTH — computed directly from their transaction records using FIFO accounting. Always use these exact numbers. Never guess or use prior knowledge about stock prices. Do not use markdown bold (**) in your response. IMPORTANT: When asked about "highest gain" or "best performer", always answer BOTH by dollar amount AND by percentage, since they often have different winners. Label them clearly: "By dollar gain: X" and "By percentage gain: Y". Be concise (under 180 words).
 
 PORTFOLIO SNAPSHOT (as of ${new Date().toLocaleDateString()}):
@@ -15575,6 +15591,9 @@ Total Unrealized P/L: ${fc(totalVal-totalCost)} (${totalCost>0?((totalVal-totalC
 Total Dividends Received: ${fc(totalDivs)}
 ${ret30d!==null?`30-Day Return: ${ret30d}%`:''}
 Number of Holdings: ${allItems.length}
+
+SECTOR BREAKDOWN${hasRealSectors ? '' : ' (sector data not yet loaded — run Live Update to fetch)'}:
+${sectorBreakdown || 'No sector data available'}
 
 HOLDINGS DETAIL (sorted by unrealized P/L % descending — first entry = highest gainer):
 ${holdingsSummary}
