@@ -2826,6 +2826,32 @@ body.dark-mode .modal-content {
 }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+<style id="settings-btn-clickable-fix">
+/* Force all interactive elements inside portfolio-summary above all overlays */
+#portfolio-summary .utility-buttons-grid,
+#portfolio-summary .utility-buttons-grid *,
+#portfolio-summary #san-fire-row,
+#portfolio-summary #san-fire-row * {
+  position: relative;
+  z-index: 10;
+}
+/* Also explicitly ensure the summary card itself doesn't create
+   a stacking context that traps our buttons below the ::before overlay */
+#portfolio-summary.portfolio-summary {
+  isolation: isolate;
+}
+#portfolio-summary.portfolio-summary::before {
+  z-index: 0 !important;
+  pointer-events: none !important;
+}
+#portfolio-summary .portfolio-inner,
+#portfolio-summary .utility-buttons-grid,
+#portfolio-summary #san-fire-row {
+  z-index: 1;
+  position: relative;
+}
+</style>
 </head>
 <body>
 <!-- 
