@@ -22,15 +22,11 @@
 <!-- Register Service Worker -->
 <script>
   if ('serviceWorker' in navigator) {
-    // Only register on GitHub Pages — skip on local/preview environments
-    const isGitHubPages = location.hostname.endsWith('github.io') || location.hostname.endsWith('github.com');
-    if (isGitHubPages) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js')
-          .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
-          .catch(err => console.warn('[PWA] Service Worker failed:', err));
-      });
-    }
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
+        .catch(err => console.warn('[PWA] Service Worker failed:', err));
+    });
   }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -2826,32 +2822,6 @@ body.dark-mode .modal-content {
 }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-
-<style id="settings-btn-clickable-fix">
-/* Force all interactive elements inside portfolio-summary above all overlays */
-#portfolio-summary .utility-buttons-grid,
-#portfolio-summary .utility-buttons-grid *,
-#portfolio-summary #san-fire-row,
-#portfolio-summary #san-fire-row * {
-  position: relative;
-  z-index: 10;
-}
-/* Also explicitly ensure the summary card itself doesn't create
-   a stacking context that traps our buttons below the ::before overlay */
-#portfolio-summary.portfolio-summary {
-  isolation: isolate;
-}
-#portfolio-summary.portfolio-summary::before {
-  z-index: 0 !important;
-  pointer-events: none !important;
-}
-#portfolio-summary .portfolio-inner,
-#portfolio-summary .utility-buttons-grid,
-#portfolio-summary #san-fire-row {
-  z-index: 1;
-  position: relative;
-}
-</style>
 </head>
 <body>
 <!-- 
@@ -3062,6 +3032,23 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-badge">Realized P/L: <span class="summary-value" id="total-pl-realized">$0.00</span></div>
 <button class="summary-toggle" id="toggle-ah-btn" type="button">🌑 Show After-Hours</button>
 </div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+  <div style="flex:1;min-width:180px;padding:8px 12px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
+    <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:3px;">😴 Sleep-at-Night Index <span title="Score 0-100: low portfolio volatility + high dividend income = high score = sleep easy" style="cursor:help;opacity:0.7;">(?)</span></div>
+    <div id="san-value" style="font-size:0.95rem;font-weight:800;color:#27ae60;">--</div>
+    <div id="san-detail" style="font-size:0.62rem;color:rgba(255,255,255,0.5);margin-top:1px;">Hit Live Update to calculate</div>
+  </div>
+  <div style="flex:1;min-width:180px;padding:8px 12px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
+    <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:3px;">🏖 Coast FIRE Progress <span title="How close your portfolio is to never needing another contribution — set goal in Settings" style="cursor:help;opacity:0.7;">(?)</span></div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+      <div style="flex:1;background:rgba(0,0,0,0.3);border-radius:999px;height:7px;overflow:hidden;">
+        <div id="coast-bar" style="height:100%;border-radius:999px;background:#3498db;width:0%;transition:width 0.8s;"></div>
+      </div>
+      <span id="coast-pct" style="font-size:0.8rem;font-weight:800;color:rgba(255,255,255,0.9);min-width:36px;text-align:right;">--%</span>
+    </div>
+    <div id="coast-detail" style="font-size:0.62rem;color:rgba(255,255,255,0.5);">Set goal in ⚙️ Settings</div>
+  </div>
+</div>
 </div>
 <div class="summary-grid">
 <div class="summary-item">
@@ -3090,44 +3077,6 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 </div>
 </div>
-</div><!-- end portfolio-summary -->
-<!-- Sleep-at-Night Index + Coast FIRE — OUTSIDE portfolio-summary -->
-<div id="san-fire-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
-
-  <!-- Sleep-at-Night -->
-  <div style="flex:1;min-width:220px;padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-      <span style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">😴 Sleep-at-Night Index</span>
-      <span title="Score 0–100 combining your portfolio volatility and dividend income. Low volatility + high dividends = high score = sleep easy. Needs 10+ days of history to show volatility score."
-        style="font-size:0.65rem;color:var(--text-secondary);cursor:help;border:1px solid var(--border-color);border-radius:999px;padding:1px 6px;">?</span>
-    </div>
-    <div id="san-value" style="font-size:1.05rem;font-weight:800;color:var(--color-positive,#27ae60);margin-bottom:4px;">--</div>
-    <div id="san-detail" style="font-size:0.68rem;color:var(--text-secondary);line-height:1.4;">Hit 🔄 Live Update to calculate</div>
-    <div style="font-size:0.62rem;color:var(--text-secondary);margin-top:5px;border-top:1px solid var(--border-color);padding-top:5px;">
-      🟢 75+ Peaceful · 🟡 50+ Moderate · 🟠 25+ Restless · 🔴 Alarming
-    </div>
-  </div>
-
-  <!-- Coast FIRE -->
-  <div style="flex:1;min-width:220px;padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-      <span style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">🏖 Coast FIRE Progress</span>
-      <span title="The $ amount your portfolio needs TODAY so it can grow to your retirement goal purely from 9% compound growth — with zero new contributions needed. Setup: ⚙️ Settings → enter Retirement Goal + Years Until Retirement."
-        style="font-size:0.65rem;color:var(--text-secondary);cursor:help;border:1px solid var(--border-color);border-radius:999px;padding:1px 6px;">?</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
-      <div style="flex:1;background:var(--bg-tertiary);border-radius:999px;height:10px;overflow:hidden;">
-        <div id="coast-bar" style="height:100%;border-radius:999px;background:#3498db;width:0%;transition:width 0.8s ease;"></div>
-      </div>
-      <span id="coast-pct" style="font-size:0.85rem;font-weight:800;color:var(--text-primary);min-width:40px;text-align:right;">--%</span>
-    </div>
-    <div id="coast-detail" style="font-size:0.68rem;color:var(--text-secondary);line-height:1.4;">
-      ⚙️ <strong>Setup:</strong> Click Settings → enter Retirement Goal ($) + Years Until Retirement → Save.
-    </div>
-  </div>
-
-</div>
-<!-- Utility buttons also OUTSIDE portfolio-summary -->
 <div class="utility-buttons-grid">
 <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
 <button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
@@ -3154,6 +3103,9 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
 <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
 <button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
+</div>
+</div>
+</div><!-- end portfolio-summary -->
 <div class="search-section">
 <div class="input-wrapper">
 <input class="search-input" id="stockInput" placeholder="Enter stock symbol (e.g., AAPL)" type="text"/>
@@ -3363,11 +3315,11 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <button class="add-btn btn-danger" id="sign-out-other-sessions-btn">🔒 Sign Out on All Other Devices</button>
 </div>
 <div class="transaction-input-group">
-<label for="modal-retirement-goal">🏖 Retirement Goal ($) — for Coast FIRE tracker:</label>
-<input class="search-input" id="modal-retirement-goal" placeholder="e.g. 2400000" type="number"/>
+<label>🏖 Retirement Goal ($) — for Coast FIRE tracker:</label>
+<input class="search-input" id="modal-retirement-goal" placeholder="e.g. 2,400,000" type="text" inputmode="numeric"/>
 </div>
 <div class="transaction-input-group">
-<label for="modal-years-to-retirement">⏳ Years Until Retirement — for Coast FIRE tracker:</label>
+<label>⏳ Years Until Retirement — for Coast FIRE tracker:</label>
 <input class="search-input" id="modal-years-to-retirement" placeholder="e.g. 25" type="number" min="1" max="50"/>
 </div>
 <button class="add-btn" id="modal-save-settings-btn">Save Settings</button>
@@ -4300,7 +4252,6 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 }
                 this.apiService = new ApiService(this.config);
                 this.cacheDOMElements();
-                // Load Coast FIRE settings from localStorage
                 this.config.retirementGoal = parseFloat(localStorage.getItem('coastFireGoal')) || 0;
                 this.config.yearsToRetirement = parseFloat(localStorage.getItem('coastFireYears')) || 25;
                 this.setupEventListeners();
@@ -5564,118 +5515,61 @@ renderPortfolioSummary() {
                 const chartValueEl = document.getElementById('chart-current-value');
                 if (chartValueEl) {
                     chartValueEl.textContent = this.formatCurrency(combinedMetrics.totalCurrentValue);
-                    // Also update its color based on today's P/L
                     chartValueEl.classList.remove('positive', 'negative');
                     chartValueEl.classList.add(totalPLTodayFinal >= 0 ? 'positive' : 'negative');
                 }
+
                 // ── Sleep-at-Night Index ──
-                // ── Sleep-at-Night Index ──
-                // Score 0-100: combines portfolio volatility + dividend income cushion.
-                // Low volatility + high dividends = high score = sleep well.
                 {
-                    const sanEl     = document.getElementById('san-value');
-                    const sanDetail = document.getElementById('san-detail');
-                    const _hist     = this.portfolioHistory || [];
-                    const _totalVal = combinedMetrics.totalCurrentValue || 0;
-                    const _annDiv   = combinedMetrics.totalDividends || 0;
-                    const fc2 = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
-
-                    let volScore = 25; // default middle if no history
-                    let divScore = 0;
-                    let details  = [];
-                    let hasVol   = false;
-
-                    // Volatility component — needs 10+ days of portfolio history
-                    if (_hist.length >= 10) {
-                        const vals    = _hist.map(h => h.value);
-                        const dlyPcts = [];
-                        for (let i = 1; i < vals.length; i++) {
-                            if (vals[i-1] > 0) dlyPcts.push((vals[i] - vals[i-1]) / vals[i-1] * 100);
-                        }
-                        if (dlyPcts.length > 0) {
-                            const mean = dlyPcts.reduce((s,v) => s+v, 0) / dlyPcts.length;
-                            const vol  = Math.sqrt(dlyPcts.reduce((s,v) => s + Math.pow(v-mean,2), 0) / dlyPcts.length) * Math.sqrt(252);
-                            // vol ≤10% = full 50pts, vol ≥40% = 0pts
-                            volScore = Math.max(0, Math.min(50, 50 - (vol - 10) * 1.25));
-                            details.push('Volatility: ' + vol.toFixed(1) + '%/yr');
-                            hasVol = true;
+                    const sanEl = document.getElementById('san-value');
+                    const sanDt = document.getElementById('san-detail');
+                    const _h = this.portfolioHistory || [];
+                    const _tv = combinedMetrics.totalCurrentValue || 0;
+                    const _ad = combinedMetrics.totalDividends || 0;
+                    let volScore = 25, divScore = 0, details = [], hasVol = false;
+                    if (_h.length >= 10) {
+                        const vals = _h.map(h=>h.value);
+                        const dps = [];
+                        for (let i=1;i<vals.length;i++) if(vals[i-1]>0) dps.push((vals[i]-vals[i-1])/vals[i-1]*100);
+                        if (dps.length > 0) {
+                            const mean = dps.reduce((s,v)=>s+v,0)/dps.length;
+                            const vol = Math.sqrt(dps.reduce((s,v)=>s+Math.pow(v-mean,2),0)/dps.length)*Math.sqrt(252);
+                            volScore = Math.max(0, Math.min(50, 50-(vol-10)*1.25));
+                            details.push('Vol: '+vol.toFixed(1)+'%/yr'); hasVol = true;
                         }
                     }
-
-                    // Dividend component — annual dividends vs portfolio value
-                    if (_totalVal > 0 && _annDiv > 0) {
-                        const divYield = (_annDiv / _totalVal) * 100;
-                        // 0% = 0pts, 5%+ = full 50pts
-                        divScore = Math.min(50, divYield * 10);
-                        details.push('Dividend yield: ' + divYield.toFixed(1) + '% (' + fc2(_annDiv) + '/yr)');
+                    if (_tv>0 && _ad>0) {
+                        const dy = (_ad/_tv)*100;
+                        divScore = Math.min(50, dy*10);
+                        details.push('Div: '+dy.toFixed(1)+'%');
                     }
-
-                    const score = Math.min(100, Math.max(0, Math.round(volScore + divScore)));
-                    const label = score >= 75 ? '🟢 ' + score + ' / 100 — Peaceful'
-                                : score >= 50 ? '🟡 ' + score + ' / 100 — Moderate'
-                                : score >= 25 ? '🟠 ' + score + ' / 100 — Restless'
-                                :               '🔴 ' + score + ' / 100 — Alarming';
-
+                    const score = Math.min(100, Math.max(0, Math.round(volScore+divScore)));
+                    const label = score>=75?'🟢 '+score+' Peaceful':score>=50?'🟡 '+score+' Moderate':score>=25?'🟠 '+score+' Restless':'🔴 '+score+' Alarming';
                     if (sanEl) sanEl.textContent = label;
-                    if (sanDetail) {
-                        if (!hasVol) {
-                            sanDetail.textContent = '⏳ Needs 10+ days of history for volatility score. ' + (details.length ? details.join(' · ') : 'Hit 🔄 Live Update daily to build history.');
-                        } else {
-                            sanDetail.textContent = details.join(' · ');
-                        }
-                    }
+                    if (sanDt) sanDt.textContent = !hasVol ? '⏳ Needs 10+ days history · '+(details.join(' · ')||'') : details.join(' · ');
                 }
 
                 // ── Coast FIRE Progress ──
-                // The $ amount your portfolio needs to reach TODAY so it can grow
-                // to your retirement goal purely from compound growth — no more contributions needed.
-                // Formula: Coast Number = Goal ÷ (1.09)^YearsUntilRetirement
                 {
-                    const coastBar    = document.getElementById('coast-bar');
-                    const coastPct    = document.getElementById('coast-pct');
-                    const coastDetail = document.getElementById('coast-detail');
-                    const _currentVal = combinedMetrics.totalCurrentValue || 0;
-                    const fc = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
-
-                    // Read goal — try config first, then localStorage directly as fallback
-                    const _goal = parseFloat(
-                        (this.config && this.config.retirementGoal) ||
-                        localStorage.getItem('coastFireGoal') || 0
-                    );
-                    const _years = parseFloat(
-                        (this.config && this.config.yearsToRetirement) ||
-                        localStorage.getItem('coastFireYears') || 25
-                    );
-
-                    if (!_goal || _goal <= 0) {
-                        if (coastPct)    coastPct.textContent = '--';
-                        if (coastDetail) coastDetail.innerHTML =
-                            '⚙️ <strong>Setup required:</strong> Click Settings → enter Retirement Goal ($) + Years Until Retirement → Save.';
+                    const cBar = document.getElementById('coast-bar');
+                    const cPct = document.getElementById('coast-pct');
+                    const cDet = document.getElementById('coast-detail');
+                    const _cv = combinedMetrics.totalCurrentValue || 0;
+                    const _g  = parseFloat((this.config&&this.config.retirementGoal)||localStorage.getItem('coastFireGoal')||0);
+                    const _y  = parseFloat((this.config&&this.config.yearsToRetirement)||localStorage.getItem('coastFireYears')||25);
+                    const fc  = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
+                    if (!_g || _g<=0) {
+                        if (cDet) cDet.textContent = 'Set goal in ⚙️ Settings → Retirement Goal ($)';
                         return;
                     }
-
-                    const coastNumber = _goal / Math.pow(1.09, _years);
-                    const pct         = Math.min(200, (_currentVal / coastNumber) * 100);
-                    const reached     = pct >= 100;
-
-                    if (coastBar) {
-                        coastBar.style.width      = Math.min(100, pct).toFixed(1) + '%';
-                        coastBar.style.background = reached ? '#27ae60' : (pct >= 75 ? '#f39c12' : '#3498db');
-                    }
-                    if (coastPct) {
-                        coastPct.textContent  = pct.toFixed(0) + '%';
-                        coastPct.style.color  = reached ? '#27ae60' : 'rgba(226,232,240,0.9)';
-                        coastPct.style.fontWeight = '800';
-                    }
-                    if (coastDetail) {
-                        if (reached) {
-                            coastDetail.textContent = '🎉 Coast FIRE reached! ' + fc(_currentVal) + ' will grow to ' + fc(_goal) + ' in ' + _years + 'yrs @ 9% with zero new contributions.';
-                            coastDetail.style.color = '#27ae60';
-                        } else {
-                            const gap = coastNumber - _currentVal;
-                            coastDetail.textContent = 'Need ' + fc(coastNumber) + ' to coast to ' + fc(_goal) + ' in ' + _years + 'yrs. Gap: ' + fc(gap) + ' more needed.';
-                            coastDetail.style.color = 'rgba(226,232,240,0.6)';
-                        }
+                    const coastNum = _g / Math.pow(1.09, _y);
+                    const pct = Math.min(200, (_cv/coastNum)*100);
+                    const reached = pct >= 100;
+                    if (cBar) { cBar.style.width=Math.min(100,pct).toFixed(1)+'%'; cBar.style.background=reached?'#27ae60':pct>=75?'#f39c12':'#3498db'; }
+                    if (cPct) { cPct.textContent=pct.toFixed(0)+'%'; cPct.style.color=reached?'#27ae60':'rgba(255,255,255,0.9)'; }
+                    if (cDet) {
+                        if (reached) { cDet.textContent='🎉 Coast FIRE reached! Portfolio grows to '+fc(_g)+' in '+_y+'yrs with no new contributions.'; cDet.style.color='#27ae60'; }
+                        else { cDet.textContent=fc(_cv)+' of '+fc(coastNum)+' needed → gap: '+fc(coastNum-_cv); cDet.style.color='rgba(255,255,255,0.5)'; }
                     }
                 }
             }
@@ -7606,7 +7500,10 @@ getOldestTransactionDate(item) {
                 if (this.elements.modalAlphaVantageKey) this.elements.modalAlphaVantageKey.value = this.config.alphaVantageKey;
                 if (this.elements.modalFmpKey) this.elements.modalFmpKey.value = this.config.fmpApiKey;
                 if (this.elements.modalRefreshInterval) this.elements.modalRefreshInterval.value = this.config.refreshIntervalMs / 1000;
-                if (this.elements.modalRetirementGoal) this.elements.modalRetirementGoal.value = this.config.retirementGoal || '';
+                if (this.elements.modalRetirementGoal) {
+                    const _gv = parseFloat(this.config.retirementGoal) || 0;
+                    this.elements.modalRetirementGoal.value = _gv > 0 ? _gv.toLocaleString('en-US') : '';
+                }
                 if (this.elements.modalYearsToRetirement) this.elements.modalYearsToRetirement.value = this.config.yearsToRetirement || 25;
             }
             closeSettingsModal() { if (this.elements.settingsModal) this.elements.settingsModal.style.display = 'none'; }
@@ -7641,13 +7538,12 @@ getOldestTransactionDate(item) {
 
                 // Update local config immediately so app uses new keys even if Firestore fails
                 this.config.finnhubApiKey = finnhubKey;
-                // Save Coast FIRE settings
-                const retirementGoal = this.elements.modalRetirementGoal ? parseFloat(this.elements.modalRetirementGoal.value) || 0 : 0;
-                const yearsToRetirement = this.elements.modalYearsToRetirement ? parseFloat(this.elements.modalYearsToRetirement.value) || 25 : 25;
-                this.config.retirementGoal = retirementGoal;
-                this.config.yearsToRetirement = yearsToRetirement;
-                localStorage.setItem('coastFireGoal', retirementGoal);
-                localStorage.setItem('coastFireYears', yearsToRetirement);
+                const _rGoal = this.elements.modalRetirementGoal ? parseFloat(this.elements.modalRetirementGoal.value.replace(/,/g,''))||0 : 0;
+                const _rYrs  = this.elements.modalYearsToRetirement ? parseFloat(this.elements.modalYearsToRetirement.value)||25 : 25;
+                this.config.retirementGoal = _rGoal;
+                this.config.yearsToRetirement = _rYrs;
+                localStorage.setItem('coastFireGoal', _rGoal);
+                localStorage.setItem('coastFireYears', _rYrs);
                 this.config.alphaVantageKey = alphaVantageKey;
                 this.config.fmpApiKey = fmpKey;
                 this.config.marketstackApiKey = marketstackKey;
@@ -13993,187 +13889,94 @@ window.renderPerfStats = function renderPerfStats() {
 
     ${(() => {
       // ── Drawdown Stress Test ──
-      const allItems2 = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
-      const totalPortVal = allItems2.reduce((s, item) => {
-        const stats = tracker.calculateTransactionStats ? tracker.calculateTransactionStats(item.transactions, item.price) : null;
-        return s + (stats ? stats.currentValue : 0);
+      const allItemsST = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
+      const totalPortVal = allItemsST.reduce((s, item) => {
+        const buys = JSON.parse(JSON.stringify((item.transactions||[]).filter(t=>t.type==='buy')));
+        const sells = (item.transactions||[]).filter(t=>t.type==='sell');
+        let shares = buys.reduce((a,b)=>a+b.shares,0) - sells.reduce((a,b)=>a+b.shares,0);
+        return s + Math.max(0, shares) * (item.price||0);
       }, 0);
-
       if (totalPortVal <= 0) return '';
-
-      const scenarios = [
-        { label: '2022 Bear Market', drop: 20, color: '#f39c12', icon: '📉' },
-        { label: '2020 COVID Crash', drop: 34, color: '#e67e22', icon: '🦠' },
-        { label: '2008 Financial Crisis', drop: 57, color: '#e74c3c', icon: '🏦' },
-        { label: 'Dot-Com Bust (2000)', drop: 49, color: '#c0392b', icon: '💻' },
-      ];
-
       const fc = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
-
+      const scenarios = [
+        {label:'2022 Bear Market',      drop:20, color:'#f39c12', icon:'📉'},
+        {label:'2020 COVID Crash',      drop:34, color:'#e67e22', icon:'🦠'},
+        {label:'2008 Financial Crisis', drop:57, color:'#e74c3c', icon:'🏦'},
+        {label:'Dot-Com Bust (2000)',   drop:49, color:'#c0392b', icon:'💻'},
+      ];
       const rows = scenarios.map(s => {
-        const loss    = totalPortVal * s.drop / 100;
-        const remain  = totalPortVal - loss;
-        const barPct  = s.drop;
+        const loss = totalPortVal * s.drop / 100;
+        const remain = totalPortVal - loss;
         return `<div style="margin-bottom:10px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
             <span style="font-size:0.75rem;font-weight:700;">${s.icon} ${s.label} (-${s.drop}%)</span>
             <span style="font-size:0.75rem;color:${s.color};font-weight:800;">-${fc(loss)}</span>
           </div>
-          <div style="background:var(--bg-tertiary);border-radius:4px;height:10px;overflow:hidden;margin-bottom:3px;">
-            <div style="width:${barPct}%;height:100%;background:${s.color};border-radius:4px;transition:width 0.6s;"></div>
+          <div style="background:var(--bg-tertiary);border-radius:4px;height:10px;overflow:hidden;margin-bottom:2px;">
+            <div style="width:${s.drop}%;height:100%;background:${s.color};border-radius:4px;"></div>
           </div>
-          <div style="font-size:0.68rem;color:var(--text-secondary);">Portfolio would drop to <strong style="color:var(--text-primary);">${fc(remain)}</strong></div>
+          <div style="font-size:0.68rem;color:var(--text-secondary);">Drops to <strong style="color:var(--text-primary);">${fc(remain)}</strong></div>
         </div>`;
       }).join('');
-
-      return `
-        <div style="margin-top:16px;padding:14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
-          <div style="font-size:0.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">
-            🧨 Drawdown Stress Test <span style="font-weight:400;font-size:0.68rem;">— based on ${fc(totalPortVal)} current value</span>
-          </div>
-          ${rows}
-          <p style="font-size:0.65rem;color:var(--text-secondary);margin-top:8px;border-top:1px solid var(--border-color);padding-top:8px;">
-            Historical market drawdowns applied to current portfolio value. Actual losses depend on your specific holdings and their beta vs the index. For illustration only.
-          </p>
-        </div>`;
+      return `<div style="margin-top:16px;padding:14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
+        <div style="font-size:0.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">
+          🧨 Drawdown Stress Test <span style="font-weight:400;font-size:0.68rem;">— based on ${fc(totalPortVal)} current value</span>
+        </div>${rows}
+        <p style="font-size:0.65rem;color:var(--text-secondary);margin-top:8px;border-top:1px solid var(--border-color);padding-top:8px;">Historical market drawdowns applied to current portfolio value. For illustration only.</p>
+      </div>`;
     })()}
-
     ${(() => {
       // ── Tax-Loss Harvesting Alert ──
-      const allItems3 = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
+      const allItemsTL = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
       const opportunities = [];
-
-      allItems3.forEach(item => {
+      allItemsTL.forEach(item => {
         if (!item.price || !item.transactions) return;
-        const buys = JSON.parse(JSON.stringify(
-          (item.transactions||[]).filter(t=>t.type==='buy').sort((a,b)=>new Date(a.date)-new Date(b.date))
-        ));
+        const buys = JSON.parse(JSON.stringify((item.transactions||[]).filter(t=>t.type==='buy').sort((a,b)=>new Date(a.date)-new Date(b.date))));
         const sells = (item.transactions||[]).filter(t=>t.type==='sell');
-
-        // Apply FIFO to find remaining lots
-        sells.forEach(sell => {
-          let need = sell.shares;
-          for (const lot of buys) {
-            if (need <= 0) break;
-            const u = Math.min(need, lot.shares); lot.shares -= u; need -= u;
-          }
-        });
-
-        // Check remaining lots for unrealized losses
-        buys.forEach((lot, idx) => {
+        sells.forEach(sell => { let need=sell.shares; for(const lot of buys){if(need<=0)break;const u=Math.min(need,lot.shares);lot.shares-=u;need-=u;} });
+        buys.forEach((lot,idx) => {
           if (lot.shares <= 0) return;
-          const currentVal = lot.shares * item.price;
-          const costVal    = lot.shares * lot.price;
-          const unrealLoss = currentVal - costVal;
-          if (unrealLoss < -100) { // only flag losses > $100
-            // Robust date parse for holdDays — same logic as display formatter
-            const _parseDate = (s) => {
-              if (!s) return null;
-              s = String(s).trim();
-              if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T12:00:00');
-              if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
-                const [mo,da,yr] = s.split('/');
-                return new Date(parseInt(yr), parseInt(mo)-1, parseInt(da));
-              }
-              if (/^\d{10,13}$/.test(s)) return new Date(s.length===13?parseInt(s):parseInt(s)*1000);
-              const d = new Date(s); return isNaN(d) ? null : d;
-            };
-            const _lotDate = _parseDate(lot.date);
-            const holdDays = _lotDate ? Math.round((Date.now() - _lotDate) / 86400000) : 0;
-            const isLongTerm = holdDays >= 366;
-            opportunities.push({
-              symbol: item.symbol,
-              lot: idx + 1,
-              shares: lot.shares,
-              costBasis: lot.price,
-              currentPrice: item.price,
-              unrealLoss,
-              holdDays,
-              isLongTerm,
-              lotDate: lot.date,
-            });
+          const unrealLoss = lot.shares*item.price - lot.shares*lot.price;
+          if (unrealLoss < -100) {
+            const _ps = (s) => { s=String(s).trim(); if(/^\d{4}-\d{2}-\d{2}$/.test(s))return new Date(s+'T12:00:00'); if(/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)){const[mo,da,yr]=s.split('/');return new Date(parseInt(yr),parseInt(mo)-1,parseInt(da));} const d=new Date(s);return isNaN(d)?null:d; };
+            const _ld = _ps(lot.date);
+            const holdDays = _ld ? Math.round((Date.now()-_ld)/86400000) : 0;
+            const lotDateStr = _ld ? _ld.toLocaleDateString() : 'Unknown';
+            opportunities.push({symbol:item.symbol,lot:idx+1,shares:lot.shares,costBasis:lot.price,currentPrice:item.price,unrealLoss,holdDays,isLongTerm:holdDays>=366,lotDateStr});
           }
         });
       });
-
-      if (opportunities.length === 0) {
-        return `<div style="margin-top:16px;padding:12px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
-          <div style="font-size:0.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">🌿 Tax-Loss Harvesting</div>
-          <p style="font-size:0.78rem;color:var(--color-positive,#27ae60);">✅ No harvesting opportunities right now — all lots are at a gain or loss is under $100.</p>
-        </div>`;
-      }
-
       const fc = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2}).format(n);
-      const totalHarvestable = opportunities.reduce((s,o)=>s+Math.abs(o.unrealLoss), 0);
-
-      const rows = opportunities
-        .sort((a,b) => a.unrealLoss - b.unrealLoss) // worst losses first
-        .slice(0, 8) // cap at 8
-        .map(o => `
-          <tr>
-            <td style="padding:6px 8px;font-weight:700;color:var(--text-primary);">${o.symbol}</td>
-            <td style="padding:6px 8px;color:var(--text-secondary);">Lot #${o.lot} · ${(() => {
-              if (!o.lotDate) return 'Unknown';
-              // Robust date parser — handles YYYY-MM-DD, MM/DD/YYYY, timestamps, etc.
-              let d;
-              const s = String(o.lotDate).trim();
-              // Already a clean ISO date YYYY-MM-DD
-              if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-                d = new Date(s + 'T12:00:00');
-              // MM/DD/YYYY or M/D/YYYY
-              } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
-                const [mo,da,yr] = s.split('/');
-                d = new Date(parseInt(yr), parseInt(mo)-1, parseInt(da));
-              // Timestamp number
-              } else if (/^\d{10,13}$/.test(s)) {
-                d = new Date(s.length === 13 ? parseInt(s) : parseInt(s)*1000);
-              } else {
-                // Fallback — let JS try
-                d = new Date(s);
-              }
-              return isNaN(d) ? s : d.toLocaleDateString();
-            })()}</td>
-            <td style="padding:6px 8px;text-align:right;">${o.shares.toFixed(3)}</td>
-            <td style="padding:6px 8px;text-align:right;">${fc(o.costBasis)} → ${fc(o.currentPrice)}</td>
-            <td style="padding:6px 8px;text-align:right;color:var(--color-negative,#e74c3c);font-weight:700;">${fc(o.unrealLoss)}</td>
-            <td style="padding:6px 8px;text-align:center;">
-              <span style="padding:2px 8px;border-radius:999px;font-size:0.65rem;font-weight:700;
-                background:${o.isLongTerm?'rgba(52,152,219,0.12)':'rgba(231,76,60,0.10)'};
-                color:${o.isLongTerm?'#3498db':'#e74c3c'};">
-                ${o.isLongTerm ? 'Long-term' : 'Short-term'}
-              </span>
-            </td>
-          </tr>`).join('');
-
-      return `
-        <div style="margin-top:16px;padding:14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
-            <div style="font-size:0.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;">
-              🌿 Tax-Loss Harvesting Opportunities
-            </div>
-            <div style="font-size:0.8rem;font-weight:800;color:var(--color-positive,#27ae60);">
-              Up to ${fc(totalHarvestable)} harvestable
-            </div>
-          </div>
-          <div style="overflow-x:auto;">
-            <table style="border-collapse:collapse;width:100%;font-size:0.75rem;">
-              <thead>
-                <tr style="border-bottom:1px solid var(--border-color);">
-                  <th style="padding:5px 8px;text-align:left;color:var(--text-secondary);font-weight:600;">Symbol</th>
-                  <th style="padding:5px 8px;text-align:left;color:var(--text-secondary);font-weight:600;">Lot / Date</th>
-                  <th style="padding:5px 8px;text-align:right;color:var(--text-secondary);font-weight:600;">Shares</th>
-                  <th style="padding:5px 8px;text-align:right;color:var(--text-secondary);font-weight:600;">Cost → Current</th>
-                  <th style="padding:5px 8px;text-align:right;color:var(--text-secondary);font-weight:600;">Unrealized Loss</th>
-                  <th style="padding:5px 8px;text-align:center;color:var(--text-secondary);font-weight:600;">Term</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-          <p style="font-size:0.65rem;color:var(--text-secondary);margin-top:10px;padding-top:8px;border-top:1px solid var(--border-color);">
-            ⚠️ Selling these lots could offset capital gains elsewhere. Watch the <strong>30-day wash-sale rule</strong> — don't re-buy the same ticker within 30 days of harvesting. Consult a tax advisor.
-          </p>
-        </div>`;
+      if (opportunities.length === 0) return `<div style="margin-top:16px;padding:12px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
+        <div style="font-size:0.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">🌿 Tax-Loss Harvesting</div>
+        <p style="font-size:0.78rem;color:var(--color-positive,#27ae60);">✅ No opportunities — all lots are at a gain or loss under $100.</p></div>`;
+      const total = opportunities.reduce((s,o)=>s+Math.abs(o.unrealLoss),0);
+      const rows = opportunities.sort((a,b)=>a.unrealLoss-b.unrealLoss).slice(0,8).map(o=>`<tr>
+        <td style="padding:5px 8px;font-weight:700;">${o.symbol}</td>
+        <td style="padding:5px 8px;color:var(--text-secondary);">Lot #${o.lot} · ${o.lotDateStr}</td>
+        <td style="padding:5px 8px;text-align:right;">${o.shares.toFixed(3)}</td>
+        <td style="padding:5px 8px;text-align:right;">${fc(o.costBasis)} → ${fc(o.currentPrice)}</td>
+        <td style="padding:5px 8px;text-align:right;color:var(--color-negative,#e74c3c);font-weight:700;">${fc(o.unrealLoss)}</td>
+        <td style="padding:5px 8px;text-align:center;"><span style="padding:2px 7px;border-radius:999px;font-size:0.65rem;font-weight:700;background:${o.isLongTerm?'rgba(52,152,219,0.12)':'rgba(231,76,60,0.10)'};color:${o.isLongTerm?'#3498db':'#e74c3c'};">${o.isLongTerm?'Long':'Short'}</span></td>
+      </tr>`).join('');
+      return `<div style="margin-top:16px;padding:14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
+          <div style="font-size:0.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;">🌿 Tax-Loss Harvesting Opportunities</div>
+          <div style="font-size:0.8rem;font-weight:800;color:var(--color-positive,#27ae60);">Up to ${fc(total)} harvestable</div>
+        </div>
+        <div style="overflow-x:auto;"><table style="border-collapse:collapse;width:100%;font-size:0.75rem;">
+          <thead><tr style="border-bottom:1px solid var(--border-color);">
+            <th style="padding:5px 8px;text-align:left;color:var(--text-secondary);font-weight:600;">Symbol</th>
+            <th style="padding:5px 8px;text-align:left;color:var(--text-secondary);font-weight:600;">Lot / Date</th>
+            <th style="padding:5px 8px;text-align:right;color:var(--text-secondary);font-weight:600;">Shares</th>
+            <th style="padding:5px 8px;text-align:right;color:var(--text-secondary);font-weight:600;">Cost → Current</th>
+            <th style="padding:5px 8px;text-align:right;color:var(--text-secondary);font-weight:600;">Unrealized Loss</th>
+            <th style="padding:5px 8px;text-align:center;color:var(--text-secondary);font-weight:600;">Term</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+        <p style="font-size:0.65rem;color:var(--text-secondary);margin-top:10px;padding-top:8px;border-top:1px solid var(--border-color);">⚠️ Selling these lots offsets capital gains. Avoid re-buying same ticker within 30 days (wash-sale rule). Consult a tax advisor.</p>
+      </div>`;
     })()}
   `;
 };
@@ -14693,5 +14496,41 @@ window.stToggleNextDividend = async function(id, symbol) {
 })();
 </script>
 
+
+<script id="comma-input-formatter">
+// Live comma formatting for the retirement goal input
+(function() {
+  function attachCommaFormatter(inputId) {
+    var el = document.getElementById(inputId);
+    if (!el) return;
+    el.addEventListener('input', function() {
+      var pos   = this.selectionStart;
+      var raw   = this.value.replace(/[^0-9]/g, '');
+      if (raw === '') { this.value = ''; return; }
+      var formatted = parseInt(raw, 10).toLocaleString('en-US');
+      var diff = formatted.length - this.value.length;
+      this.value = formatted;
+      // Restore cursor position accounting for added commas
+      try { this.setSelectionRange(pos + diff, pos + diff); } catch(e) {}
+    });
+    el.addEventListener('blur', function() {
+      var raw = this.value.replace(/[^0-9]/g, '');
+      if (raw) this.value = parseInt(raw, 10).toLocaleString('en-US');
+    });
+  }
+
+  // Attach when settings modal opens (button may not exist at DOMContentLoaded)
+  document.addEventListener('click', function(e) {
+    if (e.target && (e.target.id === 'settingsBtn' || e.target.closest('#settingsBtn'))) {
+      setTimeout(function() { attachCommaFormatter('modal-retirement-goal'); }, 100);
+    }
+  });
+
+  // Also try on DOMContentLoaded in case modal is already in DOM
+  document.addEventListener('DOMContentLoaded', function() {
+    attachCommaFormatter('modal-retirement-goal');
+  });
+})();
+</script>
 </body>
 </html>
