@@ -4,6 +4,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -21,11 +22,15 @@
 <!-- Register Service Worker -->
 <script>
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js')
-        .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
-        .catch(err => console.warn('[PWA] Service Worker failed:', err));
-    });
+    // Only register on GitHub Pages — skip on local/preview environments
+    const isGitHubPages = location.hostname.endsWith('github.io') || location.hostname.endsWith('github.com');
+    if (isGitHubPages) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
+          .catch(err => console.warn('[PWA] Service Worker failed:', err));
+      });
+    }
   }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -3031,6 +3036,24 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-badge">Realized P/L: <span class="summary-value" id="total-pl-realized">$0.00</span></div>
 <button class="summary-toggle" id="toggle-ah-btn" type="button">🌑 Show After-Hours</button>
 </div>
+<!-- Sleep-at-Night Index + Coast FIRE row -->
+<div id="san-fire-row" style="display:none;margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+  <div style="flex:1;min-width:200px;padding:10px 14px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:10px;">
+    <div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">😴 Sleep-at-Night Index</div>
+    <div id="san-value" style="font-size:1.1rem;font-weight:800;color:var(--color-positive,#27ae60);">--</div>
+    <div id="san-detail" style="font-size:0.68rem;color:var(--text-secondary);margin-top:2px;">Refreshes with live update</div>
+  </div>
+  <div style="flex:1;min-width:200px;padding:10px 14px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:10px;">
+    <div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">🏖 Coast FIRE Progress</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <div style="flex:1;background:var(--bg-secondary);border-radius:999px;height:8px;overflow:hidden;">
+        <div id="coast-bar" style="height:100%;border-radius:999px;background:var(--color-positive,#27ae60);width:0%;transition:width 0.6s ease;"></div>
+      </div>
+      <span id="coast-pct" style="font-size:0.8rem;font-weight:800;color:var(--color-positive,#27ae60);min-width:36px;text-align:right;">0%</span>
+    </div>
+    <div id="coast-detail" style="font-size:0.68rem;color:var(--text-secondary);">Set your goal in Settings → Retirement Goal ($)</div>
+  </div>
+</div>
 </div>
 <div class="summary-grid">
 <div class="summary-item">
@@ -3295,6 +3318,14 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="transaction-input-group">
 <label for="sign-out-other-sessions-btn">Security:</label>
 <button class="add-btn btn-danger" id="sign-out-other-sessions-btn">🔒 Sign Out on All Other Devices</button>
+</div>
+<div class="transaction-input-group">
+<label for="modal-retirement-goal">🏖 Retirement Goal ($) — for Coast FIRE tracker:</label>
+<input class="search-input" id="modal-retirement-goal" placeholder="e.g. 2400000" type="number"/>
+</div>
+<div class="transaction-input-group">
+<label for="modal-years-to-retirement">⏳ Years Until Retirement — for Coast FIRE tracker:</label>
+<input class="search-input" id="modal-years-to-retirement" placeholder="e.g. 25" type="number" min="1" max="50"/>
 </div>
 <button class="add-btn" id="modal-save-settings-btn">Save Settings</button>
 </div>
@@ -4226,6 +4257,9 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 }
                 this.apiService = new ApiService(this.config);
                 this.cacheDOMElements();
+                // Load Coast FIRE settings from localStorage
+                this.config.retirementGoal = parseFloat(localStorage.getItem('coastFireGoal')) || 0;
+                this.config.yearsToRetirement = parseFloat(localStorage.getItem('coastFireYears')) || 25;
                 this.setupEventListeners();
                 this.applyTheme();
                 this.applyPrivacyMode();
@@ -4395,6 +4429,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     modalAlphaVantageKey: document.getElementById('modal-alpha-vantage-key'),
                     modalFmpKey: document.getElementById('modal-fmp-key'),
                     modalRefreshInterval: document.getElementById('modal-refresh-interval'),
+                    modalRetirementGoal: document.getElementById('modal-retirement-goal'),
+                    modalYearsToRetirement: document.getElementById('modal-years-to-retirement'),
                     modalSaveSettingsBtn: document.getElementById('modal-save-settings-btn'),
                     enablePushNotificationsBtn: document.getElementById('enable-push-notifications-btn'),
                     signOutOtherSessionsBtn: document.getElementById('sign-out-other-sessions-btn'),
@@ -5489,6 +5525,95 @@ renderPortfolioSummary() {
                     chartValueEl.classList.remove('positive', 'negative');
                     chartValueEl.classList.add(totalPLTodayFinal >= 0 ? 'positive' : 'negative');
                 }
+                // ── Sleep-at-Night Index ──
+                // Combines volatility (from portfolioHistory) with dividend income stability.
+                // High dividends + low volatility = green. High volatility + low dividends = red.
+                (function updateSleepAtNight() {
+                    const row = document.getElementById('san-fire-row');
+                    if (row) row.style.display = 'flex';
+                    const sanEl     = document.getElementById('san-value');
+                    const sanDetail = document.getElementById('san-detail');
+                    const hist = (tracker && tracker.portfolioHistory) ? tracker.portfolioHistory : [];
+                    const totalVal = combinedMetrics.totalCurrentValue || 0;
+                    const annualDiv = combinedMetrics.totalDividends || 0;
+
+                    let score = 50; // baseline
+                    let details = [];
+
+                    // Volatility component (lower vol = better score)
+                    if (hist.length >= 10) {
+                        const vals = hist.map(h=>h.value);
+                        const dlyPcts = [];
+                        for (let i=1;i<vals.length;i++) {
+                            if (vals[i-1]>0) dlyPcts.push((vals[i]-vals[i-1])/vals[i-1]*100);
+                        }
+                        if (dlyPcts.length > 0) {
+                            const mean = dlyPcts.reduce((s,v)=>s+v,0)/dlyPcts.length;
+                            const vol  = Math.sqrt(dlyPcts.reduce((s,v)=>s+Math.pow(v-mean,2),0)/dlyPcts.length) * Math.sqrt(252);
+                            // vol < 10% = great, vol > 40% = terrible
+                            const volScore = Math.max(0, Math.min(50, 50 - (vol - 10) * 1.25));
+                            score = volScore;
+                            details.push('Vol: ' + vol.toFixed(1) + '%/yr');
+                        }
+                    }
+
+                    // Dividend stability component (higher div yield on cost = better)
+                    if (totalVal > 0 && annualDiv > 0) {
+                        const divYield = (annualDiv / totalVal) * 100;
+                        // 0% = 0 pts, 5%+ = 50 pts
+                        const divScore = Math.min(50, divYield * 10);
+                        score += divScore;
+                        details.push('Div: ' + divYield.toFixed(1) + '%');
+                    }
+
+                    score = Math.min(100, Math.max(0, Math.round(score)));
+                    const label = score >= 75 ? '🟢 ' + score + ' — Peaceful'
+                                : score >= 50 ? '🟡 ' + score + ' — Moderate'
+                                : score >= 25 ? '🟠 ' + score + ' — Restless'
+                                :               '🔴 ' + score + ' — Alarming';
+                    if (sanEl)     sanEl.textContent = label;
+                    if (sanDetail) sanDetail.textContent = details.length ? details.join(' · ') : 'Accumulating data...';
+                })();
+
+                // ── Coast FIRE Progress ──
+                // Shows how close the portfolio is to the point where it can grow to
+                // the retirement goal with zero additional contributions.
+                (function updateCoastFire() {
+                    const coastBar    = document.getElementById('coast-bar');
+                    const coastPct    = document.getElementById('coast-pct');
+                    const coastDetail = document.getElementById('coast-detail');
+                    const currentVal  = combinedMetrics.totalCurrentValue || 0;
+
+                    // Try to read goal from config/settings
+                    const goal        = (tracker && tracker.config && tracker.config.retirementGoal)
+                                        ? parseFloat(tracker.config.retirementGoal) : 0;
+                    const yearsToRet  = (tracker && tracker.config && tracker.config.yearsToRetirement)
+                                        ? parseFloat(tracker.config.yearsToRetirement) : 25;
+                    const growthRate  = 0.09; // assume 9% annual growth
+
+                    if (!goal || goal <= 0) {
+                        if (coastDetail) coastDetail.textContent = 'Set Retirement Goal ($) in ⚙️ Settings to activate.';
+                        return;
+                    }
+
+                    // Coast FIRE number = goal / (1 + r)^years
+                    const coastNumber = goal / Math.pow(1 + growthRate, yearsToRet);
+                    const pct = Math.min(100, (currentVal / coastNumber) * 100);
+                    const reached = pct >= 100;
+
+                    if (coastBar)    { coastBar.style.width = pct.toFixed(1) + '%'; coastBar.style.background = reached ? '#27ae60' : '#3498db'; }
+                    if (coastPct)    { coastPct.textContent = pct.toFixed(0) + '%'; coastPct.style.color = reached ? 'var(--color-positive,#27ae60)' : 'var(--text-primary)'; }
+                    if (coastDetail) {
+                        const fc = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
+                        if (reached) {
+                            coastDetail.textContent = '🎉 Coast FIRE reached! Your portfolio can now grow to ' + fc(goal) + ' without another contribution.';
+                            coastDetail.style.color = 'var(--color-positive,#27ae60)';
+                        } else {
+                            coastDetail.textContent = fc(currentVal) + ' of ' + fc(coastNumber) + ' needed to coast to ' + fc(goal) + ' in ' + yearsToRet + 'yrs @ 9%';
+                            coastDetail.style.color = 'var(--text-secondary)';
+                        }
+                    }
+                })();
             }
 
             isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
@@ -7417,6 +7542,8 @@ getOldestTransactionDate(item) {
                 if (this.elements.modalAlphaVantageKey) this.elements.modalAlphaVantageKey.value = this.config.alphaVantageKey;
                 if (this.elements.modalFmpKey) this.elements.modalFmpKey.value = this.config.fmpApiKey;
                 if (this.elements.modalRefreshInterval) this.elements.modalRefreshInterval.value = this.config.refreshIntervalMs / 1000;
+                if (this.elements.modalRetirementGoal) this.elements.modalRetirementGoal.value = this.config.retirementGoal || '';
+                if (this.elements.modalYearsToRetirement) this.elements.modalYearsToRetirement.value = this.config.yearsToRetirement || 25;
             }
             closeSettingsModal() { if (this.elements.settingsModal) this.elements.settingsModal.style.display = 'none'; }
             
@@ -7450,6 +7577,13 @@ getOldestTransactionDate(item) {
 
                 // Update local config immediately so app uses new keys even if Firestore fails
                 this.config.finnhubApiKey = finnhubKey;
+                // Save Coast FIRE settings
+                const retirementGoal = this.elements.modalRetirementGoal ? parseFloat(this.elements.modalRetirementGoal.value) || 0 : 0;
+                const yearsToRetirement = this.elements.modalYearsToRetirement ? parseFloat(this.elements.modalYearsToRetirement.value) || 25 : 25;
+                this.config.retirementGoal = retirementGoal;
+                this.config.yearsToRetirement = yearsToRetirement;
+                localStorage.setItem('coastFireGoal', retirementGoal);
+                localStorage.setItem('coastFireYears', yearsToRetirement);
                 this.config.alphaVantageKey = alphaVantageKey;
                 this.config.fmpApiKey = fmpKey;
                 this.config.marketstackApiKey = marketstackKey;
@@ -13790,6 +13924,158 @@ window.renderPerfStats = function renderPerfStats() {
             <span><span style="color:#9b59b6;font-weight:700;">■</span> Negative (diversifying)</span>
             <span><span style="color:#27ae60;font-weight:700;">■</span> Strongly negative (best hedge)</span>
           </div>
+        </div>`;
+    })()}
+
+    ${(() => {
+      // ── Drawdown Stress Test ──
+      const allItems2 = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
+      const totalPortVal = allItems2.reduce((s, item) => {
+        const stats = tracker.calculateTransactionStats ? tracker.calculateTransactionStats(item.transactions, item.price) : null;
+        return s + (stats ? stats.currentValue : 0);
+      }, 0);
+
+      if (totalPortVal <= 0) return '';
+
+      const scenarios = [
+        { label: '2022 Bear Market', drop: 20, color: '#f39c12', icon: '📉' },
+        { label: '2020 COVID Crash', drop: 34, color: '#e67e22', icon: '🦠' },
+        { label: '2008 Financial Crisis', drop: 57, color: '#e74c3c', icon: '🏦' },
+        { label: 'Dot-Com Bust (2000)', drop: 49, color: '#c0392b', icon: '💻' },
+      ];
+
+      const fc = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
+
+      const rows = scenarios.map(s => {
+        const loss    = totalPortVal * s.drop / 100;
+        const remain  = totalPortVal - loss;
+        const barPct  = s.drop;
+        return `<div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-size:0.75rem;font-weight:700;">${s.icon} ${s.label} (-${s.drop}%)</span>
+            <span style="font-size:0.75rem;color:${s.color};font-weight:800;">-${fc(loss)}</span>
+          </div>
+          <div style="background:var(--bg-tertiary);border-radius:4px;height:10px;overflow:hidden;margin-bottom:3px;">
+            <div style="width:${barPct}%;height:100%;background:${s.color};border-radius:4px;transition:width 0.6s;"></div>
+          </div>
+          <div style="font-size:0.68rem;color:var(--text-secondary);">Portfolio would drop to <strong style="color:var(--text-primary);">${fc(remain)}</strong></div>
+        </div>`;
+      }).join('');
+
+      return `
+        <div style="margin-top:16px;padding:14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
+          <div style="font-size:0.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">
+            🧨 Drawdown Stress Test <span style="font-weight:400;font-size:0.68rem;">— based on ${fc(totalPortVal)} current value</span>
+          </div>
+          ${rows}
+          <p style="font-size:0.65rem;color:var(--text-secondary);margin-top:8px;border-top:1px solid var(--border-color);padding-top:8px;">
+            Historical market drawdowns applied to current portfolio value. Actual losses depend on your specific holdings and their beta vs the index. For illustration only.
+          </p>
+        </div>`;
+    })()}
+
+    ${(() => {
+      // ── Tax-Loss Harvesting Alert ──
+      const allItems3 = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
+      const opportunities = [];
+
+      allItems3.forEach(item => {
+        if (!item.price || !item.transactions) return;
+        const buys = JSON.parse(JSON.stringify(
+          (item.transactions||[]).filter(t=>t.type==='buy').sort((a,b)=>new Date(a.date)-new Date(b.date))
+        ));
+        const sells = (item.transactions||[]).filter(t=>t.type==='sell');
+
+        // Apply FIFO to find remaining lots
+        sells.forEach(sell => {
+          let need = sell.shares;
+          for (const lot of buys) {
+            if (need <= 0) break;
+            const u = Math.min(need, lot.shares); lot.shares -= u; need -= u;
+          }
+        });
+
+        // Check remaining lots for unrealized losses
+        buys.forEach((lot, idx) => {
+          if (lot.shares <= 0) return;
+          const currentVal = lot.shares * item.price;
+          const costVal    = lot.shares * lot.price;
+          const unrealLoss = currentVal - costVal;
+          if (unrealLoss < -100) { // only flag losses > $100
+            const holdDays = Math.round((Date.now() - new Date(lot.date)) / 86400000);
+            const isLongTerm = holdDays >= 366;
+            opportunities.push({
+              symbol: item.symbol,
+              lot: idx + 1,
+              shares: lot.shares,
+              costBasis: lot.price,
+              currentPrice: item.price,
+              unrealLoss,
+              holdDays,
+              isLongTerm,
+              lotDate: lot.date,
+            });
+          }
+        });
+      });
+
+      if (opportunities.length === 0) {
+        return `<div style="margin-top:16px;padding:12px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
+          <div style="font-size:0.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">🌿 Tax-Loss Harvesting</div>
+          <p style="font-size:0.78rem;color:var(--color-positive,#27ae60);">✅ No harvesting opportunities right now — all lots are at a gain or loss is under $100.</p>
+        </div>`;
+      }
+
+      const fc = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2}).format(n);
+      const totalHarvestable = opportunities.reduce((s,o)=>s+Math.abs(o.unrealLoss), 0);
+
+      const rows = opportunities
+        .sort((a,b) => a.unrealLoss - b.unrealLoss) // worst losses first
+        .slice(0, 8) // cap at 8
+        .map(o => `
+          <tr>
+            <td style="padding:6px 8px;font-weight:700;color:var(--text-primary);">${o.symbol}</td>
+            <td style="padding:6px 8px;color:var(--text-secondary);">Lot #${o.lot} · ${new Date(o.lotDate+'T12:00:00').toLocaleDateString()}</td>
+            <td style="padding:6px 8px;text-align:right;">${o.shares.toFixed(3)}</td>
+            <td style="padding:6px 8px;text-align:right;">${fc(o.costBasis)} → ${fc(o.currentPrice)}</td>
+            <td style="padding:6px 8px;text-align:right;color:var(--color-negative,#e74c3c);font-weight:700;">${fc(o.unrealLoss)}</td>
+            <td style="padding:6px 8px;text-align:center;">
+              <span style="padding:2px 8px;border-radius:999px;font-size:0.65rem;font-weight:700;
+                background:${o.isLongTerm?'rgba(52,152,219,0.12)':'rgba(231,76,60,0.10)'};
+                color:${o.isLongTerm?'#3498db':'#e74c3c'};">
+                ${o.isLongTerm ? 'Long-term' : 'Short-term'}
+              </span>
+            </td>
+          </tr>`).join('');
+
+      return `
+        <div style="margin-top:16px;padding:14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
+            <div style="font-size:0.75rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;">
+              🌿 Tax-Loss Harvesting Opportunities
+            </div>
+            <div style="font-size:0.8rem;font-weight:800;color:var(--color-positive,#27ae60);">
+              Up to ${fc(totalHarvestable)} harvestable
+            </div>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="border-collapse:collapse;width:100%;font-size:0.75rem;">
+              <thead>
+                <tr style="border-bottom:1px solid var(--border-color);">
+                  <th style="padding:5px 8px;text-align:left;color:var(--text-secondary);font-weight:600;">Symbol</th>
+                  <th style="padding:5px 8px;text-align:left;color:var(--text-secondary);font-weight:600;">Lot / Date</th>
+                  <th style="padding:5px 8px;text-align:right;color:var(--text-secondary);font-weight:600;">Shares</th>
+                  <th style="padding:5px 8px;text-align:right;color:var(--text-secondary);font-weight:600;">Cost → Current</th>
+                  <th style="padding:5px 8px;text-align:right;color:var(--text-secondary);font-weight:600;">Unrealized Loss</th>
+                  <th style="padding:5px 8px;text-align:center;color:var(--text-secondary);font-weight:600;">Term</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <p style="font-size:0.65rem;color:var(--text-secondary);margin-top:10px;padding-top:8px;border-top:1px solid var(--border-color);">
+            ⚠️ Selling these lots could offset capital gains elsewhere. Watch the <strong>30-day wash-sale rule</strong> — don't re-buy the same ticker within 30 days of harvesting. Consult a tax advisor.
+          </p>
         </div>`;
     })()}
   `;
