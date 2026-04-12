@@ -3064,23 +3064,41 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 </div>
 </div>
-<!-- Sleep-at-Night Index + Coast FIRE — placed OUTSIDE portfolio-inner to avoid flex layout conflict -->
+<!-- Sleep-at-Night Index + Coast FIRE -->
 <div id="san-fire-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-  <div style="flex:1;min-width:200px;padding:10px 14px;background:rgba(0,0,0,0.25);border:1px solid rgba(148,163,184,0.2);border-radius:10px;">
-    <div style="font-size:0.62rem;color:rgba(226,232,240,0.7);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">😴 Sleep-at-Night Index</div>
-    <div id="san-value" style="font-size:1.1rem;font-weight:800;color:#27ae60;">--</div>
-    <div id="san-detail" style="font-size:0.68rem;color:rgba(226,232,240,0.6);margin-top:2px;">Refreshes with live update</div>
-  </div>
-  <div style="flex:1;min-width:200px;padding:10px 14px;background:rgba(0,0,0,0.25);border:1px solid rgba(148,163,184,0.2);border-radius:10px;">
-    <div style="font-size:0.62rem;color:rgba(226,232,240,0.7);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">🏖 Coast FIRE Progress</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-      <div style="flex:1;background:rgba(0,0,0,0.3);border-radius:999px;height:8px;overflow:hidden;">
-        <div id="coast-bar" style="height:100%;border-radius:999px;background:#27ae60;width:0%;transition:width 0.6s ease;"></div>
-      </div>
-      <span id="coast-pct" style="font-size:0.8rem;font-weight:800;color:#27ae60;min-width:36px;text-align:right;">0%</span>
+
+  <!-- Sleep-at-Night -->
+  <div style="flex:1;min-width:220px;padding:10px 14px;background:rgba(0,0,0,0.25);border:1px solid rgba(148,163,184,0.2);border-radius:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:0.62rem;color:rgba(226,232,240,0.7);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">😴 Sleep-at-Night Index</span>
+      <span title="Score 0–100 combining your portfolio volatility and dividend income. Low volatility + high dividends = high score = sleep easy. Needs 10+ days of history to show volatility score."
+        style="font-size:0.65rem;color:rgba(148,163,184,0.6);cursor:help;border:1px solid rgba(148,163,184,0.25);border-radius:999px;padding:1px 6px;">?</span>
     </div>
-    <div id="coast-detail" style="font-size:0.68rem;color:rgba(226,232,240,0.6);">Set your goal in ⚙️ Settings → Retirement Goal ($)</div>
+    <div id="san-value" style="font-size:1.05rem;font-weight:800;color:#27ae60;margin-bottom:4px;">--</div>
+    <div id="san-detail" style="font-size:0.68rem;color:rgba(226,232,240,0.55);line-height:1.4;">Hit 🔄 Live Update to calculate</div>
+    <div style="font-size:0.62rem;color:rgba(148,163,184,0.45);margin-top:5px;border-top:1px solid rgba(148,163,184,0.1);padding-top:5px;">
+      🟢 75+ Peaceful · 🟡 50+ Moderate · 🟠 25+ Restless · 🔴 Alarming
+    </div>
   </div>
+
+  <!-- Coast FIRE -->
+  <div style="flex:1;min-width:220px;padding:10px 14px;background:rgba(0,0,0,0.25);border:1px solid rgba(148,163,184,0.2);border-radius:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <span style="font-size:0.62rem;color:rgba(226,232,240,0.7);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">🏖 Coast FIRE Progress</span>
+      <span title="The $ amount your portfolio needs TODAY so it can grow to your retirement goal purely from 9% compound growth — with zero new contributions needed. Setup: ⚙️ Settings → enter Retirement Goal + Years Until Retirement."
+        style="font-size:0.65rem;color:rgba(148,163,184,0.6);cursor:help;border:1px solid rgba(148,163,184,0.25);border-radius:999px;padding:1px 6px;">?</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+      <div style="flex:1;background:rgba(0,0,0,0.35);border-radius:999px;height:10px;overflow:hidden;">
+        <div id="coast-bar" style="height:100%;border-radius:999px;background:#3498db;width:0%;transition:width 0.8s ease;"></div>
+      </div>
+      <span id="coast-pct" style="font-size:0.85rem;font-weight:800;color:rgba(226,232,240,0.9);min-width:40px;text-align:right;">--%</span>
+    </div>
+    <div id="coast-detail" style="font-size:0.68rem;color:rgba(226,232,240,0.55);line-height:1.4;">
+      ⚙️ <strong style="color:rgba(226,232,240,0.75);">Setup:</strong> Click Settings → enter Retirement Goal ($) + Years Until Retirement → Save.
+    </div>
+  </div>
+
 </div>
 <div class="utility-buttons-grid">
 <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
@@ -5526,93 +5544,115 @@ renderPortfolioSummary() {
                     chartValueEl.classList.add(totalPLTodayFinal >= 0 ? 'positive' : 'negative');
                 }
                 // ── Sleep-at-Night Index ──
-                // Combines volatility (from portfolioHistory) with dividend income stability.
-                // High dividends + low volatility = green. High volatility + low dividends = red.
-                (function updateSleepAtNight() {
-                    const row = document.getElementById('san-fire-row'); // always visible
+                // ── Sleep-at-Night Index ──
+                // Score 0-100: combines portfolio volatility + dividend income cushion.
+                // Low volatility + high dividends = high score = sleep well.
+                {
                     const sanEl     = document.getElementById('san-value');
                     const sanDetail = document.getElementById('san-detail');
-                    const hist = (tracker && tracker.portfolioHistory) ? tracker.portfolioHistory : [];
-                    const totalVal = combinedMetrics.totalCurrentValue || 0;
-                    const annualDiv = combinedMetrics.totalDividends || 0;
+                    const _hist     = this.portfolioHistory || [];
+                    const _totalVal = combinedMetrics.totalCurrentValue || 0;
+                    const _annDiv   = combinedMetrics.totalDividends || 0;
+                    const fc2 = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
 
-                    let score = 50; // baseline
-                    let details = [];
+                    let volScore = 25; // default middle if no history
+                    let divScore = 0;
+                    let details  = [];
+                    let hasVol   = false;
 
-                    // Volatility component (lower vol = better score)
-                    if (hist.length >= 10) {
-                        const vals = hist.map(h=>h.value);
+                    // Volatility component — needs 10+ days of portfolio history
+                    if (_hist.length >= 10) {
+                        const vals    = _hist.map(h => h.value);
                         const dlyPcts = [];
-                        for (let i=1;i<vals.length;i++) {
-                            if (vals[i-1]>0) dlyPcts.push((vals[i]-vals[i-1])/vals[i-1]*100);
+                        for (let i = 1; i < vals.length; i++) {
+                            if (vals[i-1] > 0) dlyPcts.push((vals[i] - vals[i-1]) / vals[i-1] * 100);
                         }
                         if (dlyPcts.length > 0) {
-                            const mean = dlyPcts.reduce((s,v)=>s+v,0)/dlyPcts.length;
-                            const vol  = Math.sqrt(dlyPcts.reduce((s,v)=>s+Math.pow(v-mean,2),0)/dlyPcts.length) * Math.sqrt(252);
-                            // vol < 10% = great, vol > 40% = terrible
-                            const volScore = Math.max(0, Math.min(50, 50 - (vol - 10) * 1.25));
-                            score = volScore;
-                            details.push('Vol: ' + vol.toFixed(1) + '%/yr');
+                            const mean = dlyPcts.reduce((s,v) => s+v, 0) / dlyPcts.length;
+                            const vol  = Math.sqrt(dlyPcts.reduce((s,v) => s + Math.pow(v-mean,2), 0) / dlyPcts.length) * Math.sqrt(252);
+                            // vol ≤10% = full 50pts, vol ≥40% = 0pts
+                            volScore = Math.max(0, Math.min(50, 50 - (vol - 10) * 1.25));
+                            details.push('Volatility: ' + vol.toFixed(1) + '%/yr');
+                            hasVol = true;
                         }
                     }
 
-                    // Dividend stability component (higher div yield on cost = better)
-                    if (totalVal > 0 && annualDiv > 0) {
-                        const divYield = (annualDiv / totalVal) * 100;
-                        // 0% = 0 pts, 5%+ = 50 pts
-                        const divScore = Math.min(50, divYield * 10);
-                        score += divScore;
-                        details.push('Div: ' + divYield.toFixed(1) + '%');
+                    // Dividend component — annual dividends vs portfolio value
+                    if (_totalVal > 0 && _annDiv > 0) {
+                        const divYield = (_annDiv / _totalVal) * 100;
+                        // 0% = 0pts, 5%+ = full 50pts
+                        divScore = Math.min(50, divYield * 10);
+                        details.push('Dividend yield: ' + divYield.toFixed(1) + '% (' + fc2(_annDiv) + '/yr)');
                     }
 
-                    score = Math.min(100, Math.max(0, Math.round(score)));
-                    const label = score >= 75 ? '🟢 ' + score + ' — Peaceful'
-                                : score >= 50 ? '🟡 ' + score + ' — Moderate'
-                                : score >= 25 ? '🟠 ' + score + ' — Restless'
-                                :               '🔴 ' + score + ' — Alarming';
-                    if (sanEl)     sanEl.textContent = label;
-                    if (sanDetail) sanDetail.textContent = details.length ? details.join(' · ') : 'Accumulating data...';
-                })();
+                    const score = Math.min(100, Math.max(0, Math.round(volScore + divScore)));
+                    const label = score >= 75 ? '🟢 ' + score + ' / 100 — Peaceful'
+                                : score >= 50 ? '🟡 ' + score + ' / 100 — Moderate'
+                                : score >= 25 ? '🟠 ' + score + ' / 100 — Restless'
+                                :               '🔴 ' + score + ' / 100 — Alarming';
+
+                    if (sanEl) sanEl.textContent = label;
+                    if (sanDetail) {
+                        if (!hasVol) {
+                            sanDetail.textContent = '⏳ Needs 10+ days of history for volatility score. ' + (details.length ? details.join(' · ') : 'Hit 🔄 Live Update daily to build history.');
+                        } else {
+                            sanDetail.textContent = details.join(' · ');
+                        }
+                    }
+                }
 
                 // ── Coast FIRE Progress ──
-                // Shows how close the portfolio is to the point where it can grow to
-                // the retirement goal with zero additional contributions.
-                (function updateCoastFire() {
+                // The $ amount your portfolio needs to reach TODAY so it can grow
+                // to your retirement goal purely from compound growth — no more contributions needed.
+                // Formula: Coast Number = Goal ÷ (1.09)^YearsUntilRetirement
+                {
                     const coastBar    = document.getElementById('coast-bar');
                     const coastPct    = document.getElementById('coast-pct');
                     const coastDetail = document.getElementById('coast-detail');
-                    const currentVal  = combinedMetrics.totalCurrentValue || 0;
+                    const _currentVal = combinedMetrics.totalCurrentValue || 0;
+                    const fc = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
 
-                    // Try to read goal from config/settings
-                    const goal        = (tracker && tracker.config && tracker.config.retirementGoal)
-                                        ? parseFloat(tracker.config.retirementGoal) : 0;
-                    const yearsToRet  = (tracker && tracker.config && tracker.config.yearsToRetirement)
-                                        ? parseFloat(tracker.config.yearsToRetirement) : 25;
-                    const growthRate  = 0.09; // assume 9% annual growth
+                    // Read goal — try config first, then localStorage directly as fallback
+                    const _goal = parseFloat(
+                        (this.config && this.config.retirementGoal) ||
+                        localStorage.getItem('coastFireGoal') || 0
+                    );
+                    const _years = parseFloat(
+                        (this.config && this.config.yearsToRetirement) ||
+                        localStorage.getItem('coastFireYears') || 25
+                    );
 
-                    if (!goal || goal <= 0) {
-                        if (coastDetail) coastDetail.textContent = 'Set Retirement Goal ($) in ⚙️ Settings to activate.';
+                    if (!_goal || _goal <= 0) {
+                        if (coastPct)    coastPct.textContent = '--';
+                        if (coastDetail) coastDetail.innerHTML =
+                            '⚙️ <strong>Setup required:</strong> Click Settings → enter Retirement Goal ($) + Years Until Retirement → Save.';
                         return;
                     }
 
-                    // Coast FIRE number = goal / (1 + r)^years
-                    const coastNumber = goal / Math.pow(1 + growthRate, yearsToRet);
-                    const pct = Math.min(100, (currentVal / coastNumber) * 100);
-                    const reached = pct >= 100;
+                    const coastNumber = _goal / Math.pow(1.09, _years);
+                    const pct         = Math.min(200, (_currentVal / coastNumber) * 100);
+                    const reached     = pct >= 100;
 
-                    if (coastBar)    { coastBar.style.width = pct.toFixed(1) + '%'; coastBar.style.background = reached ? '#27ae60' : '#3498db'; }
-                    if (coastPct)    { coastPct.textContent = pct.toFixed(0) + '%'; coastPct.style.color = reached ? 'var(--color-positive,#27ae60)' : 'var(--text-primary)'; }
+                    if (coastBar) {
+                        coastBar.style.width      = Math.min(100, pct).toFixed(1) + '%';
+                        coastBar.style.background = reached ? '#27ae60' : (pct >= 75 ? '#f39c12' : '#3498db');
+                    }
+                    if (coastPct) {
+                        coastPct.textContent  = pct.toFixed(0) + '%';
+                        coastPct.style.color  = reached ? '#27ae60' : 'rgba(226,232,240,0.9)';
+                        coastPct.style.fontWeight = '800';
+                    }
                     if (coastDetail) {
-                        const fc = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
                         if (reached) {
-                            coastDetail.textContent = '🎉 Coast FIRE reached! Your portfolio can now grow to ' + fc(goal) + ' without another contribution.';
-                            coastDetail.style.color = 'var(--color-positive,#27ae60)';
+                            coastDetail.textContent = '🎉 Coast FIRE reached! ' + fc(_currentVal) + ' will grow to ' + fc(_goal) + ' in ' + _years + 'yrs @ 9% with zero new contributions.';
+                            coastDetail.style.color = '#27ae60';
                         } else {
-                            coastDetail.textContent = fc(currentVal) + ' of ' + fc(coastNumber) + ' needed to coast to ' + fc(goal) + ' in ' + yearsToRet + 'yrs @ 9%';
-                            coastDetail.style.color = 'var(--text-secondary)';
+                            const gap = coastNumber - _currentVal;
+                            coastDetail.textContent = 'Need ' + fc(coastNumber) + ' to coast to ' + fc(_goal) + ' in ' + _years + 'yrs. Gap: ' + fc(gap) + ' more needed.';
+                            coastDetail.style.color = 'rgba(226,232,240,0.6)';
                         }
                     }
-                })();
+                }
             }
 
             isMutualFund(symbol) { return symbol.length === 5 && symbol.endsWith('X'); }
