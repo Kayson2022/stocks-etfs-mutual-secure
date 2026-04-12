@@ -3036,24 +3036,6 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-badge">Realized P/L: <span class="summary-value" id="total-pl-realized">$0.00</span></div>
 <button class="summary-toggle" id="toggle-ah-btn" type="button">🌑 Show After-Hours</button>
 </div>
-<!-- Sleep-at-Night Index + Coast FIRE row -->
-<div id="san-fire-row" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
-  <div style="flex:1;min-width:200px;padding:10px 14px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:10px;">
-    <div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">😴 Sleep-at-Night Index</div>
-    <div id="san-value" style="font-size:1.1rem;font-weight:800;color:var(--color-positive,#27ae60);">--</div>
-    <div id="san-detail" style="font-size:0.68rem;color:var(--text-secondary);margin-top:2px;">Refreshes with live update</div>
-  </div>
-  <div style="flex:1;min-width:200px;padding:10px 14px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:10px;">
-    <div style="font-size:0.62rem;color:var(--text-secondary);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">🏖 Coast FIRE Progress</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-      <div style="flex:1;background:var(--bg-secondary);border-radius:999px;height:8px;overflow:hidden;">
-        <div id="coast-bar" style="height:100%;border-radius:999px;background:var(--color-positive,#27ae60);width:0%;transition:width 0.6s ease;"></div>
-      </div>
-      <span id="coast-pct" style="font-size:0.8rem;font-weight:800;color:var(--color-positive,#27ae60);min-width:36px;text-align:right;">0%</span>
-    </div>
-    <div id="coast-detail" style="font-size:0.68rem;color:var(--text-secondary);">Set your goal in Settings → Retirement Goal ($)</div>
-  </div>
-</div>
 </div>
 <div class="summary-grid">
 <div class="summary-item">
@@ -3081,6 +3063,24 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-item-value"><span class="summary-value" id="fund-count-value">0</span></div>
 </div>
 </div>
+</div>
+<!-- Sleep-at-Night Index + Coast FIRE — placed OUTSIDE portfolio-inner to avoid flex layout conflict -->
+<div id="san-fire-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+  <div style="flex:1;min-width:200px;padding:10px 14px;background:rgba(0,0,0,0.25);border:1px solid rgba(148,163,184,0.2);border-radius:10px;">
+    <div style="font-size:0.62rem;color:rgba(226,232,240,0.7);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">😴 Sleep-at-Night Index</div>
+    <div id="san-value" style="font-size:1.1rem;font-weight:800;color:#27ae60;">--</div>
+    <div id="san-detail" style="font-size:0.68rem;color:rgba(226,232,240,0.6);margin-top:2px;">Refreshes with live update</div>
+  </div>
+  <div style="flex:1;min-width:200px;padding:10px 14px;background:rgba(0,0,0,0.25);border:1px solid rgba(148,163,184,0.2);border-radius:10px;">
+    <div style="font-size:0.62rem;color:rgba(226,232,240,0.7);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">🏖 Coast FIRE Progress</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <div style="flex:1;background:rgba(0,0,0,0.3);border-radius:999px;height:8px;overflow:hidden;">
+        <div id="coast-bar" style="height:100%;border-radius:999px;background:#27ae60;width:0%;transition:width 0.6s ease;"></div>
+      </div>
+      <span id="coast-pct" style="font-size:0.8rem;font-weight:800;color:#27ae60;min-width:36px;text-align:right;">0%</span>
+    </div>
+    <div id="coast-detail" style="font-size:0.68rem;color:rgba(226,232,240,0.6);">Set your goal in ⚙️ Settings → Retirement Goal ($)</div>
+  </div>
 </div>
 <div class="utility-buttons-grid">
 <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
