@@ -3062,13 +3062,45 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 <!-- Sleep-at-Night + Coast FIRE — OUTSIDE portfolio-inner, spans full card width -->
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
-  <div style="padding:10px 14px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
-    <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">😴 Sleep-at-Night Index <span title="Score 0-100: low portfolio volatility + high dividend income = high score = sleep easy" style="cursor:help;opacity:0.7;">(?)</span></div>
+
+  <!-- SLEEP AT NIGHT -->
+  <div style="position:relative;padding:10px 14px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+      <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">😴 Sleep-at-Night Index</div>
+      <button onclick="document.getElementById('san-info').style.display=document.getElementById('san-info').style.display==='none'?'block':'none'"
+        style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:999px;color:rgba(255,255,255,0.7);font-size:0.6rem;padding:1px 6px;cursor:pointer;line-height:1.4;flex-shrink:0;">ℹ️ How it works</button>
+    </div>
+    <div id="san-info" style="display:none;margin-bottom:8px;padding:8px 10px;background:rgba(0,0,0,0.3);border-radius:6px;font-size:0.68rem;color:rgba(255,255,255,0.75);line-height:1.6;">
+      <strong style="color:#27ae60;">What it measures:</strong> How comfortable your portfolio is to hold — combining <em>volatility</em> and <em>dividend income</em>.<br><br>
+      <strong style="color:#27ae60;">Score breakdown (0–100):</strong><br>
+      • <strong>Volatility (0–50 pts):</strong> Lower swings = more pts. Under 10%/yr = full 50 pts. Over 40%/yr = 0 pts.<br>
+      • <strong>Dividends (0–50 pts):</strong> Higher yield = more pts. 5%+ yield = full 50 pts. 0% = 0 pts.<br><br>
+      <strong style="color:#27ae60;">Ratings:</strong> 🟢 75+ Peaceful · 🟡 50+ Moderate · 🟠 25+ Restless · 🔴 Alarming<br><br>
+      <em style="color:rgba(255,255,255,0.5);">Updates automatically on every 🔄 Live Update. Needs 10+ days of portfolio history for full score.</em>
+    </div>
     <div id="san-value" style="font-size:0.95rem;font-weight:800;color:#27ae60;">--</div>
-    <div id="san-detail" style="font-size:0.62rem;color:rgba(255,255,255,0.5);margin-top:2px;">Hit Live Update to calculate</div>
+    <div id="san-detail" style="font-size:0.62rem;color:rgba(255,255,255,0.5);margin-top:2px;">Hit 🔄 Live Update to calculate</div>
   </div>
-  <div style="padding:10px 14px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
-    <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:4px;">🏖 Coast FIRE Progress <span title="How close your portfolio is to never needing another contribution — set goal in Settings" style="cursor:help;opacity:0.7;">(?)</span></div>
+
+  <!-- COAST FIRE -->
+  <div style="position:relative;padding:10px 14px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+      <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">🏖 Coast FIRE Progress</div>
+      <button onclick="document.getElementById('coast-info').style.display=document.getElementById('coast-info').style.display==='none'?'block':'none'"
+        style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:999px;color:rgba(255,255,255,0.7);font-size:0.6rem;padding:1px 6px;cursor:pointer;line-height:1.4;flex-shrink:0;">ℹ️ How it works</button>
+    </div>
+    <div id="coast-info" style="display:none;margin-bottom:8px;padding:8px 10px;background:rgba(0,0,0,0.3);border-radius:6px;font-size:0.68rem;color:rgba(255,255,255,0.75);line-height:1.6;">
+      <strong style="color:#3498db;">What it means:</strong> The $ amount your portfolio needs TODAY so it can grow to your retirement goal purely from compound growth — <em>without adding another dollar.</em><br><br>
+      <strong style="color:#3498db;">The formula:</strong><br>
+      <code style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;font-size:0.72rem;">Coast # = Retirement Goal ÷ (1 + Growth%)^Years</code><br><br>
+      <strong style="color:#3498db;">Example:</strong> Goal $2.5M, 25 years, 9% growth:<br>
+      $2,500,000 ÷ (1.09)²⁵ = <strong>$298,000 needed today</strong><br><br>
+      <strong style="color:#3498db;">Setup required:</strong> Click ⚙️ Settings → enter:<br>
+      • Retirement Goal ($)<br>
+      • Years Until Retirement<br>
+      • Expected Annual Growth Rate (%)<br><br>
+      <em style="color:rgba(255,255,255,0.5);">Progress bar = your current portfolio ÷ coast number. 100% = you never need to invest again!</em>
+    </div>
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
       <div style="flex:1;background:rgba(0,0,0,0.3);border-radius:999px;height:8px;overflow:hidden;">
         <div id="coast-bar" style="height:100%;border-radius:999px;background:#3498db;width:0%;transition:width 0.8s;"></div>
@@ -3077,6 +3109,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     </div>
     <div id="coast-detail" style="font-size:0.62rem;color:rgba(255,255,255,0.5);">Set goal in ⚙️ Settings</div>
   </div>
+
 </div>
 <div class="utility-buttons-grid">
 <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
@@ -3322,6 +3355,10 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="transaction-input-group">
 <label>⏳ Years Until Retirement — for Coast FIRE tracker:</label>
 <input class="search-input" id="modal-years-to-retirement" placeholder="e.g. 25" type="number" min="1" max="50"/>
+</div>
+<div class="transaction-input-group">
+<label>📈 Expected Annual Growth Rate (%) — for Coast FIRE tracker:</label>
+<input class="search-input" id="modal-growth-rate" placeholder="e.g. 9  (S&P 500 historical avg)" type="number" min="1" max="30" step="0.5"/>
 </div>
 <button class="add-btn" id="modal-save-settings-btn">Save Settings</button>
 </div>
@@ -4255,6 +4292,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 this.cacheDOMElements();
                 this.config.retirementGoal = parseFloat(localStorage.getItem('coastFireGoal')) || 0;
                 this.config.yearsToRetirement = parseFloat(localStorage.getItem('coastFireYears')) || 25;
+                this.config.coastGrowthRate = parseFloat(localStorage.getItem('coastFireRate')) || 9;
                 this.setupEventListeners();
                 this.applyTheme();
                 this.applyPrivacyMode();
@@ -4426,6 +4464,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     modalRefreshInterval: document.getElementById('modal-refresh-interval'),
                     modalRetirementGoal: document.getElementById('modal-retirement-goal'),
                     modalYearsToRetirement: document.getElementById('modal-years-to-retirement'),
+                    modalGrowthRate: document.getElementById('modal-growth-rate'),
                     modalSaveSettingsBtn: document.getElementById('modal-save-settings-btn'),
                     enablePushNotificationsBtn: document.getElementById('enable-push-notifications-btn'),
                     signOutOtherSessionsBtn: document.getElementById('sign-out-other-sessions-btn'),
@@ -5563,14 +5602,15 @@ renderPortfolioSummary() {
                         if (cDet) cDet.textContent = 'Set goal in ⚙️ Settings → Retirement Goal ($)';
                         return;
                     }
-                    const coastNum = _g / Math.pow(1.09, _y);
+                    const _r = parseFloat((this.config&&this.config.coastGrowthRate)||localStorage.getItem('coastFireRate')||9) / 100;
+                    const coastNum = _g / Math.pow(1 + _r, _y);
                     const pct = Math.min(200, (_cv/coastNum)*100);
                     const reached = pct >= 100;
                     if (cBar) { cBar.style.width=Math.min(100,pct).toFixed(1)+'%'; cBar.style.background=reached?'#27ae60':pct>=75?'#f39c12':'#3498db'; }
                     if (cPct) { cPct.textContent=pct.toFixed(0)+'%'; cPct.style.color=reached?'#27ae60':'rgba(255,255,255,0.9)'; }
                     if (cDet) {
-                        if (reached) { cDet.textContent='🎉 Coast FIRE reached! Portfolio grows to '+fc(_g)+' in '+_y+'yrs with no new contributions.'; cDet.style.color='#27ae60'; }
-                        else { cDet.textContent=fc(_cv)+' of '+fc(coastNum)+' needed → gap: '+fc(coastNum-_cv); cDet.style.color='rgba(255,255,255,0.5)'; }
+                        if (reached) { cDet.innerHTML='🎉 <strong>Coast FIRE reached!</strong> Your $'+fc(_cv)+' will compound to '+fc(_g)+' in '+_y+' yrs @ '+(_r*100).toFixed(1)+'%/yr — zero new contributions needed.'; cDet.style.color='#27ae60'; }
+                        else { cDet.innerHTML='<strong>Formula:</strong> $'+fc(_g)+' ÷ (1+'+(_r*100).toFixed(1)+'%)^'+_y+'yrs = Coast# $'+fc(coastNum)+'<br>You have $'+fc(_cv)+' — need $'+fc(Math.max(0,coastNum-_cv))+' more.'; cDet.style.color='rgba(255,255,255,0.55)'; }
                     }
                 }
             }
@@ -7506,6 +7546,7 @@ getOldestTransactionDate(item) {
                     this.elements.modalRetirementGoal.value = _gv > 0 ? _gv.toLocaleString('en-US') : '';
                 }
                 if (this.elements.modalYearsToRetirement) this.elements.modalYearsToRetirement.value = this.config.yearsToRetirement || 25;
+                if (this.elements.modalGrowthRate) this.elements.modalGrowthRate.value = this.config.coastGrowthRate || 9;
             }
             closeSettingsModal() { if (this.elements.settingsModal) this.elements.settingsModal.style.display = 'none'; }
             
@@ -7543,8 +7584,11 @@ getOldestTransactionDate(item) {
                 const _rYrs  = this.elements.modalYearsToRetirement ? parseFloat(this.elements.modalYearsToRetirement.value)||25 : 25;
                 this.config.retirementGoal = _rGoal;
                 this.config.yearsToRetirement = _rYrs;
+                const _rRate = this.elements.modalGrowthRate ? parseFloat(this.elements.modalGrowthRate.value)||9 : 9;
+                this.config.coastGrowthRate = _rRate;
                 localStorage.setItem('coastFireGoal', _rGoal);
                 localStorage.setItem('coastFireYears', _rYrs);
+                localStorage.setItem('coastFireRate', _rRate);
                 this.config.alphaVantageKey = alphaVantageKey;
                 this.config.fmpApiKey = fmpKey;
                 this.config.marketstackApiKey = marketstackKey;
