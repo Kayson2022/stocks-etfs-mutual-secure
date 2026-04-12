@@ -14001,7 +14001,20 @@ window.renderPerfStats = function renderPerfStats() {
           const costVal    = lot.shares * lot.price;
           const unrealLoss = currentVal - costVal;
           if (unrealLoss < -100) { // only flag losses > $100
-            const holdDays = Math.round((Date.now() - new Date(lot.date)) / 86400000);
+            // Robust date parse for holdDays — same logic as display formatter
+            const _parseDate = (s) => {
+              if (!s) return null;
+              s = String(s).trim();
+              if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T12:00:00');
+              if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+                const [mo,da,yr] = s.split('/');
+                return new Date(parseInt(yr), parseInt(mo)-1, parseInt(da));
+              }
+              if (/^\d{10,13}$/.test(s)) return new Date(s.length===13?parseInt(s):parseInt(s)*1000);
+              const d = new Date(s); return isNaN(d) ? null : d;
+            };
+            const _lotDate = _parseDate(lot.date);
+            const holdDays = _lotDate ? Math.round((Date.now() - _lotDate) / 86400000) : 0;
             const isLongTerm = holdDays >= 366;
             opportunities.push({
               symbol: item.symbol,
@@ -14034,7 +14047,27 @@ window.renderPerfStats = function renderPerfStats() {
         .map(o => `
           <tr>
             <td style="padding:6px 8px;font-weight:700;color:var(--text-primary);">${o.symbol}</td>
-            <td style="padding:6px 8px;color:var(--text-secondary);">Lot #${o.lot} · ${new Date(o.lotDate+'T12:00:00').toLocaleDateString()}</td>
+            <td style="padding:6px 8px;color:var(--text-secondary);">Lot #${o.lot} · ${(() => {
+              if (!o.lotDate) return 'Unknown';
+              // Robust date parser — handles YYYY-MM-DD, MM/DD/YYYY, timestamps, etc.
+              let d;
+              const s = String(o.lotDate).trim();
+              // Already a clean ISO date YYYY-MM-DD
+              if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+                d = new Date(s + 'T12:00:00');
+              // MM/DD/YYYY or M/D/YYYY
+              } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+                const [mo,da,yr] = s.split('/');
+                d = new Date(parseInt(yr), parseInt(mo)-1, parseInt(da));
+              // Timestamp number
+              } else if (/^\d{10,13}$/.test(s)) {
+                d = new Date(s.length === 13 ? parseInt(s) : parseInt(s)*1000);
+              } else {
+                // Fallback — let JS try
+                d = new Date(s);
+              }
+              return isNaN(d) ? s : d.toLocaleDateString();
+            })()}</td>
             <td style="padding:6px 8px;text-align:right;">${o.shares.toFixed(3)}</td>
             <td style="padding:6px 8px;text-align:right;">${fc(o.costBasis)} → ${fc(o.currentPrice)}</td>
             <td style="padding:6px 8px;text-align:right;color:var(--color-negative,#e74c3c);font-weight:700;">${fc(o.unrealLoss)}</td>
