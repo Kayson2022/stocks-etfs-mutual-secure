@@ -14129,7 +14129,7 @@ window.renderPerfStats = function renderPerfStats() {
 window.renderVaR = function() {
   const el = document.getElementById('stVarContent');
   if (!el) return;
-  const tracker = getTracker ? getTracker() : window.stockTracker;
+  const tracker = window.stockTracker;
   if (!tracker) return;
 
   const hist = tracker.portfolioHistory || [];
@@ -14310,7 +14310,7 @@ window.renderVaR = function() {
 
 // ── AI Explanation for VaR ──────────────────────────────────────────────────
 window.runVarAI = async function() {
-  const tracker = getTracker ? getTracker() : window.stockTracker;
+  const tracker = window.stockTracker;
   if (!tracker) return;
   const btn = document.getElementById('varAiBtn');
   const result = document.getElementById('varAiResult');
@@ -14387,6 +14387,7 @@ Write in English. Be direct and educational. No bullet lists — flowing paragra
     });
 
     const data = await response.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
 
     if (!text) throw new Error('No response from AI');
@@ -14413,7 +14414,7 @@ Write in English. Be direct and educational. No bullet lists — flowing paragra
 window.renderDividendWaterfall = function() {
   const el = document.getElementById('stDivWaterfallContent');
   if (!el) return;
-  const tracker = getTracker ? getTracker() : window.stockTracker;
+  const tracker = window.stockTracker;
   if (!tracker) return;
 
   const fc = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2}).format(n||0);
@@ -14607,7 +14608,7 @@ window.renderDividendWaterfall = function() {
 
 // ── AI Explanation for Dividend Waterfall ──────────────────────────────────
 window.runWaterfallAI = async function() {
-  const tracker = getTracker ? getTracker() : window.stockTracker;
+  const tracker = window.stockTracker;
   if (!tracker) return;
   const btn = document.getElementById('waterfallAiBtn');
   const result = document.getElementById('waterfallAiResult');
@@ -14668,6 +14669,7 @@ Write in English. Be specific and encouraging but honest. Under 180 words.`;
       body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await response.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
     if (!text) throw new Error('No response');
 
@@ -15195,8 +15197,11 @@ window.stToggleNextDividend = async function(id, symbol) {
 window.renderAnomaly = function() {
   const el = document.getElementById('stAnomalyContent');
   if (!el) return;
-  const tracker = getTracker ? getTracker() : window.stockTracker;
-  if (!tracker) return;
+  const tracker = window.stockTracker;
+  if (!tracker || (!tracker.stocks && !tracker.mutualFunds)) {
+    el.innerHTML = '<p style="padding:16px;color:var(--text-secondary);text-align:center;">⏳ Portfolio not loaded yet — please sign in and run a Live Update first.</p>';
+    return;
+  }
 
   const allItems = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
   const fc2 = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2}).format(n||0);
@@ -15362,7 +15367,7 @@ window.runAnomalyAI = async function() {
   result.innerHTML=`<div style="padding:12px;background:linear-gradient(135deg,rgba(102,126,234,0.1),rgba(118,75,162,0.1));border:1px solid rgba(102,126,234,0.3);border-radius:9px;font-size:0.8rem;color:var(--text-secondary);">✨ AI is analyzing the anomalies…</div>`;
 
   try {
-    const tracker = getTracker ? getTracker() : window.stockTracker;
+    const tracker = window.stockTracker;
     const allItems = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
 
     const series = {};
@@ -15422,6 +15427,7 @@ Be direct and educational. Under 250 words total. No bullet points — short par
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
     });
     const data = await response.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
     if (!text) throw new Error('No response');
 
@@ -15498,8 +15504,11 @@ window.submitPortfolioQuestion = async function() {
   if (!question) return;
   input.value = '';
 
-  const tracker = getTracker ? getTracker() : window.stockTracker;
-  if (!tracker) return;
+  const tracker = window.stockTracker;
+  if (!tracker || (!tracker.stocks && !tracker.mutualFunds)) {
+    const chat2 = document.getElementById("askPortfolioChat");
+    if(chat2) { const e=document.createElement("div"); e.style.cssText="align-self:flex-start;padding:10px 14px;background:rgba(231,76,60,0.1);border-radius:9px;font-size:0.8rem;color:#e74c3c;"; e.textContent="Portfolio not loaded yet — sign in and run Live Update first."; chat2.appendChild(e); } return;
+  }
 
   // ── Append user bubble ──────────────────────────────────────────────────
   const userBubble = document.createElement('div');
@@ -15577,8 +15586,9 @@ ${portHist.slice(-7).map(h=>`${h.date}: ${fc(h.value)}`).join('\n')}`:''}`;
       })
     });
     const data = await response.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-    if (!text) throw new Error('No response from AI');
+    if (!text) throw new Error('Empty response — data: '+JSON.stringify(data).slice(0,200));
 
     typing.style.cssText = 'align-self:flex-start;max-width:85%;padding:12px 14px;background:var(--bg-secondary);border:1px solid rgba(102,126,234,0.3);border-radius:14px 14px 14px 4px;font-size:0.82rem;color:var(--text-primary);line-height:1.65;';
     typing.innerHTML = `<div style="font-size:0.62rem;color:rgba(102,126,234,0.8);font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px;">✨ Claude</div>
