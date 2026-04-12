@@ -21,7 +21,7 @@
 <meta name="apple-mobile-web-app-title" content="Stocks Tracker">
 <!-- Register Service Worker -->
 <script>
-  if ('serviceWorker' in navigator) {
+  if ('serviceWorker' in navigator && location.hostname === 'kayson2022.github.io') {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js')
         .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
@@ -2692,13 +2692,19 @@ body.dark-mode .modal-content {
     .modal-content {
         width: 100% !important;
         max-width: 100% !important;
-        max-height: 92vh !important;
+        max-height: 88vh !important;
+        max-height: 88dvh !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
         border-radius: 18px 18px 0 0 !important;
         margin-top: auto !important;
         padding: 18px !important;
     }
     .modal {
         align-items: flex-end !important;
+        height: 100% !important;
+        height: 100dvh !important;
+        overflow: hidden !important;
     }
 
     /* List All modal cards — 2 cols */
@@ -2737,7 +2743,7 @@ body.dark-mode .modal-content {
   /* Summary stats 2-col on mobile */
   #portfolio-summary .summary-stats { grid-template-columns: repeat(2, 1fr) !important; }
   /* Modals full width */
-  .modal-content { width: 96vw !important; max-width: 96vw !important; padding: 16px !important; }
+  .modal-content { width: 96vw !important; max-width: 96vw !important; padding: 16px !important; max-height: 88vh !important; max-height: 88dvh !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
   /* Toolbar panels full width */
   .st-panel { margin: 0 !important; border-radius: 0 !important; }
   /* Chart range buttons — smaller on mobile */
@@ -3321,7 +3327,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 </div>
 <div class="modal" id="settingsModal" style="display: none;">
-<div class="modal-content" style="max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+<div class="modal-content" style="max-height:90vh;max-height:90dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;">
 <button class="close-modal-btn" id="closeSettingsBtn">×</button>
 <h3 class="modal-title">Settings</h3>
 <div class="transaction-input-group">
