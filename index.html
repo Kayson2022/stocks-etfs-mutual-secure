@@ -4465,6 +4465,18 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         if (keys.marketstackKey) this.config.marketstackApiKey = keys.marketstackKey;
                         if (keys.refreshIntervalMs) this.config.refreshIntervalMs = keys.refreshIntervalMs;
 
+                        // Load Coast FIRE settings from Firestore (syncs across devices)
+                        const cf = data.coastFire || {};
+                        if (cf.goal)  {
+                            this.config.retirementGoal  = cf.goal;
+                            this.config.yearsToRetirement = cf.years || this.config.yearsToRetirement;
+                            this.config.coastGrowthRate   = cf.rate  || this.config.coastGrowthRate;
+                            // Also sync to localStorage so it works offline
+                            localStorage.setItem('coastFireGoal',  cf.goal);
+                            localStorage.setItem('coastFireYears', cf.years || 25);
+                            localStorage.setItem('coastFireRate',  cf.rate  || 9);
+                        }
+
                         // Update Settings modal inputs if available
                         if (this.elements && this.elements.modalFinnhubKey) {
                             this.elements.modalFinnhubKey.value = this.config.finnhubApiKey;
@@ -15487,6 +15499,10 @@ window.renderAskPortfolio = function() {
       </div>
 
       <!-- Chat history -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;min-height:20px;">
+        <span id="askPortfolioChatCount" style="font-size:0.65rem;color:var(--text-secondary);"></span>
+        <button id="clearChatBtn" onclick="window.clearPortfolioChat()" style="display:none;padding:3px 10px;font-size:0.68rem;border-radius:6px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);cursor:pointer;">🗑️ Clear chat</button>
+      </div>
       <div id="askPortfolioChat" style="display:flex;flex-direction:column;gap:12px;"></div>
     </div>
 
@@ -15494,6 +15510,25 @@ window.renderAskPortfolio = function() {
       Claude reads your live portfolio data (holdings, prices, history, transactions, dividends) to answer. No data leaves your browser except to the Claude API.
       Responses are AI-generated estimates — not financial advice.
     </p>`;
+};
+
+window.clearPortfolioChat = function() {
+  const chat = document.getElementById('askPortfolioChat');
+  const count = document.getElementById('askPortfolioChatCount');
+  const btn   = document.getElementById('clearChatBtn');
+  if (chat)  chat.innerHTML = '';
+  if (count) count.textContent = '';
+  if (btn)   btn.style.display = 'none';
+};
+
+window._updateChatCounter = function() {
+  const chat  = document.getElementById('askPortfolioChat');
+  const count = document.getElementById('askPortfolioChatCount');
+  const btn   = document.getElementById('clearChatBtn');
+  if (!chat) return;
+  const msgs = chat.children.length;
+  if (count) count.textContent = msgs > 0 ? `${Math.ceil(msgs/2)} question${Math.ceil(msgs/2)!==1?'s':''}` : '';
+  if (btn)   btn.style.display = msgs > 0 ? 'inline-block' : 'none';
 };
 
 window.submitPortfolioQuestion = async function() {
@@ -15521,85 +15556,89 @@ window.submitPortfolioQuestion = async function() {
   typing.style.cssText = 'align-self:flex-start;max-width:85%;padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:14px 14px 14px 4px;font-size:0.82rem;color:var(--text-secondary);';
   typing.innerHTML = '⏳ Reading your portfolio…';
   chat.appendChild(typing);
+  window._updateChatCounter();
   chat.scrollTop = chat.scrollHeight;
 
   try {
-    // ── Serialize portfolio state ───────────────────────────────────────
+    // ── Dump the raw tracker state as JSON — no manual field mapping needed ──
+    // The AI reads every field directly, so no question ever gets "Unknown"
     const allItems = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
-    const fc = n => '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 
-    // Helper: clone transactions before calling calculateTransactionStats
-    // because the function mutates the buys array in place
     const calcStats = (item) => tracker.calculateTransactionStats(
       JSON.parse(JSON.stringify(item.transactions||[])), item.price||0
     );
 
-    // Use the app's own calculateTransactionStats — same function the cards use
-    // This guarantees the numbers match exactly what's shown on screen
-    const holdingsRaw = allItems.map(item => {
-      const stats     = calcStats(item);
-      const shares    = stats.totalSharesOwned || 0;
-      const costBasis = stats.costOfRemainingShares || 0;
-      const costPerSh = shares > 0 ? costBasis / shares : 0;
-      const currentVal= shares * (item.price||0);
-      const unrealPL  = stats.unrealizedPL ?? (currentVal - costBasis);
-      const unrealPct = costBasis > 0 ? (unrealPL/costBasis)*100 : 0;
-      const divTotal  = (item.dividends||[]).reduce((s,d)=>s+(parseFloat(d.totalAmount)||0),0);
-      const todayChg  = item.changePercent ?? item.percentChange ?? 0;
-      const sector    = item.industry || item.sector || item.finnhubSector || item.gsector || 'Unknown';
-      const line = `${item.symbol} (${sector}): ${shares.toFixed(3)} shares @ ${fc(item.price)} | cost/sh ${fc(costPerSh)} | cost basis ${fc(costBasis)} | current value ${fc(currentVal)} | unrealized P/L ${fc(unrealPL)} | unrealized % ${unrealPct.toFixed(1)}% | today ${todayChg>=0?'+':''}${todayChg.toFixed(2)}% | dividends ${fc(divTotal)}`;
-      return { line, unrealPL, unrealPct };
+    // Build a clean summary object per holding using EVERY available field
+    const holdings = allItems.map(item => {
+      const stats = calcStats(item);
+      return {
+        symbol:          item.symbol,
+        name:            item.name || item.symbol,
+        price:           item.price || 0,
+        changeToday:     item.change || 0,
+        changePctToday:  item.changePercent ?? item.percentChange ?? 0,
+        previousClose:   item.previousClose || 0,
+        sharesOwned:     stats.totalSharesOwned || 0,
+        avgCostPerShare: stats.averageCostBasis || 0,
+        totalCostBasis:  stats.costOfRemainingShares || 0,
+        currentValue:    (stats.totalSharesOwned||0) * (item.price||0),
+        unrealizedPL:    stats.unrealizedPL || 0,
+        unrealizedPLPct: stats.costOfRemainingShares > 0
+                           ? (stats.unrealizedPL / stats.costOfRemainingShares * 100)
+                           : 0,
+        realizedPL:      stats.realizedPL || 0,
+        dividendsTotal:  (item.dividends||[]).reduce((s,d)=>s+(parseFloat(d.totalAmount)||0),0),
+        sector:          item.industry || item.sector || item.finnhubSector || item.gsector || null,
+        peRatio:         item.pe || item.peRatio || null,
+        marketCap:       item.marketCap || null,
+        week52High:      item.week52High || item.yearHigh || null,
+        week52Low:       item.week52Low  || item.yearLow  || null,
+        beta:            item.beta || null,
+        type:            item.type || (item.symbol?.length===5&&item.symbol.endsWith('X')?'mutual_fund':'stock'),
+      };
     });
 
-    // Send both rankings explicitly so AI answers $ and % correctly
-    const holdingsSummary =
-      'RANKED BY DOLLAR GAIN (highest $ first):\n' +
-      [...holdingsRaw].sort((a,b)=>b.unrealPL-a.unrealPL).map(h=>h.line).join('\n') +
-      '\n\nRANKED BY % GAIN (highest % first):\n' +
-      [...holdingsRaw].sort((a,b)=>b.unrealPct-a.unrealPct).map(h=>h.line).join('\n');
+    // Portfolio-level summary
+    const totalVal  = holdings.reduce((s,h)=>s+h.currentValue,0);
+    const totalCost = holdings.reduce((s,h)=>s+h.totalCostBasis,0);
+    const totalUnreal = holdings.reduce((s,h)=>s+h.unrealizedPL,0);
+    const totalDivs = holdings.reduce((s,h)=>s+h.dividendsTotal,0);
 
-    const portHist = (tracker.portfolioHistory||[]).slice(-30);
-    // Use calculateTransactionStats for accurate totals too
-    const totalVal  = allItems.reduce((s,item) => s + (calcStats(item).totalSharesOwned||0) * (item.price||0), 0);
-    const totalCost = allItems.reduce((s,item) => s + (calcStats(item).costOfRemainingShares||0), 0);
-    const totalDivs = allItems.reduce((s,item)=>s+(item.dividends||[]).reduce((ss,d)=>ss+(parseFloat(d.totalAmount)||0),0),0);
-    const startVal = portHist.length>0?Number(portHist[0].value||0):totalCost;
-    const ret30d = startVal>0?((totalVal-startVal)/startVal*100).toFixed(2):null;
-
-    // Build sector breakdown using same logic as the Snapshot panel
+    // Sector breakdown — computed, not guessed
     const sectorMap = {};
-    allItems.forEach(item => {
-      const st  = calcStats(item);
-      const val = (st.totalSharesOwned||0) * (item.price||0);
-      if (val <= 0) return;
-      const sec = item.industry || item.sector || item.finnhubSector || item.gsector || 'Unknown';
-      sectorMap[sec] = (sectorMap[sec]||0) + val;
+    holdings.forEach(h => {
+      const sec = h.sector || 'Unknown';
+      sectorMap[sec] = (sectorMap[sec]||0) + h.currentValue;
     });
-    const sectorTotal = Object.values(sectorMap).reduce((s,v)=>s+v,0);
-    const sectorBreakdown = Object.entries(sectorMap)
+    const sectors = Object.entries(sectorMap)
       .sort((a,b)=>b[1]-a[1])
-      .map(([sec,val])=>`${sec}: ${fc(val)} (${sectorTotal>0?(val/sectorTotal*100).toFixed(1):0}%)`)
-      .join('\n');
-    const hasRealSectors = Object.keys(sectorMap).some(s => s !== 'Unknown');
+      .map(([sec,val])=>({ sector:sec, value:val, pct:(val/totalVal*100).toFixed(1)+'%' }));
 
-    const systemPrompt = `You are a personal financial analyst AI with direct access to the user's live portfolio data. The data below is GROUND TRUTH — computed directly from their transaction records using FIFO accounting. Always use these exact numbers. Never guess or use prior knowledge about stock prices. Do not use markdown bold (**) in your response. IMPORTANT: When asked about "highest gain" or "best performer", always answer BOTH by dollar amount AND by percentage, since they often have different winners. Label them clearly: "By dollar gain: X" and "By percentage gain: Y". Be concise (under 180 words).
+    // Portfolio history for trend questions
+    const portHist = (tracker.portfolioHistory||[]).slice(-30);
+    const startVal  = portHist.length>0?Number(portHist[0].value||0):totalCost;
+    const ret30d    = startVal>0?((totalVal-startVal)/startVal*100).toFixed(1)+'%':null;
 
-PORTFOLIO SNAPSHOT (as of ${new Date().toLocaleDateString()}):
-Total Portfolio Value: ${fc(totalVal)}
-Total Cost Basis: ${fc(totalCost)}
-Total Unrealized P/L: ${fc(totalVal-totalCost)} (${totalCost>0?((totalVal-totalCost)/totalCost*100).toFixed(1):0}%)
-Total Dividends Received: ${fc(totalDivs)}
-${ret30d!==null?`30-Day Return: ${ret30d}%`:''}
-Number of Holdings: ${allItems.length}
+    const portfolioJSON = JSON.stringify({
+      asOf:           new Date().toLocaleDateString(),
+      summary: {
+        totalValue:        totalVal,
+        totalCostBasis:    totalCost,
+        unrealizedPL:      totalUnreal,
+        unrealizedPLPct:   totalCost>0?(totalUnreal/totalCost*100).toFixed(1)+'%':'N/A',
+        totalDividends:    totalDivs,
+        return30d:         ret30d,
+        numberOfHoldings:  holdings.length,
+      },
+      sectorBreakdown: sectors,
+      holdings:        holdings.sort((a,b)=>b.unrealizedPLPct-a.unrealizedPLPct),
+      recentHistory:   portHist.slice(-7).map(h=>({date:h.date,value:h.value})),
+    }, null, 2);
 
-SECTOR BREAKDOWN${hasRealSectors ? '' : ' (sector data not yet loaded — run Live Update to fetch)'}:
-${sectorBreakdown || 'No sector data available'}
+    const systemPrompt = `You are a personal financial analyst AI. The user's complete live portfolio data is below as JSON — treat it as ground truth. Answer questions using exact numbers from the data. Be concise (under 200 words). Do not use markdown bold (**). When asked about gains, give both dollar and percentage answers.
 
-HOLDINGS DETAIL (sorted by unrealized P/L % descending — first entry = highest gainer):
-${holdingsSummary}
-
-${portHist.length>1?`RECENT PORTFOLIO HISTORY (last ${portHist.length} days):
-${portHist.slice(-7).map(h=>`${h.date}: ${fc(h.value)}`).join('\n')}`:''}`;
+PORTFOLIO DATA:
+${portfolioJSON}`;
 
     const response = await fetch('https://ai-proxy.giolamchieu1975.workers.dev', {
       method:'POST',
@@ -15624,6 +15663,7 @@ ${portHist.slice(-7).map(h=>`${h.date}: ${fc(h.value)}`).join('\n')}`:''}`;
     typing.style.cssText = 'align-self:flex-start;max-width:85%;padding:10px 14px;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.3);border-radius:14px 14px 14px 4px;font-size:0.78rem;color:#e74c3c;';
     typing.textContent = 'Error: '+e.message;
   }
+  window._updateChatCounter();
   chat.scrollTop = chat.scrollHeight;
 };
 </script>
