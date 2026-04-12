@@ -3321,7 +3321,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 </div>
 <div class="modal" id="settingsModal" style="display: none;">
-<div class="modal-content">
+<div class="modal-content" style="max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">
 <button class="close-modal-btn" id="closeSettingsBtn">×</button>
 <h3 class="modal-title">Settings</h3>
 <div class="transaction-input-group">
@@ -8982,8 +8982,41 @@ await this.saveData();
     const month = document.getElementById('summary-month');
     try {
       const plToday = tracker.totalPLToday || tracker.total_pl_today || (tracker.getTotalPLToday && tracker.getTotalPLToday());
-      const pct1w = tracker.weekPercent || (tracker.getWeekPercent && tracker.getWeekPercent && tracker.getWeekPercent());
-      const pct1m = tracker.monthPercent || (tracker.getMonthPercent && tracker.getMonthPercent && tracker.getMonthPercent());
+      // Compute 1W and 1M from portfolioHistory since weekPercent/monthPercent are never set on tracker
+      let pct1w, pct1m;
+      try {
+        const hist = Array.isArray(tracker.portfolioHistory) ? tracker.portfolioHistory : [];
+        const now = Date.now();
+        const msDay = 86400 * 1000;
+        const currentVal = tracker.totalPortfolioValue || tracker.combinedTotal ||
+          (hist.length ? Number(hist[hist.length-1].value || hist[hist.length-1].totalValue || 0) : 0);
+        if (hist.length >= 2 && currentVal > 0) {
+          const cutoff1w = now - 7 * msDay;
+          const cutoff1m = now - 30 * msDay;
+          const sorted = hist.slice().sort((a,b) => new Date(a.date) - new Date(b.date));
+          const findBase = (cutoff) => {
+            let best = null;
+            for (const e of sorted) {
+              const t = new Date(e.date).getTime();
+              if (t <= cutoff) best = e;
+            }
+            return best;
+          };
+          const base1w = findBase(cutoff1w);
+          const base1m = findBase(cutoff1m);
+          if (base1w) {
+            const bv = Number(base1w.value || base1w.totalValue || 0);
+            if (bv > 0) pct1w = ((currentVal - bv) / bv) * 100;
+          }
+          if (base1m) {
+            const bv = Number(base1m.value || base1m.totalValue || 0);
+            if (bv > 0) pct1m = ((currentVal - bv) / bv) * 100;
+          }
+        }
+      } catch(e2) {}
+      // fallback to tracker properties if history didn't yield a result
+      if (pct1w === undefined) pct1w = tracker.weekPercent || (tracker.getWeekPercent && tracker.getWeekPercent());
+      if (pct1m === undefined) pct1m = tracker.monthPercent || (tracker.getMonthPercent && tracker.getMonthPercent());
       function fmtPillCurrency(v){
   const n = Number(v);
   if(!Number.isFinite(n)) return '$0.00';
