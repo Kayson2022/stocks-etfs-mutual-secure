@@ -2945,6 +2945,7 @@ body.dark-mode .modal-content {
   <button class="st-toolbar-btn" data-st-panel="divwaterfall">💧 Div Waterfall</button>
   <button class="st-toolbar-btn" data-st-panel="anomaly">🚨 Anomaly</button>
   <button class="st-toolbar-btn" data-st-panel="askai">💬 Ask Portfolio</button>
+  <button class="st-toolbar-btn" data-st-panel="overlap">🔍 ETF Overlap</button>
   <button class="st-toolbar-btn" data-st-panel="schedd">📄 Schedule D</button>
   <button class="st-toolbar-btn" data-st-panel="compact" id="stCompactBtn">⊞ Compact</button>
 </div>
@@ -2973,6 +2974,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     divwaterfall:'renderDividendWaterfall',
     anomaly:  'renderAnomaly',
     askai:    'renderAskPortfolio',
+    overlap:  'renderOverlap',
     schedd:   'renderSchedD',
   };
   if (key === 'compact') {
@@ -3059,6 +3061,11 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
   <div class="st-panel-title">📉 Performance Stats</div>
   <div class="st-panel-sub">CAGR, max drawdown, best/worst single day, win rate on closed positions, and average hold time.</div>
   <div id="stPerfStatsContent"></div>
+</div>
+<div id="stOverlapPanel" class="st-panel">
+  <div class="st-panel-title">🔍 ETF Overlap Detector</div>
+  <div class="st-panel-sub">Detects duplicate and overlapping funds in your portfolio. Flags "same index, different name" pairs and shadow overlap from shared top holdings.</div>
+  <div id="stOverlapContent"></div>
 </div>
 <div id="stAnomalyPanel" class="st-panel">
   <div class="st-panel-title">🚨 Anomaly Detector — AI Market Watchdog</div>
@@ -10952,6 +10959,7 @@ const PANELS = {
   divwaterfall:'stDivWaterfallPanel',
   anomaly:  'stAnomalyPanel',
   askai:    'stAskAiPanel',
+  overlap:  'stOverlapPanel',
   schedd:   'stSchedDPanel',
 };
 
@@ -15666,6 +15674,393 @@ ${portfolioJSON}`;
   window._updateChatCounter();
   chat.scrollTop = chat.scrollHeight;
 };
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     FEATURE: ETF OVERLAP DETECTOR
+     ══════════════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+
+// ── Knowledge base ─────────────────────────────────────────────────────────
+// Category: [{ symbols, name, description }]
+// Similarity groups: funds in the same group are near-identical
+const OVERLAP_DB = {
+
+  // ── IDENTICAL INDEX GROUPS (different fund companies, same index) ─────────
+  identicalGroups: [
+    {
+      name: 'S&P 500',
+      description: 'All track the exact same 500 large-cap US stocks.',
+      symbols: ['VOO','IVV','SPY','SPLG','FXAIX','SWPPX','SXPAX'],
+    },
+    {
+      name: 'Total US Market',
+      description: 'Covers virtually the entire US stock market.',
+      symbols: ['VTI','ITOT','SWTSX','FSKAX','FZROX'],
+    },
+    {
+      name: 'US Tech (Information Technology)',
+      description: 'Both track the MSCI US IMI Information Technology index.',
+      symbols: ['VGT','FTEC'],
+    },
+    {
+      name: 'Nasdaq-100',
+      description: 'Tracks the 100 largest non-financial Nasdaq companies.',
+      symbols: ['QQQ','QQQM'],
+    },
+    {
+      name: 'Total International',
+      description: 'Broad international developed + emerging markets.',
+      symbols: ['VXUS','IXUS','SWISX'],
+    },
+    {
+      name: 'Emerging Markets',
+      description: 'Tracks developing country equities.',
+      symbols: ['VWO','EEM','IEMG','SPEM'],
+    },
+    {
+      name: 'US Dividend (High Quality)',
+      description: 'Dividend growth focused ETFs with significant overlap.',
+      symbols: ['SCHD','VYM','DVY','HDV'],
+    },
+    {
+      name: 'Semiconductors',
+      description: 'Concentrated semiconductor sector funds.',
+      symbols: ['SOXX','SMH','FSELX','PSI'],
+    },
+    {
+      name: 'S&P 500 Growth',
+      description: 'Large-cap US growth stocks — top holdings nearly identical.',
+      symbols: ['SCHG','IVW','VOOG','SPYG','VUG'],
+    },
+    {
+      name: 'Total Bond Market',
+      description: 'Broad US investment-grade bond market.',
+      symbols: ['BND','AGG','FXNAX'],
+    },
+    {
+      name: 'Short-Term Treasury',
+      description: 'Short-duration US government bonds.',
+      symbols: ['VGSH','SHY','SCHO'],
+    },
+    {
+      name: 'Real Estate (REIT)',
+      description: 'US Real Estate Investment Trusts.',
+      symbols: ['VNQ','IYR','SCHH','FREL'],
+    },
+  ],
+
+  // ── SHADOW OVERLAP (different names, but heavily overlapping top holdings) ─
+  shadowGroups: [
+    {
+      name: 'Apple + Microsoft + Nvidia + Meta + Amazon Show',
+      description: 'These all have the same 5 mega-caps as their top holdings (~40–60% of each fund).',
+      symbols: ['QQQ','QQQM','SCHG','VUG','IVW','VOOG','SPYG','MGK','ONEQ'],
+      severity: 'high',
+    },
+    {
+      name: 'S&P 500 is already ~30% Tech',
+      description: 'Holding both a broad S&P 500 fund and a tech ETF means your Apple/MSFT/NVDA exposure is doubled.',
+      symbols: ['VOO','IVV','SPY','FXAIX'],
+      pairedWith: ['QQQ','QQQM','VGT','FTEC','IYW','XLK','SCHG','VUG'],
+      severity: 'medium',
+    },
+    {
+      name: 'VTI already contains VOO/SPY (S&P 500 = 85% of VTI)',
+      description: 'VTI is a superset of VOO. Holding both means 85% of your VTI duplicates your VOO position.',
+      symbols: ['VTI','ITOT','FSKAX'],
+      pairedWith: ['VOO','IVV','SPY','FXAIX','SPLG'],
+      severity: 'high',
+    },
+    {
+      name: 'Semiconductor funds overlap heavily with Tech ETFs',
+      description: 'SOXX/SMH/FSELX are concentrated slices of what VGT/QQQ already own.',
+      symbols: ['SOXX','SMH','FSELX','PSI'],
+      pairedWith: ['VGT','FTEC','QQQ','QQQM','IYW','XLK'],
+      severity: 'medium',
+    },
+    {
+      name: 'SCHD and VYM are both dividend ETFs with ~60% overlap',
+      description: 'Both focus on high-dividend US equities. Many of the same companies appear in both.',
+      symbols: ['SCHD','VYM'],
+      severity: 'medium',
+    },
+  ],
+
+  // ── CATEGORY TAGS ─────────────────────────────────────────────────────────
+  categories: {
+    'Core S&P 500':      ['VOO','IVV','SPY','SPLG','FXAIX','SWPPX'],
+    'Total US Market':   ['VTI','ITOT','SWTSX','FSKAX','FZROX'],
+    'US Growth/Tech':    ['QQQ','QQQM','VGT','FTEC','IYW','XLK','SCHG','VUG','IVW','VOOG','SPYG','MGK','ONEQ'],
+    'Semiconductors':    ['SOXX','SMH','FSELX','PSI','NVDA'],
+    'Value/Dividend':    ['SCHD','VYM','DVY','HDV','VTV','IVE'],
+    'International':     ['VXUS','IXUS','VEA','EFA','VWO','EEM','IEMG'],
+    'Bonds':             ['BND','AGG','FXNAX','VGSH','SHY','TLT','IEF'],
+    'Real Estate':       ['VNQ','IYR','SCHH','FREL'],
+    'Energy':            ['XLE','VDE','FENY'],
+    'Healthcare':        ['XLV','VHT','FHLC'],
+    'Leveraged':         ['TSLL','NVDL','TQQQ','SOXL','UPRO','SSO'],
+  },
+};
+
+// ── Main render function ───────────────────────────────────────────────────
+window.renderOverlap = function() {
+  const el = document.getElementById('stOverlapContent');
+  if (!el) return;
+  const tracker = window.stockTracker;
+  if (!tracker) {
+    el.innerHTML = '<p style="padding:16px;color:var(--text-secondary);text-align:center;">⏳ Portfolio not loaded yet.</p>';
+    return;
+  }
+
+  const allItems = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
+  const symbols  = allItems.map(i => i.symbol.toUpperCase());
+
+  if (symbols.length === 0) {
+    el.innerHTML = '<p style="padding:16px;color:var(--text-secondary);text-align:center;">No holdings found. Add stocks and funds first.</p>';
+    return;
+  }
+
+  // ── Check identical index overlaps ────────────────────────────────────────
+  const identicalHits = [];
+  OVERLAP_DB.identicalGroups.forEach(group => {
+    const matches = symbols.filter(s => group.symbols.includes(s));
+    if (matches.length >= 2) {
+      identicalHits.push({ ...group, matches });
+    }
+  });
+
+  // ── Check shadow overlaps ─────────────────────────────────────────────────
+  const shadowHits = [];
+  OVERLAP_DB.shadowGroups.forEach(group => {
+    if (group.pairedWith) {
+      // Check if user holds at least 1 from each side
+      const sideA = symbols.filter(s => group.symbols.includes(s));
+      const sideB = symbols.filter(s => group.pairedWith.includes(s));
+      if (sideA.length > 0 && sideB.length > 0) {
+        shadowHits.push({ ...group, matchesA: sideA, matchesB: sideB });
+      }
+    } else {
+      const matches = symbols.filter(s => group.symbols.includes(s));
+      if (matches.length >= 2) {
+        shadowHits.push({ ...group, matches });
+      }
+    }
+  });
+
+  // ── Category breakdown ────────────────────────────────────────────────────
+  const categoryMap = {};
+  symbols.forEach(sym => {
+    let found = false;
+    Object.entries(OVERLAP_DB.categories).forEach(([cat, tickers]) => {
+      if (tickers.includes(sym)) {
+        if (!categoryMap[cat]) categoryMap[cat] = [];
+        categoryMap[cat].push(sym);
+        found = true;
+      }
+    });
+    if (!found) {
+      if (!categoryMap['Other/Individual']) categoryMap['Other/Individual'] = [];
+      categoryMap['Other/Individual'].push(sym);
+    }
+  });
+
+  const overlapScore = Math.min(100, identicalHits.length * 35 + shadowHits.filter(h=>h.severity==='high').length * 25 + shadowHits.filter(h=>h.severity==='medium').length * 15);
+  const scoreColor   = overlapScore >= 60 ? '#e74c3c' : overlapScore >= 30 ? '#f39c12' : '#27ae60';
+  const scoreLabel   = overlapScore >= 60 ? '🔴 High Redundancy' : overlapScore >= 30 ? '🟡 Moderate Overlap' : '🟢 Well Diversified';
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  const identicalHTML = identicalHits.map(h => `
+    <div style="padding:12px 14px;background:var(--bg-secondary);border:1px solid #e74c3c;border-left:4px solid #e74c3c;border-radius:9px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
+        <div style="font-size:0.8rem;font-weight:800;color:#e74c3c;">🔴 Identical Index: ${h.name}</div>
+        <div style="display:flex;gap:5px;">${h.matches.map(s=>`<span style="padding:2px 8px;background:rgba(231,76,60,0.15);border-radius:999px;font-size:0.72rem;font-weight:700;color:#e74c3c;">${s}</span>`).join('')}</div>
+      </div>
+      <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.5;">${h.description}</div>
+      <div style="font-size:0.72rem;color:#e74c3c;margin-top:6px;font-weight:600;">💡 Recommendation: Keep one, sell the rest. You're paying fees for the same exposure.</div>
+    </div>`).join('');
+
+  const shadowHTML = shadowHits.map(h => {
+    const col = h.severity === 'high' ? '#f39c12' : '#3498db';
+    const icon = h.severity === 'high' ? '🟠' : '🔵';
+    const matchBadges = h.matches
+      ? h.matches.map(s=>`<span style="padding:2px 8px;background:rgba(243,156,18,0.15);border-radius:999px;font-size:0.72rem;font-weight:700;color:${col};">${s}</span>`).join('')
+      : [...(h.matchesA||[]).map(s=>`<span style="padding:2px 8px;background:rgba(243,156,18,0.15);border-radius:999px;font-size:0.72rem;font-weight:700;color:${col};">${s}</span>`),
+         '<span style="font-size:0.7rem;color:var(--text-secondary);padding:2px 4px;">overlaps with</span>',
+         ...(h.matchesB||[]).map(s=>`<span style="padding:2px 8px;background:rgba(52,152,219,0.15);border-radius:999px;font-size:0.72rem;font-weight:700;color:#3498db;">${s}</span>`)
+        ].join('');
+    return `
+    <div style="padding:12px 14px;background:var(--bg-secondary);border:1px solid ${col};border-left:4px solid ${col};border-radius:9px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+        <div style="font-size:0.8rem;font-weight:800;color:${col};">${icon} Shadow Overlap: ${h.name}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">${matchBadges}</div>
+      </div>
+      <div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.5;">${h.description}</div>
+    </div>`;
+  }).join('');
+
+  const catRows = Object.entries(categoryMap).map(([cat, syms]) => {
+    const warn = syms.length > 1 && cat !== 'Other/Individual';
+    return `<tr style="border-bottom:0.5px solid var(--border-color);">
+      <td style="padding:6px 8px;font-size:0.75rem;font-weight:600;">${cat}</td>
+      <td style="padding:6px 8px;font-size:0.75rem;">${syms.map(s=>`<span style="padding:2px 7px;border-radius:999px;border:1px solid var(--border-color);margin-right:3px;font-size:0.7rem;">${s}</span>`).join('')}</td>
+      <td style="padding:6px 8px;text-align:center;">${warn ? '<span style="color:#f39c12;font-size:0.72rem;font-weight:700;">⚠️ Possible overlap</span>' : '<span style="color:#27ae60;font-size:0.72rem;">✅</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  const totalIssues = identicalHits.length + shadowHits.length;
+
+  el.innerHTML = `
+    <!-- Score header -->
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding:14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:10px;">
+      <div style="position:relative;width:64px;height:64px;flex-shrink:0;">
+        <svg viewBox="0 0 36 36" style="width:64px;height:64px;transform:rotate(-90deg);">
+          <circle cx="18" cy="18" r="15.9" fill="none" stroke="var(--border-color)" stroke-width="3"/>
+          <circle cx="18" cy="18" r="15.9" fill="none" stroke="${scoreColor}" stroke-width="3"
+            stroke-dasharray="${overlapScore} ${100-overlapScore}" stroke-linecap="round"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;color:${scoreColor};">${overlapScore}</div>
+      </div>
+      <div>
+        <div style="font-size:1rem;font-weight:800;color:${scoreColor};">${scoreLabel}</div>
+        <div style="font-size:0.72rem;color:var(--text-secondary);margin-top:3px;">${symbols.length} holdings scanned · ${totalIssues} issue${totalIssues!==1?'s':''} found</div>
+        <div style="font-size:0.68rem;color:var(--text-secondary);margin-top:2px;">Overlap score: 0 = fully unique · 100 = all duplicates</div>
+      </div>
+      <div style="margin-left:auto;">
+        <button onclick="window.runOverlapAI()" id="overlapAiBtn"
+          style="padding:7px 14px;border-radius:8px;border:none;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:0.75rem;font-weight:700;cursor:pointer;white-space:nowrap;">
+          ✨ AI Advice
+        </button>
+      </div>
+    </div>
+
+    <!-- AI Result -->
+    <div id="overlapAiResult" style="display:none;margin-bottom:14px;"></div>
+
+    ${totalIssues === 0 ? `
+    <div style="padding:16px;background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.3);border-radius:9px;margin-bottom:14px;text-align:center;">
+      <div style="font-size:1.2rem;">✅</div>
+      <div style="font-size:0.85rem;font-weight:700;color:#27ae60;margin-top:4px;">No Overlap Detected</div>
+      <div style="font-size:0.72rem;color:var(--text-secondary);margin-top:4px;">Your holdings appear to be distinct. No identical index funds or known shadow overlaps found.</div>
+    </div>` : ''}
+
+    ${identicalHits.length > 0 ? `
+    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#e74c3c;margin-bottom:8px;">🔴 Identical Index Funds (${identicalHits.length})</div>
+    ${identicalHTML}` : ''}
+
+    ${shadowHits.length > 0 ? `
+    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#f39c12;margin:14px 0 8px;">🟠 Shadow Overlap (${shadowHits.length})</div>
+    ${shadowHTML}` : ''}
+
+    <!-- Category table -->
+    <div style="margin-top:16px;">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin-bottom:8px;">📋 Holdings by Category</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="border-bottom:2px solid var(--border-color);font-size:0.68rem;color:var(--text-secondary);">
+            <th style="padding:5px 8px;text-align:left;">Category</th>
+            <th style="padding:5px 8px;text-align:left;">Your Holdings</th>
+            <th style="padding:5px 8px;text-align:center;">Status</th>
+          </tr></thead>
+          <tbody>${catRows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- How it works -->
+    <details style="margin-top:14px;">
+      <summary style="font-size:0.72rem;font-weight:700;color:var(--text-secondary);cursor:pointer;text-transform:uppercase;letter-spacing:0.4px;">ℹ️ How Overlap Detection Works</summary>
+      <div style="margin-top:8px;padding:12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;font-size:0.76rem;color:var(--text-secondary);line-height:1.7;">
+        <strong style="color:var(--text-primary);">Identical Index:</strong> Flags funds from different companies that track the exact same index (e.g. VOO vs FXAIX = both S&P 500). You're paying two expense ratios for one bet.<br><br>
+        <strong style="color:var(--text-primary);">Shadow Overlap:</strong> Flags funds with different names but heavily overlapping top holdings. QQQ and SCHG sound different but both are ~40% Apple + Microsoft + Nvidia.<br><br>
+        <strong style="color:var(--text-primary);">Overlap Score:</strong> 0 = all your holdings are unique · 100 = everything duplicates everything else. Under 30 is healthy for most portfolios.<br><br>
+        <em>Based on a static knowledge base of common ETF relationships. For exact overlap percentages, check ETFrc.com or Morningstar X-Ray.</em>
+      </div>
+    </details>
+
+    <p style="font-size:0.65rem;color:var(--text-secondary);margin-top:12px;padding-top:8px;border-top:1px solid var(--border-color);">
+      Knowledge base covers 60+ common ETFs and mutual funds. Individual stocks are excluded from overlap analysis. Not financial advice.
+    </p>`;
+};
+
+// ── AI Advice for overlap ──────────────────────────────────────────────────
+window.runOverlapAI = async function() {
+  const btn    = document.getElementById('overlapAiBtn');
+  const result = document.getElementById('overlapAiResult');
+  if (!result) return;
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Analyzing…'; }
+  result.style.display='block';
+  result.innerHTML=`<div style="padding:12px;background:linear-gradient(135deg,rgba(102,126,234,0.1),rgba(118,75,162,0.1));border:1px solid rgba(102,126,234,0.3);border-radius:9px;font-size:0.8rem;color:var(--text-secondary);">✨ AI is reviewing your portfolio for redundancy…</div>`;
+
+  try {
+    const tracker  = window.stockTracker;
+    const allItems = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
+    const symbols  = allItems.map(i => i.symbol.toUpperCase());
+
+    const identicalHits = [];
+    OVERLAP_DB.identicalGroups.forEach(group => {
+      const matches = symbols.filter(s => group.symbols.includes(s));
+      if (matches.length >= 2) identicalHits.push({ name:group.name, matches });
+    });
+
+    const shadowHits = [];
+    OVERLAP_DB.shadowGroups.forEach(group => {
+      if (group.pairedWith) {
+        const sideA = symbols.filter(s => group.symbols.includes(s));
+        const sideB = symbols.filter(s => group.pairedWith.includes(s));
+        if (sideA.length>0 && sideB.length>0) shadowHits.push({ name:group.name, sideA, sideB });
+      } else {
+        const matches = symbols.filter(s => group.symbols.includes(s));
+        if (matches.length>=2) shadowHits.push({ name:group.name, matches });
+      }
+    });
+
+    const calcStats = (item) => tracker.calculateTransactionStats(
+      JSON.parse(JSON.stringify(item.transactions||[])), item.price||0
+    );
+    const holdingValues = allItems.map(item => {
+      const st = calcStats(item);
+      return `${item.symbol}: $${((st.totalSharesOwned||0)*(item.price||0)).toFixed(0)}`;
+    }).join(', ');
+
+    const prompt = `You are a portfolio efficiency advisor. The user holds these ETFs/stocks: ${symbols.join(', ')}.
+
+Position values: ${holdingValues}
+
+Detected issues:
+${identicalHits.length>0 ? 'IDENTICAL INDEX FUNDS: '+identicalHits.map(h=>`${h.matches.join(' + ')} (both track ${h.name})`).join('; ') : 'No identical funds.'}
+${shadowHits.length>0 ? 'SHADOW OVERLAP: '+shadowHits.map(h=>h.matches?h.matches.join(' + '):(h.sideA.join(',')+' overlaps with '+h.sideB.join(','))).join('; ') : 'No shadow overlap.'}
+
+Give specific, actionable advice in 3-4 short paragraphs:
+1. Which specific funds to consolidate and why
+2. What the user would gain by simplifying (lower fees, cleaner exposure)
+3. What to keep and why
+Be direct. Use the actual ticker symbols. No generic advice. Under 220 words. No bullet points.`;
+
+    const response = await fetch('https://ai-proxy.giolamchieu1975.workers.dev', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, messages:[{role:'user',content:prompt}] })
+    });
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message||JSON.stringify(data.error));
+    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    if (!text) throw new Error('No response');
+
+    result.innerHTML=`<div style="padding:16px;background:linear-gradient(135deg,rgba(102,126,234,0.08),rgba(118,75,162,0.08));border:1px solid rgba(102,126,234,0.25);border-radius:10px;">
+      <div style="font-size:0.72rem;color:rgba(102,126,234,1);font-weight:700;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px;">✨ AI Portfolio Efficiency Advice</div>
+      <div style="font-size:0.82rem;color:var(--text-primary);line-height:1.7;">${text.split('\n\n').join('</p><p style="margin:8px 0;">').split('\n').join('<br>')}</div>
+      <div style="font-size:0.62rem;color:var(--text-secondary);margin-top:10px;padding-top:8px;border-top:1px solid rgba(102,126,234,0.2);">Generated by Gemini AI · Not financial advice</div>
+    </div>`;
+    if(btn){btn.textContent='✨ AI Advice';btn.disabled=false;}
+  } catch(e) {
+    result.innerHTML=`<div style="padding:12px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;font-size:0.78rem;color:#e74c3c;">AI unavailable: ${e.message}</div>`;
+    if(btn){btn.textContent='✨ AI Advice';btn.disabled=false;}
+  }
+};
+
+})();
 </script>
 
 <!-- Safety net: re-expose all panel functions globally after IIFE runs -->
