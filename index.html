@@ -3065,7 +3065,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 </div>
 <!-- Sleep-at-Night Index + Coast FIRE -->
-<div id="san-fire-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+<div id="san-fire-row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;position:relative;z-index:2;">
 
   <!-- Sleep-at-Night -->
   <div style="flex:1;min-width:220px;padding:10px 14px;background:rgba(0,0,0,0.25);border:1px solid rgba(148,163,184,0.2);border-radius:10px;">
@@ -3100,7 +3100,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
   </div>
 
 </div>
-<div class="utility-buttons-grid">
+<div class="utility-buttons-grid" style="position:relative;z-index:2;">
 <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
 <button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
 <div class="import-wrapper">
