@@ -16106,101 +16106,114 @@ window.runOverlapAI = async function(mode) {
       JSON.parse(JSON.stringify(item.transactions||[])), item.price||0
     );
 
-    // Build full holding context
+    // ── Pre-compute a LEAN summary — avoids bloating the prompt ──────────
     const holdings = allItems.map(item => {
       const st  = calcStats(item);
       const val = (st.totalSharesOwned||0) * (item.price||0);
-      const sec = item.industry || item.sector || item.finnhubSector || 'Unknown';
-      return { symbol: item.symbol, value: val, sector: sec, pct: 0 };
-    });
+      return { symbol: item.symbol, value: val };
+    }).filter(h => h.value > 0);
     const totalVal = holdings.reduce((s,h)=>s+h.value, 0);
-    holdings.forEach(h => h.pct = totalVal > 0 ? (h.value/totalVal*100).toFixed(1) : 0);
 
-    // Detect sector concentration
-    const sectorMap = {};
+    // Bucket every symbol into a category
+    const categorize = (sym) => {
+      if (['VOO','IVV','SPY','FXAIX','SPLG','SWPPX'].includes(sym))          return 'S&P 500 ETF';
+      if (['VTI','ITOT','FSKAX','FZROX','SWTSX'].includes(sym))              return 'Total Market ETF';
+      if (['QQQ','QQQM'].includes(sym))                                       return 'Nasdaq-100 ETF';
+      if (['VGT','FTEC','IYW','XLK'].includes(sym))                          return 'Tech Sector ETF';
+      if (['SCHG','VUG','IVW','VOOG','SPYG','MGK'].includes(sym))            return 'US Growth ETF';
+      if (['SOXX','SMH','FSELX','PSI'].includes(sym))                        return 'Semiconductor ETF';
+      if (['SCHD','VYM','DVY','HDV'].includes(sym))                          return 'Dividend ETF';
+      if (['VXUS','IXUS','VEA','EFA'].includes(sym))                         return 'Intl Developed ETF';
+      if (['VWO','EEM','IEMG','SPEM'].includes(sym))                         return 'Emerging Markets ETF';
+      if (['BND','AGG','FXNAX','TLT','IEF','VGSH','SHY'].includes(sym))     return 'Bond ETF';
+      if (['VNQ','IYR','SCHH','FREL'].includes(sym))                         return 'Real Estate ETF';
+      if (['GLD','IAU','SLV','PDBC'].includes(sym))                          return 'Commodity ETF';
+      if (['TSLL','NVDL','TQQQ','SOXL','UPRO'].includes(sym))               return 'Leveraged ETF';
+      return 'Individual Stock';
+    };
+
+    // Category totals
+    const catMap = {};
     holdings.forEach(h => {
-      const cat = (() => {
-        const s = h.symbol;
-        if (['VOO','IVV','SPY','FXAIX','SPLG','VTI','ITOT','FSKAX'].includes(s)) return 'US Core/Total Market';
-        if (['QQQ','QQQM','VGT','FTEC','IYW','XLK','SCHG','VUG','SOXX','SMH','FSELX'].includes(s)) return 'US Tech/Growth';
-        if (['SCHD','VYM','DVY','HDV'].includes(s)) return 'US Dividend';
-        if (['VXUS','IXUS','VEA','EFA','VWO','EEM','IEMG'].includes(s)) return 'International';
-        if (['BND','AGG','TLT','IEF','VGSH','SHY'].includes(s)) return 'Bonds';
-        if (['VNQ','IYR','SCHH'].includes(s)) return 'Real Estate';
-        if (['GLD','IAU','SLV'].includes(s)) return 'Commodities';
-        return h.sector !== 'Unknown' ? h.sector : 'Individual Stocks';
-      })();
-      sectorMap[cat] = (sectorMap[cat]||0) + h.value;
+      const cat = categorize(h.symbol);
+      catMap[cat] = (catMap[cat]||{total:0, symbols:[]});
+      catMap[cat].total += h.value;
+      catMap[cat].symbols.push(h.symbol);
     });
-    const sectorBreakdown = Object.entries(sectorMap)
-      .sort((a,b)=>b[1]-a[1])
-      .map(([cat,val])=>`${cat}: ${(val/totalVal*100).toFixed(1)}%`)
-      .join(', ');
 
-    const holdingStr = holdings
+    // Top 15 holdings by value only (not all 58)
+    const top15 = holdings
       .sort((a,b)=>b.value-a.value)
-      .map(h=>`${h.symbol} (${h.pct}%, $${Math.round(h.value).toLocaleString()})`)
+      .slice(0,15)
+      .map(h=>`${h.symbol} ${(h.value/totalVal*100).toFixed(1)}%`)
       .join(', ');
 
-    // Detect overlaps for context
+    const catSummary = Object.entries(catMap)
+      .sort((a,b)=>b[1].total-a[1].total)
+      .map(([cat,d])=>`${cat} (${(d.total/totalVal*100).toFixed(0)}%): ${d.symbols.join(',')}`)
+      .join('\n');
+
+    // Identical overlaps — just the pairs, short
     const identicalHits = [];
-    OVERLAP_DB.identicalGroups.forEach(group => {
-      const matches = symbols.filter(s => group.symbols.includes(s));
-      if (matches.length >= 2) identicalHits.push(matches.join(' = ') + ` (same ${group.name} index)`);
+    OVERLAP_DB.identicalGroups.forEach(g => {
+      const m = symbols.filter(s=>g.symbols.includes(s));
+      if (m.length>=2) identicalHits.push(m.join('=') + ' [same ' + g.name + ']');
     });
     const shadowHits = [];
-    OVERLAP_DB.shadowGroups.forEach(group => {
-      if (group.pairedWith) {
-        const a = symbols.filter(s => group.symbols.includes(s));
-        const b = symbols.filter(s => group.pairedWith.includes(s));
-        if (a.length&&b.length) shadowHits.push(`${a.join(',')} overlaps with ${b.join(',')}`);
+    OVERLAP_DB.shadowGroups.forEach(g => {
+      if (g.pairedWith) {
+        const a=symbols.filter(s=>g.symbols.includes(s));
+        const b=symbols.filter(s=>g.pairedWith.includes(s));
+        if (a.length&&b.length) shadowHits.push(a.join(',') + ' overlaps ' + b.join(','));
       } else {
-        const m = symbols.filter(s => group.symbols.includes(s));
-        if (m.length>=2) shadowHits.push(m.join(' + ') + ` (${group.name})`);
+        const m=symbols.filter(s=>g.symbols.includes(s));
+        if (m.length>=2) shadowHits.push(m.join('+'));
       }
     });
 
-    // ── Build prompt based on mode ─────────────────────────────────────────
-    const baseContext = `Portfolio total: $${Math.round(totalVal).toLocaleString()}
-Holdings (by weight): ${holdingStr}
-Sector breakdown: ${sectorBreakdown}
-Identical index funds: ${identicalHits.length ? identicalHits.join('; ') : 'None'}
-Shadow overlaps: ${shadowHits.length ? shadowHits.join('; ') : 'None'}`;
+    // ── Tight base context — under 400 tokens ──────────────────────────────
+    const baseContext =
+`Total: $${Math.round(totalVal).toLocaleString()} | ${holdings.length} positions
+Top 15 by weight: ${top15}
+Category breakdown:
+${catSummary}
+Redundancies: ${identicalHits.join('; ')||'none'}
+Shadow overlap: ${shadowHits.join('; ')||'none'}`;
 
     const prompts = {
 
-      cleanup: `You are a portfolio efficiency advisor. Analyze this portfolio and give specific cleanup advice.
-
+      cleanup:
+`You are a portfolio efficiency advisor. Portfolio data:
 ${baseContext}
 
-Write 3-4 focused paragraphs:
-1. Specific funds to consolidate or eliminate (use ticker symbols, explain why)
-2. Fee savings from simplification
-3. What to keep and why it earns its place
-4. The leaner 3-5 fund portfolio this could become
-Write a THOROUGH and COMPLETE response. Cover every point in full detail — do not summarize or cut short. Minimum 400 words. Use the actual tickers throughout with specific dollar amounts.`,
+Write 4 complete paragraphs:
+P1 — Redundancy problem: which exact tickers duplicate each other and why that wastes money
+P2 — What to sell: specific tickers to eliminate with dollar amounts from the data above
+P3 — What to keep and why each earns its place
+P4 — The simplified portfolio: recommend a clean 4-6 position structure using actual tickers
+Be thorough. Use ticker symbols and dollar amounts throughout. Do not stop before completing all 4 paragraphs.`,
 
-      rebalance: `You are a portfolio strategist. This portfolio is concentrated in US tech/growth. Give a specific rebalancing roadmap.
-
+      rebalance:
+`You are a portfolio strategist. Portfolio data:
 ${baseContext}
 
-Write 4 paragraphs covering:
-1. Current concentration problem (quantify using the percentages above — e.g. "X% in US tech is double the recommended...")
-2. Target allocation recommendation with specific percentages (e.g. "65% US core, 15% international, 10% bonds, 10% dividend")
-3. Specific ETFs to ADD to fill gaps (international exposure: VXUS, bonds: BND, dividend income: SCHD — use actual tickers)
-4. How to get there: trim the overlap, redirect into underweight areas
-Be specific with numbers and tickers. Write a THOROUGH and COMPLETE response — minimum 500 words. Include exact dollar amounts to sell/buy for each position. Do not stop early. No bullet points.`,
+Write 4 complete paragraphs:
+P1 — Concentration problem: quantify how overweight this portfolio is in US tech/growth vs a healthy allocation
+P2 — Target allocation: recommended % split across US core / international / bonds / dividend / alternatives
+P3 — Specific actions: which tickers to trim (with $ amounts), which new ETFs to add (VXUS for international, BND for bonds, etc.)
+P4 — Timeline and priority: what to do first, second, third to get to the target allocation
+Use the actual tickers and dollar figures. Be concrete. Do not stop before completing all 4 paragraphs.`,
 
-      outlook: `You are a forward-looking market strategist with expertise in long-term investing. Analyze this portfolio in the context of 5–10 year market trends.
-
+      outlook:
+`You are a market strategist. Portfolio data:
 ${baseContext}
 
-Write 4 paragraphs:
-1. Where this portfolio is positioned today (strengths given current macro environment — AI boom, rate cycle, etc.)
-2. Risks over the next 5–10 years specific to THIS portfolio (US concentration risk, tech valuation, currency risk from no international exposure, etc.)
-3. Emerging opportunities the portfolio is missing (international markets, sectors poised to grow, asset classes for the next decade)
-4. One specific action to future-proof this portfolio
-Be specific to the actual holdings. Reference real macro trends. Honest about uncertainty. Write a THOROUGH and COMPLETE response — minimum 500 words covering all 4 paragraphs fully. Do not stop early or truncate any section. No bullet points.`,
+Write 4 complete paragraphs:
+P1 — Current positioning strengths: how this portfolio has benefited from recent AI/tech boom and what that means going forward
+P2 — 5-year risks: US concentration risk, tech valuation multiples, interest rate sensitivity, geopolitical risk from zero international exposure
+P3 — 10-year opportunities being missed: which asset classes and geographies are likely to outperform, and what this portfolio lacks
+P4 — One clear action: the single most impactful change to make this portfolio more resilient for the next decade
+Be specific to the actual holdings listed. Reference real macro trends. Do not stop before completing all 4 paragraphs.`,
     };
 
     const response = await fetch('https://ai-proxy.giolamchieu1975.workers.dev', {
