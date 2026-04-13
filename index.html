@@ -3065,8 +3065,8 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
   <div id="stPerfStatsContent"></div>
 </div>
 <div id="stExposurePanel" class="st-panel">
-  <div class="st-panel-title">🔬 True Exposure — Look-Through Analysis</div>
-  <div class="st-panel-sub">Calculates your real exposure to individual companies by looking through your ETFs. Reveals hidden concentration — e.g. how much Apple you actually own across VOO + QQQ + VGT combined.</div>
+  <div class="st-panel-title">🔬 Stock Concentration — % of Portfolio</div>
+  <div class="st-panel-sub">Shows each individual stock and ETF as a percentage of your total portfolio value. Flags any single stock over 10% as a concentration risk.</div>
   <div id="stExposureContent"></div>
 </div>
 <div id="stOverlapPanel" class="st-panel">
@@ -16283,54 +16283,11 @@ document.addEventListener('keydown', function(e) {
 </script>
 
 <!-- ══════════════════════════════════════════════════════════════════
-     FEATURE: TRUE EXPOSURE / LOOK-THROUGH ANALYSIS
+     FEATURE: STOCK CONCENTRATION — % of portfolio per individual stock
      ══════════════════════════════════════════════════════════════════ -->
 <script>
 (function() {
 
-// ── ETF Look-Through Database ─────────────────────────────────────────────
-// Top holdings with approximate weights (%) as of early 2026
-// Sources: ETF issuer fact sheets. Weights shift monthly — these are estimates.
-const ETF_HOLDINGS = {
-  // S&P 500 / Total Market
-  'VOO':  { 'AAPL':7.2,'MSFT':6.4,'NVDA':6.1,'AMZN':3.8,'META':2.6,'GOOGL':2.1,'GOOG':1.8,'TSLA':1.7,'BRK.B':1.7,'AVGO':1.6,'JPM':1.4,'LLY':1.2,'UNH':1.1,'V':1.1,'XOM':1.0 },
-  'IVV':  { 'AAPL':7.2,'MSFT':6.4,'NVDA':6.1,'AMZN':3.8,'META':2.6,'GOOGL':2.1,'GOOG':1.8,'TSLA':1.7,'BRK.B':1.7,'AVGO':1.6,'JPM':1.4,'LLY':1.2,'UNH':1.1,'V':1.1,'XOM':1.0 },
-  'SPY':  { 'AAPL':7.2,'MSFT':6.4,'NVDA':6.1,'AMZN':3.8,'META':2.6,'GOOGL':2.1,'GOOG':1.8,'TSLA':1.7,'BRK.B':1.7,'AVGO':1.6,'JPM':1.4,'LLY':1.2,'UNH':1.1,'V':1.1,'XOM':1.0 },
-  'SPLG': { 'AAPL':7.2,'MSFT':6.4,'NVDA':6.1,'AMZN':3.8,'META':2.6,'GOOGL':2.1,'GOOG':1.8,'TSLA':1.7,'BRK.B':1.7,'AVGO':1.6,'JPM':1.4,'LLY':1.2,'UNH':1.1,'V':1.1,'XOM':1.0 },
-  'FXAIX':{ 'AAPL':7.2,'MSFT':6.4,'NVDA':6.1,'AMZN':3.8,'META':2.6,'GOOGL':2.1,'GOOG':1.8,'TSLA':1.7,'BRK.B':1.7,'AVGO':1.6,'JPM':1.4,'LLY':1.2,'UNH':1.1,'V':1.1,'XOM':1.0 },
-  'VTI':  { 'AAPL':6.5,'MSFT':5.8,'NVDA':5.5,'AMZN':3.4,'META':2.4,'GOOGL':1.9,'GOOG':1.6,'TSLA':1.5,'BRK.B':1.6,'AVGO':1.5,'JPM':1.3,'LLY':1.1,'UNH':1.0,'V':1.0,'XOM':0.9 },
-  'ITOT': { 'AAPL':6.5,'MSFT':5.8,'NVDA':5.5,'AMZN':3.4,'META':2.4,'GOOGL':1.9,'GOOG':1.6,'TSLA':1.5,'BRK.B':1.6,'AVGO':1.5,'JPM':1.3,'LLY':1.1,'UNH':1.0,'V':1.0,'XOM':0.9 },
-  'FSKAX':{ 'AAPL':6.5,'MSFT':5.8,'NVDA':5.5,'AMZN':3.4,'META':2.4,'GOOGL':1.9,'GOOG':1.6,'TSLA':1.5,'BRK.B':1.6,'AVGO':1.5,'JPM':1.3,'LLY':1.1,'UNH':1.0,'V':1.0,'XOM':0.9 },
-  // Nasdaq-100
-  'QQQ':  { 'AAPL':9.0,'MSFT':7.9,'NVDA':7.2,'AMZN':5.3,'META':4.6,'TSLA':3.2,'GOOGL':2.8,'GOOG':2.6,'AVGO':2.5,'COST':2.4,'NFLX':1.6,'TMUS':1.1,'AMD':1.0,'ADBE':1.0,'QCOM':0.9 },
-  'QQQM': { 'AAPL':9.0,'MSFT':7.9,'NVDA':7.2,'AMZN':5.3,'META':4.6,'TSLA':3.2,'GOOGL':2.8,'GOOG':2.6,'AVGO':2.5,'COST':2.4,'NFLX':1.6,'TMUS':1.1,'AMD':1.0,'ADBE':1.0,'QCOM':0.9 },
-  // Tech ETFs
-  'VGT':  { 'AAPL':15.8,'MSFT':14.2,'NVDA':12.1,'AVGO':4.4,'ORCL':2.6,'AMD':1.9,'ADBE':1.8,'CRM':1.7,'ACN':1.6,'CSCO':1.5,'QCOM':1.5,'TXN':1.4,'AMAT':1.3,'INTC':0.9,'MU':0.9 },
-  'FTEC': { 'AAPL':15.8,'MSFT':14.2,'NVDA':12.1,'AVGO':4.4,'ORCL':2.6,'AMD':1.9,'ADBE':1.8,'CRM':1.7,'ACN':1.6,'CSCO':1.5,'QCOM':1.5,'TXN':1.4,'AMAT':1.3,'INTC':0.9,'MU':0.9 },
-  'IYW':  { 'AAPL':17.1,'MSFT':15.4,'NVDA':13.2,'AVGO':4.8,'ORCL':2.8,'AMD':2.0,'ADBE':1.9,'CRM':1.8,'ACN':1.7,'CSCO':1.6,'QCOM':1.6,'TXN':1.5,'AMAT':1.4,'INTC':1.0,'MU':1.0 },
-  'XLK':  { 'AAPL':21.8,'MSFT':21.2,'NVDA':8.2,'AVGO':4.9,'AMD':2.4,'ADBE':2.2,'CRM':2.1,'CSCO':2.0,'ACN':1.9,'TXN':1.8,'QCOM':1.7,'ORCL':1.6,'AMAT':1.5,'MU':1.2,'INTC':1.0 },
-  // Growth ETFs
-  'SCHG': { 'AAPL':12.4,'MSFT':11.6,'NVDA':10.8,'AMZN':6.2,'META':5.1,'GOOGL':3.8,'GOOG':3.2,'TSLA':3.0,'AVGO':2.8,'COST':1.9,'NFLX':1.4,'AMD':1.1,'ADBE':1.0,'V':0.9,'MA':0.9 },
-  'VUG':  { 'AAPL':12.1,'MSFT':11.2,'NVDA':10.4,'AMZN':6.0,'META':4.9,'GOOGL':3.6,'GOOG':3.0,'TSLA':2.9,'AVGO':2.7,'COST':1.8,'NFLX':1.3,'AMD':1.0,'V':1.0,'MA':0.9,'ADBE':0.9 },
-  'IVW':  { 'AAPL':11.8,'MSFT':10.9,'NVDA':10.1,'AMZN':5.8,'META':4.7,'GOOGL':3.5,'GOOG':2.9,'TSLA':2.8,'AVGO':2.6,'COST':1.7,'NFLX':1.2,'AMD':1.0,'V':1.0,'MA':0.9,'LLY':0.9 },
-  // Semiconductor ETFs
-  'SOXX': { 'NVDA':12.1,'AVGO':11.8,'AMD':8.2,'QCOM':6.4,'TXN':6.1,'AMAT':5.9,'INTC':4.8,'MU':4.7,'MRVL':4.2,'LRCX':4.0,'KLAC':3.8,'ON':3.2,'MCHP':2.9,'ADI':2.8,'MPWR':2.4 },
-  'SMH':  { 'NVDA':24.8,'TSM':14.2,'AVGO':8.1,'ASML':5.4,'QCOM':4.8,'AMD':4.6,'TXN':4.2,'AMAT':3.8,'INTC':3.2,'MU':3.0,'LRCX':2.8,'KLAC':2.6,'ADI':2.4,'MRVL':2.2,'ON':2.0 },
-  'FSELX':{ 'NVDA':22.4,'AVGO':14.6,'AMD':8.8,'QCOM':6.2,'TXN':5.8,'AMAT':5.4,'INTC':4.6,'MU':4.4,'MRVL':3.8,'LRCX':3.6,'KLAC':3.2,'ON':2.8,'ADI':2.6,'MCHP':2.4,'MPWR':2.2 },
-  // Dividend ETFs
-  'SCHD': { 'AVGO':4.2,'LMT':4.1,'HD':4.0,'ABBV':3.9,'KO':3.8,'PEP':3.6,'CVX':3.5,'PFE':3.4,'MRK':3.3,'IBM':3.2,'TXN':3.1,'AMGN':3.0,'VZ':2.9,'MMM':2.8,'UPS':2.7 },
-  'VYM':  { 'JPM':3.8,'XOM':3.6,'JNJ':3.4,'AVGO':3.2,'PG':3.1,'HD':3.0,'CVX':2.9,'ABBV':2.8,'MRK':2.7,'KO':2.6,'PEP':2.5,'LLY':2.4,'PFE':2.3,'MCD':2.2,'VZ':2.1 },
-  'DVY':  { 'VZ':4.8,'IBM':4.6,'CVX':4.4,'XOM':4.2,'T':4.0,'MO':3.8,'PFE':3.6,'KO':3.4,'PEP':3.2,'MMM':3.0,'WBA':2.8,'LYB':2.6,'IP':2.4,'OKE':2.2,'PM':2.0 },
-  // International
-  'VXUS': { 'ASML':1.2,'TSM':1.1,'SAP':0.8,'NOVO.B':0.8,'TM':0.7,'NESN':0.7,'SHEL':0.6,'NVO':0.6,'ULVR':0.5,'MC':0.5,'ROG':0.5,'NOVN':0.4,'RMS':0.4,'AZN':0.4,'SIE':0.4 },
-  'IXUS': { 'ASML':1.2,'TSM':1.1,'SAP':0.8,'NOVO.B':0.8,'TM':0.7,'NESN':0.7,'SHEL':0.6,'NVO':0.6,'ULVR':0.5,'MC':0.5,'ROG':0.5,'NOVN':0.4,'RMS':0.4,'AZN':0.4,'SIE':0.4 },
-  // Real Estate
-  'VNQ':  { 'PLD':10.2,'AMT':8.8,'EQIX':8.1,'WELL':5.4,'SPG':4.8,'O':4.6,'PSA':4.4,'VICI':4.2,'EQR':3.8,'AVB':3.6,'DLR':3.4,'WY':3.2,'SUI':2.8,'IRM':2.6,'MAA':2.4 },
-  // Bonds (no stock look-through needed)
-  'BND':  {}, 'AGG':{}, 'TLT':{}, 'IEF':{}, 'VGSH':{}, 'SHY':{},
-};
-
-// ── Main render function ───────────────────────────────────────────────────
 window.renderTrueExposure = function() {
   const el = document.getElementById('stExposureContent');
   if (!el) return;
@@ -16340,168 +16297,212 @@ window.renderTrueExposure = function() {
     return;
   }
 
+  const fc = n => '$' + Number(n||0).toLocaleString('en-US', {maximumFractionDigits:0});
   const allItems = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
-  const calcStats = (item) => tracker.calculateTransactionStats(
-    JSON.parse(JSON.stringify(item.transactions||[])), item.price||0
-  );
 
-  const fc  = n => '$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});
-  const pct = n => Number(n||0).toFixed(2)+'%';
+  // ── Identify ETFs vs individual stocks ───────────────────────────────────
+  const KNOWN_ETFS = new Set([
+    'VOO','IVV','SPY','SPLG','FXAIX','VTI','ITOT','FSKAX','FZROX','SWTSX',
+    'QQQ','QQQM','VGT','FTEC','IYW','XLK','SCHG','VUG','IVW','VOOG','SPYG','MGK',
+    'SOXX','SMH','FSELX','PSI','SCHD','VYM','DVY','HDV','VTV','IVE',
+    'VXUS','IXUS','VEA','EFA','VWO','EEM','IEMG','SPEM',
+    'BND','AGG','FXNAX','TLT','IEF','VGSH','SHY','BIL','SGOV',
+    'VNQ','IYR','SCHH','FREL','GLD','IAU','SLV','PDBC',
+    'TSLL','NVDL','TQQQ','SOXL','UPRO','SSO','SPXL',
+    'JEPQ','JEPI','SCHB','SCHA','SCHF','SCHE','SCHI',
+  ]);
+  const isETF = item => {
+    const s = item.symbol.toUpperCase();
+    if (item.type==='mutualFund' || (s.length===5&&s.endsWith('X'))) return true;
+    return KNOWN_ETFS.has(s);
+  };
 
-  // ── Build position values ─────────────────────────────────────────────────
-  const positions = {};  // symbol → { value, isDirect }
+  // ── Compute each item's current value ────────────────────────────────────
   let totalPortVal = 0;
-
+  const positions = {}; // sym → { value, isEtf, item }
   allItems.forEach(item => {
-    const st  = calcStats(item);
-    const val = (st.totalSharesOwned||0) * (item.price||0);
+    const txClone = JSON.parse(JSON.stringify(item.transactions||[]));
+    const st  = tracker.calculateTransactionStats(txClone, item.price||0);
+    const val = st.currentValue || 0;
     if (val <= 0) return;
     totalPortVal += val;
-    positions[item.symbol.toUpperCase()] = { value: val, isDirect: true };
+    positions[item.symbol.toUpperCase()] = { value: val, isEtf: isETF(item), item };
   });
 
   if (totalPortVal === 0) {
-    el.innerHTML = '<p style="padding:16px;color:var(--text-secondary);text-align:center;">No holdings with value found.</p>';
+    el.innerHTML = '<p style="padding:16px;color:var(--text-secondary);text-align:center;">No holdings found.</p>';
     return;
   }
 
   // ── Look-through: compute effective exposure per company ─────────────────
-  const exposure = {};  // company → { direct$, indirect$, via: {etf: $} }
+  // Direct stocks counted at full value
+  // ETFs decomposed using known weights, remainder kept as "ETF basket"
+  const exposure = {}; // company → { direct, etfBreakdown:{etf:$}, etfUnmapped }
 
   Object.entries(positions).forEach(([sym, pos]) => {
-    const etfData = ETF_HOLDINGS[sym];
-    if (etfData && Object.keys(etfData).length > 0) {
-      // This is an ETF — distribute its value through holdings
-      Object.entries(etfData).forEach(([company, weightPct]) => {
-        const exposureVal = pos.value * (weightPct / 100);
-        if (!exposure[company]) exposure[company] = { direct: 0, indirect: 0, via: {} };
-        exposure[company].indirect += exposureVal;
-        exposure[company].via[sym] = (exposure[company].via[sym] || 0) + exposureVal;
-      });
-    } else {
-      // Direct stock holding
-      if (!exposure[sym]) exposure[sym] = { direct: 0, indirect: 0, via: {} };
+    if (!pos.isEtf) {
+      // Individual stock — count directly
+      if (!exposure[sym]) exposure[sym] = { direct:0, etfBreakdown:{}, etfUnmapped:0 };
       exposure[sym].direct += pos.value;
+    } else {
+      // ETF — look through holdings database
+      const etfData = ETF_HOLDINGS[sym];
+      if (etfData && Object.keys(etfData).length > 0) {
+        let mapped = 0;
+        Object.entries(etfData).forEach(([company, weightPct]) => {
+          const expVal = pos.value * (weightPct / 100);
+          if (!exposure[company]) exposure[company] = { direct:0, etfBreakdown:{}, etfUnmapped:0 };
+          exposure[company].etfBreakdown[sym] = (exposure[company].etfBreakdown[sym]||0) + expVal;
+          mapped += expVal;
+        });
+        // Unmapped remainder treated as "other ETF holdings"
+        const unmapped = pos.value - mapped;
+        if (unmapped > 0) {
+          const key = sym + '_OTHER';
+          exposure[key] = exposure[key] || { direct:0, etfBreakdown:{}, etfUnmapped:0 };
+          exposure[key].etfUnmapped += unmapped;
+        }
+      } else {
+        // Bond ETF or unknown — keep as whole
+        if (!exposure[sym]) exposure[sym] = { direct:0, etfBreakdown:{}, etfUnmapped:0 };
+        exposure[sym].direct += pos.value;
+      }
     }
   });
 
-  // Combine direct + indirect, compute total exposure
-  const combined = Object.entries(exposure).map(([company, data]) => {
-    const total = data.direct + data.indirect;
-    const pctOfPortfolio = (total / totalPortVal) * 100;
-    return { company, direct: data.direct, indirect: data.indirect, total, pct: pctOfPortfolio, via: data.via };
-  }).filter(h => h.total > 100) // hide tiny positions
-    .sort((a, b) => b.total - a.total);
+  // Build sorted list — only show named companies (exclude _OTHER keys)
+  const combined = Object.entries(exposure)
+    .filter(([k]) => !k.endsWith('_OTHER'))
+    .map(([company, d]) => {
+      const etfTotal = Object.values(d.etfBreakdown).reduce((s,v)=>s+v, 0);
+      const total = d.direct + etfTotal;
+      return {
+        company,
+        direct:   d.direct,
+        etfTotal,
+        etfBreakdown: d.etfBreakdown,
+        total,
+        pct: (total / totalPortVal) * 100,
+        isDirectOnly: d.direct > 0 && etfTotal === 0,
+        hasDirect:    d.direct > 0,
+      };
+    })
+    .filter(h => h.total > 200)
+    .sort((a,b) => b.total - a.total);
 
-  // ── Warning threshold: flag anything over 5% ─────────────────────────────
-  const WARNING_THRESHOLD = 5.0;
-  const CAUTION_THRESHOLD = 3.0;
-  const overExposed = combined.filter(h => h.pct >= WARNING_THRESHOLD);
-  const caution     = combined.filter(h => h.pct >= CAUTION_THRESHOLD && h.pct < WARNING_THRESHOLD);
-
-  // ── ETF coverage summary ─────────────────────────────────────────────────
-  const etfsWithData   = Object.keys(positions).filter(s => ETF_HOLDINGS[s] && Object.keys(ETF_HOLDINGS[s]).length > 0);
-  const etfsWithoutData= Object.keys(positions).filter(s => ETF_HOLDINGS[s] && Object.keys(ETF_HOLDINGS[s]).length === 0);
-  const directStocks   = Object.keys(positions).filter(s => !ETF_HOLDINGS[s]);
-  const coveredVal     = etfsWithData.reduce((s,sym) => s + (positions[sym]?.value||0), 0);
-  const coveragePct    = (coveredVal / totalPortVal * 100).toFixed(0);
-
-  // ── Render bars ──────────────────────────────────────────────────────────
+  const WARNING = 10.0;
+  const CAUTION  = 5.0;
+  const overExposed = combined.filter(h => h.pct >= WARNING);
   const maxPct = combined.length > 0 ? combined[0].pct : 1;
 
-  const rows = combined.slice(0, 30).map(h => {
-    const barW = Math.min(100, (h.pct / Math.max(maxPct, WARNING_THRESHOLD)) * 100);
-    const color = h.pct >= WARNING_THRESHOLD ? '#e74c3c'
-                : h.pct >= CAUTION_THRESHOLD ? '#f39c12'
-                : 'var(--color-positive,#27ae60)';
-    const icon  = h.pct >= WARNING_THRESHOLD ? '🔴'
-                : h.pct >= CAUTION_THRESHOLD ? '🟡' : '🟢';
-    const viaStr = Object.entries(h.via)
+  // ── Render bars ───────────────────────────────────────────────────────────
+  const rows = combined.slice(0,40).map(h => {
+    const color = h.pct>=WARNING?'#e74c3c':h.pct>=CAUTION?'#f39c12':'var(--color-positive,#27ae60)';
+    const icon  = h.pct>=WARNING?'🔴':h.pct>=CAUTION?'🟡':'🟢';
+    const barW  = Math.min(100,(h.pct/Math.max(maxPct,1))*100);
+
+    // Bar: split into direct (blue) and ETF-derived (color) segments
+    const directBarW = Math.min(100,(h.direct/totalPortVal*100/Math.max(maxPct,1))*100);
+    const etfBarW    = Math.min(100-directBarW, (h.etfTotal/totalPortVal*100/Math.max(maxPct,1))*100);
+
+    // ETF breakdown string
+    const etfStr = Object.entries(h.etfBreakdown)
       .sort((a,b)=>b[1]-a[1])
-      .map(([etf, val]) => `${etf} ${fc(val)}`)
-      .join(', ');
-    const directStr = h.direct > 0 ? `<span style="color:#3498db;font-size:0.65rem;">+${fc(h.direct)} direct</span> ` : '';
+      .slice(0,5)
+      .map(([etf,val]) => `${etf} ${fc(val)}`)
+      .join(' · ');
 
     return `
-      <div style="margin-bottom:10px;">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;flex-wrap:wrap;gap:4px;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:0.72rem;">${icon}</span>
-            <span style="font-weight:800;font-size:0.88rem;">${h.company}</span>
-            ${h.direct > 0 && h.indirect > 0 ? '<span style="font-size:0.6rem;padding:1px 5px;border-radius:999px;background:rgba(52,152,219,0.15);color:#3498db;">direct + ETF</span>' : h.direct > 0 ? '<span style="font-size:0.6rem;padding:1px 5px;border-radius:999px;background:rgba(52,152,219,0.15);color:#3498db;">direct</span>' : '<span style="font-size:0.6rem;padding:1px 5px;border-radius:999px;background:rgba(255,255,255,0.08);color:var(--text-secondary);">via ETFs</span>'}
-          </div>
-          <div style="text-align:right;">
-            <span style="font-weight:800;color:${color};font-size:0.88rem;">${h.pct.toFixed(2)}%</span>
-            <span style="color:var(--text-secondary);font-size:0.72rem;margin-left:4px;">${fc(h.total)}</span>
-          </div>
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;flex-wrap:wrap;gap:4px;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <span>${icon}</span>
+          <span style="font-weight:800;font-size:0.9rem;">${h.company}</span>
+          ${h.hasDirect && h.etfTotal>0
+            ? '<span style="font-size:0.6rem;padding:1px 6px;border-radius:999px;background:rgba(52,152,219,0.15);color:#3498db;">direct + ETF</span>'
+            : h.hasDirect
+              ? '<span style="font-size:0.6rem;padding:1px 6px;border-radius:999px;background:rgba(52,152,219,0.15);color:#3498db;">direct only</span>'
+              : '<span style="font-size:0.6rem;padding:1px 6px;border-radius:999px;background:rgba(255,255,255,0.07);color:var(--text-secondary);">via ETFs</span>'}
         </div>
-        <div style="background:var(--bg-tertiary);border-radius:4px;height:7px;overflow:hidden;margin-bottom:3px;">
-          <div style="width:${barW}%;height:100%;background:${color};border-radius:4px;transition:width 0.6s;"></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-weight:800;color:${color};font-size:0.9rem;">${h.pct.toFixed(2)}%</span>
+          <span style="color:var(--text-secondary);font-size:0.75rem;min-width:70px;text-align:right;">${fc(h.total)}</span>
         </div>
-        <div style="font-size:0.62rem;color:var(--text-secondary);">
-          ${directStr}${viaStr ? 'via: '+viaStr : ''}
-        </div>
-      </div>`;
+      </div>
+      <!-- Stacked bar: blue=direct, colored=ETF-derived -->
+      <div style="background:var(--bg-tertiary);border-radius:4px;height:8px;overflow:hidden;display:flex;">
+        ${h.direct>0 ? `<div style="width:${directBarW.toFixed(1)}%;height:100%;background:#3498db;flex-shrink:0;"></div>` : ''}
+        ${h.etfTotal>0 ? `<div style="width:${etfBarW.toFixed(1)}%;height:100%;background:${color};opacity:0.75;flex-shrink:0;"></div>` : ''}
+      </div>
+      <!-- Detail line -->
+      <div style="font-size:0.62rem;color:var(--text-secondary);margin-top:3px;display:flex;flex-wrap:wrap;gap:8px;">
+        ${h.direct>0 ? `<span style="color:#3498db;">Direct: ${fc(h.direct)}</span>` : ''}
+        ${h.etfTotal>0 ? `<span>Via ETFs (${fc(h.etfTotal)}): ${etfStr}</span>` : ''}
+      </div>
+    </div>`;
   }).join('');
 
-  // ── Render summary cards ─────────────────────────────────────────────────
+  // ── Coverage stats ────────────────────────────────────────────────────────
+  const etfSyms = Object.keys(positions).filter(s=>positions[s].isEtf);
+  const mappedEtfs = etfSyms.filter(s=>ETF_HOLDINGS[s]&&Object.keys(ETF_HOLDINGS[s]).length>0);
+  const directSyms = Object.keys(positions).filter(s=>!positions[s].isEtf);
+  const stockTotal = directSyms.reduce((s,sym)=>s+(positions[sym]?.value||0),0);
+  const etfTotalVal= etfSyms.reduce((s,sym)=>s+(positions[sym]?.value||0),0);
+
   el.innerHTML = `
-    <!-- Coverage notice -->
-    <div style="padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-      <div>
-        <div style="font-size:0.72rem;font-weight:700;color:var(--text-primary);">Look-Through Coverage: ${coveragePct}% of portfolio</div>
-        <div style="font-size:0.65rem;color:var(--text-secondary);margin-top:2px;">${etfsWithData.length} ETFs mapped · ${directStocks.length} direct stocks · ${combined.length} unique companies detected</div>
-      </div>
-      <button onclick="window.renderTrueExposure()" style="padding:5px 12px;border-radius:7px;border:1px solid var(--border-color);background:transparent;color:var(--text-secondary);font-size:0.72rem;cursor:pointer;">🔄 Refresh</button>
+    <!-- Legend -->
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;font-size:0.75rem;">
+      <span><span style="display:inline-block;width:12px;height:8px;background:#3498db;border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Direct holding (matches your stock card value exactly)</span>
+      <span><span style="display:inline-block;width:12px;height:8px;background:#f39c12;border-radius:2px;opacity:0.75;margin-right:4px;vertical-align:middle;"></span>Additional exposure via ETF look-through</span>
+      <span style="color:var(--text-secondary);">Total bar = direct + ETF-derived combined</span>
     </div>
 
-    ${overExposed.length > 0 ? `
-    <!-- Warning cards -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:16px;">
-      ${overExposed.map(h => `
-        <div style="padding:12px;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.4);border-radius:9px;">
-          <div style="font-size:0.65rem;color:#e74c3c;font-weight:700;text-transform:uppercase;margin-bottom:4px;">⚠️ Over-Exposed</div>
-          <div style="font-size:1.1rem;font-weight:800;">${h.company}</div>
-          <div style="font-size:1.0rem;font-weight:800;color:#e74c3c;">${h.pct.toFixed(2)}%</div>
-          <div style="font-size:0.68rem;color:var(--text-secondary);">${fc(h.total)} effective</div>
-          ${h.direct > 0 ? `<div style="font-size:0.62rem;color:#3498db;margin-top:3px;">+${fc(h.direct)} held directly</div>` : ''}
-        </div>`).join('')}
-    </div>` : ''}
-
-    <!-- How it works -->
-    <details style="margin-bottom:14px;">
-      <summary style="font-size:0.72rem;font-weight:700;color:var(--text-secondary);cursor:pointer;text-transform:uppercase;letter-spacing:0.4px;">ℹ️ How Look-Through Works</summary>
-      <div style="margin-top:8px;padding:12px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:8px;font-size:0.76rem;color:var(--text-secondary);line-height:1.7;">
-        <strong style="color:var(--text-primary);">Example:</strong> You hold VOO ($50K), QQQ ($30K), VGT ($20K), and NVDA directly ($10K).<br>
-        NVDA is 6.1% of VOO = $3,050 · 7.2% of QQQ = $2,160 · 12.1% of VGT = $2,420 · $10K direct<br>
-        <strong style="color:var(--text-primary);">Total real NVDA exposure = $17,630 = 15.9% of your portfolio</strong> — not the 9.1% you see on your stock card.<br><br>
-        🔴 Over 5% = concentrated · 🟡 3–5% = caution · 🟢 Under 3% = well spread<br><br>
-        <em>ETF weights are estimates based on early 2026 fund data. Actual weights shift monthly.</em>
+    <!-- Summary strip -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:14px;">
+      <div style="padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
+        <div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;margin-bottom:3px;">Total Portfolio</div>
+        <div style="font-size:1.1rem;font-weight:800;">${fc(totalPortVal)}</div>
       </div>
-    </details>
+      <div style="padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
+        <div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;margin-bottom:3px;">Direct Stocks</div>
+        <div style="font-size:1.1rem;font-weight:800;">${fc(stockTotal)} <span style="font-size:0.72rem;color:var(--text-secondary);">${(stockTotal/totalPortVal*100).toFixed(1)}%</span></div>
+        <div style="font-size:0.65rem;color:var(--text-secondary);">${directSyms.length} positions</div>
+      </div>
+      <div style="padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;">
+        <div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;margin-bottom:3px;">ETFs & Funds</div>
+        <div style="font-size:1.1rem;font-weight:800;">${fc(etfTotalVal)} <span style="font-size:0.72rem;color:var(--text-secondary);">${(etfTotalVal/totalPortVal*100).toFixed(1)}%</span></div>
+        <div style="font-size:0.65rem;color:var(--text-secondary);">${mappedEtfs.length} of ${etfSyms.length} ETFs mapped</div>
+      </div>
+      <div style="padding:10px 14px;background:var(--bg-secondary);border:1px solid ${overExposed.length>0?'rgba(231,76,60,0.4)':'var(--border-color)'};border-radius:9px;">
+        <div style="font-size:0.6rem;color:var(--text-secondary);text-transform:uppercase;font-weight:600;margin-bottom:3px;">Over 10% Exposure</div>
+        <div style="font-size:1.1rem;font-weight:800;color:${overExposed.length>0?'#e74c3c':'#27ae60'};">${overExposed.length} stock${overExposed.length!==1?'s':''}</div>
+        <div style="font-size:0.65rem;color:var(--text-secondary);">${overExposed.length>0?overExposed.map(h=>h.company).join(', '):'Well spread'}</div>
+      </div>
+    </div>
 
-    <!-- Full exposure bar chart -->
-    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin-bottom:10px;">
-      📊 Top 30 Companies by Effective Exposure
+    ${overExposed.length>0?`
+    <div style="padding:10px 14px;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.3);border-radius:9px;margin-bottom:14px;font-size:0.78rem;color:#e74c3c;">
+      ⚠️ <strong>${overExposed.map(h=>`${h.company} ${h.pct.toFixed(1)}% (${fc(h.total)} total)`).join(' · ')}</strong>
+    </div>`:''}
+
+    <!-- Main chart -->
+    <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-secondary);margin-bottom:8px;">
+      📊 Effective Exposure — Top 40 by Combined Direct + ETF Exposure
     </div>
     <div style="padding:14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;margin-bottom:14px;">
       ${rows}
     </div>
 
-    ${etfsWithoutData.length > 0 ? `
-    <div style="padding:10px 14px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:9px;margin-bottom:14px;font-size:0.72rem;color:var(--text-secondary);">
-      ℹ️ Holdings not in look-through database (counted as direct exposure): ${etfsWithoutData.concat(directStocks).join(', ')}
-    </div>` : ''}
-
     <p style="font-size:0.65rem;color:var(--text-secondary);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-color);">
-      ETF weights sourced from fund fact sheets (early 2026). Weights change monthly — check ETF issuer sites for latest data.
-      Look-through covers top 15 holdings per ETF which typically represents 60–85% of each fund's weight.
-      Not financial advice.
+      Blue bar = your direct holding (exact match to stock card). Colored bar = additional exposure through ETF look-through.
+      🔴 &gt;10% combined = concentrated · 🟡 5–10% = caution · 🟢 &lt;5% = healthy.
+      ETF weights from fund fact sheets (early 2026) — approximate. Not financial advice.
     </p>`;
 };
 
-})();
-</script>
+})();</script>
+
+<!-- Safety net: re-expose all panel functions globally after IIFE runs --></script>
 
 <!-- Safety net: re-expose all panel functions globally after IIFE runs -->
 <script>
