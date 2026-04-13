@@ -16105,7 +16105,7 @@ Write 3-4 focused paragraphs:
 2. Fee savings from simplification
 3. What to keep and why it earns its place
 4. The leaner 3-5 fund portfolio this could become
-Write fully — do not truncate. Use the actual tickers throughout.`,
+Write a COMPLETE response of at least 300 words. Do not stop early or summarize. Use the actual tickers throughout.`,
 
       rebalance: `You are a portfolio strategist. This portfolio is concentrated in US tech/growth. Give a specific rebalancing roadmap.
 
@@ -16116,7 +16116,7 @@ Write 4 paragraphs covering:
 2. Target allocation recommendation with specific percentages (e.g. "65% US core, 15% international, 10% bonds, 10% dividend")
 3. Specific ETFs to ADD to fill gaps (international exposure: VXUS, bonds: BND, dividend income: SCHD — use actual tickers)
 4. How to get there: trim the overlap, redirect into underweight areas
-Be specific with numbers and tickers. Write fully — do not truncate. No bullet points.`,
+Be specific with numbers and tickers. Write a COMPLETE response of at least 350 words. Do not stop early. No bullet points.`,
 
       outlook: `You are a forward-looking market strategist with expertise in long-term investing. Analyze this portfolio in the context of 5–10 year market trends.
 
@@ -16127,13 +16127,13 @@ Write 4 paragraphs:
 2. Risks over the next 5–10 years specific to THIS portfolio (US concentration risk, tech valuation, currency risk from no international exposure, etc.)
 3. Emerging opportunities the portfolio is missing (international markets, sectors poised to grow, asset classes for the next decade)
 4. One specific action to future-proof this portfolio
-Be specific to the actual holdings. Reference real macro trends. Honest about uncertainty. Write fully — do not truncate. No bullet points.`,
+Be specific to the actual holdings. Reference real macro trends. Honest about uncertainty. Write a COMPLETE response of at least 350 words. Do not stop early. No bullet points.`,
     };
 
     const response = await fetch('https://ai-proxy.giolamchieu1975.workers.dev', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:2000, messages:[{role:'user',content:prompts[mode]}] })
+      body:JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:4000, messages:[{role:'user',content:prompts[mode]}] })
     });
     const data = await response.json();
     if (data.error) throw new Error(data.error.message||JSON.stringify(data.error));
