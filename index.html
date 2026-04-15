@@ -14403,14 +14403,14 @@ Portfolio Data:
 - Return skewness: ${skewness} (negative = left tail risk, positive = right skew)
 - Top holdings: ${holdingsSummary}
 
-Write in English. Be direct and educational. No bullet lists — flowing paragraphs only. Keep it under 200 words.`;
+Write in English. Be direct and educational. No bullet lists — flowing paragraphs only. Always complete your sentences and thoughts fully.`;
 
     const response = await fetch('https://ai-proxy.giolamchieu1975.workers.dev', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
+        max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -14690,12 +14690,12 @@ Dividend Portfolio Summary:
 - Daily Passive Income: $${(totalAnnual/365).toFixed(2)}
 - Dividend payers: ${divItems.join('; ')}
 
-Write in English. Be specific and encouraging but honest. Under 180 words.`;
+Write in English. Be specific and encouraging but honest. Always complete your sentences and thoughts fully.`;
 
     const response = await fetch('https://ai-proxy.giolamchieu1975.workers.dev', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
     });
     const data = await response.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
@@ -15448,12 +15448,12 @@ Date: ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',mon
 Anomalies detected:
 ${summaries}
 
-Be direct and educational. Under 250 words total. No bullet points — short paragraphs per stock.`;
+Be direct and educational. Always complete every stock's analysis fully. No bullet points — short paragraphs per stock.`;
 
     const response = await fetch('https://ai-proxy.giolamchieu1975.workers.dev', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:8000,messages:[{role:'user',content:prompt}]})
     });
     const data = await response.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
@@ -15652,7 +15652,7 @@ window.submitPortfolioQuestion = async function() {
       recentHistory:   portHist.slice(-7).map(h=>({date:h.date,value:h.value})),
     }, null, 2);
 
-    const systemPrompt = `You are a personal financial analyst AI. The user's complete live portfolio data is below as JSON — treat it as ground truth. Answer questions using exact numbers from the data. Be concise (under 200 words). Do not use markdown bold (**). When asked about gains, give both dollar and percentage answers.
+    const systemPrompt = `You are a personal financial analyst AI. The user's complete live portfolio data is below as JSON — treat it as ground truth. Answer questions using exact numbers from the data. Be concise but always complete your full answer. Do not use markdown bold (**). When asked about gains, give both dollar and percentage answers.
 
 PORTFOLIO DATA:
 ${portfolioJSON}`;
@@ -15662,7 +15662,7 @@ ${portfolioJSON}`;
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         model:'claude-sonnet-4-20250514',
-        max_tokens:2000,
+        max_tokens: 8000,
         system: systemPrompt,
         messages:[{role:'user',content:question}]
       })
