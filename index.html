@@ -16922,8 +16922,30 @@ function resetAutoLockPin() {
 document.addEventListener('click', function(e) {
     if (e.target && e.target.id === 'settingsBtn') {
         setTimeout(function() {
-            var cb = document.getElementById('autoLockEnabled');
+            var cb  = document.getElementById('autoLockEnabled');
+            var sel = document.getElementById('autoLockTimeout');
             if (cb) cb.checked = localStorage.getItem('al_enabled_stocks') !== 'false';
+            if (sel && localStorage.getItem('al_timeout_stocks')) {
+                var stored = parseFloat(localStorage.getItem('al_timeout_stocks'));
+                var mins   = stored / 60;
+                if      (stored === 60)   sel.value = '60';
+                else if (stored === 300)  sel.value = '300';
+                else if (stored === 600)  sel.value = '600';
+                else if (stored === 900)  sel.value = '900';
+                else if (stored === 1800) sel.value = '1800';
+                else { sel.value = 'custom';
+                    document.getElementById('autoLockCustom').style.display = 'block';
+                    var customVal  = document.getElementById('autoLockCustomVal');
+                    var customUnit = document.getElementById('autoLockCustomUnit');
+                    if (stored < 60) {
+                        if (customVal)  customVal.value  = stored;
+                        if (customUnit) customUnit.value = 'seconds';
+                    } else {
+                        if (customVal)  customVal.value  = Math.round(stored / 60);
+                        if (customUnit) customUnit.value = 'minutes';
+                    }
+                }
+            }
         }, 200);
     }
 });
