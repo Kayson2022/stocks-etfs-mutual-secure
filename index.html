@@ -7,6 +7,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -2939,6 +2940,7 @@ body.dark-mode .modal-content {
   <button class="st-toolbar-btn" data-st-panel="rebal">⚖️ Rebalance</button>
   <button class="st-toolbar-btn" data-st-panel="recur">🔁 Recurring</button>
   <button class="st-toolbar-btn" data-st-panel="alerts">🔔 Smart Alerts</button>
+  <button class="st-toolbar-btn" onclick="alLockNow()" title="Lock App">🔒 Lock</button>
   <button class="st-toolbar-btn" data-st-panel="benchmark">📊 Benchmark</button>
   <button class="st-toolbar-btn" data-st-panel="journal">📓 Trade Journal</button>
   <button class="st-toolbar-btn" data-st-panel="divcal">💰 Div Calendar</button>
@@ -16852,6 +16854,129 @@ window.renderTrueExposure = function() {
   document.addEventListener('DOMContentLoaded', function() {
     attachCommaFormatter('modal-retirement-goal');
   });
+})();
+</script>
+
+<!-- AUTO-LOCK OVERLAY: stocks -->
+<div id="alOverlay" style="display:none;position:fixed;inset:0;z-index:99999;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);background:rgba(0,0,0,0.65);align-items:center;justify-content:center;">
+  <div style="background:#1a1a2e;border:1px solid #333;border-radius:16px;padding:36px 32px;width:300px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+    <div style="font-size:2.5rem;margin-bottom:10px;">🔒</div>
+    <div style="font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:4px;" id="alTitle">Session Locked</div>
+    <div style="font-size:0.82rem;color:#888;margin-bottom:20px;" id="alSubtitle">Enter your PIN to continue</div>
+    <div style="display:flex;justify-content:center;gap:14px;margin-bottom:20px;">
+      <div id="alDot0" style="width:14px;height:14px;border-radius:50%;background:#333;transition:background 0.2s;"></div>
+      <div id="alDot1" style="width:14px;height:14px;border-radius:50%;background:#333;transition:background 0.2s;"></div>
+      <div id="alDot2" style="width:14px;height:14px;border-radius:50%;background:#333;transition:background 0.2s;"></div>
+      <div id="alDot3" style="width:14px;height:14px;border-radius:50%;background:#333;transition:background 0.2s;"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;">
+      <button onclick="alPress(1)" style="padding:14px;font-size:1.2rem;font-weight:700;border-radius:10px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;">1</button>
+      <button onclick="alPress(2)" style="padding:14px;font-size:1.2rem;font-weight:700;border-radius:10px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;">2</button>
+      <button onclick="alPress(3)" style="padding:14px;font-size:1.2rem;font-weight:700;border-radius:10px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;">3</button>
+      <button onclick="alPress(4)" style="padding:14px;font-size:1.2rem;font-weight:700;border-radius:10px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;">4</button>
+      <button onclick="alPress(5)" style="padding:14px;font-size:1.2rem;font-weight:700;border-radius:10px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;">5</button>
+      <button onclick="alPress(6)" style="padding:14px;font-size:1.2rem;font-weight:700;border-radius:10px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;">6</button>
+      <button onclick="alPress(7)" style="padding:14px;font-size:1.2rem;font-weight:700;border-radius:10px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;">7</button>
+      <button onclick="alPress(8)" style="padding:14px;font-size:1.2rem;font-weight:700;border-radius:10px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;">8</button>
+      <button onclick="alPress(9)" style="padding:14px;font-size:1.2rem;font-weight:700;border-radius:10px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;">9</button>
+      <button style="visibility:hidden;"></button>
+      <button onclick="alPress(0)" style="padding:14px;font-size:1.2rem;font-weight:700;border-radius:10px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;">0</button>
+      <button onclick="alBackspace()" style="padding:14px;font-size:1.2rem;border-radius:10px;border:1px solid #333;background:#111;color:#fff;cursor:pointer;">⌫</button>
+    </div>
+    <div id="alError" style="font-size:0.78rem;color:#e74c3c;min-height:18px;margin-bottom:10px;"></div>
+    <a onclick="alResetPin()" style="font-size:0.7rem;color:#888;cursor:pointer;text-decoration:underline;">Forgot PIN? Reset</a>
+  </div>
+</div>
+
+<script>
+(function() {
+  var PIN_KEY      = 'al_pin_stocks';
+  var TIMEOUT_KEY  = 'al_timeout_stocks';
+  var ENABLED_KEY  = 'al_enabled_stocks';
+  var DEFAULT_SECS = 600;
+  var entry   = '';
+  var locked  = false;
+  var timer   = null;
+  var setting = false;
+
+  function getTimeoutMs() {
+    return parseFloat(localStorage.getItem(TIMEOUT_KEY) || DEFAULT_SECS) * 1000;
+  }
+  function isEnabled() {
+    return localStorage.getItem(ENABLED_KEY) !== 'false';
+  }
+  function getPin() {
+    return localStorage.getItem(PIN_KEY) || null;
+  }
+  function updateDots() {
+    for (var i = 0; i < 4; i++) {
+      var d = document.getElementById('alDot' + i);
+      if (d) d.style.background = i < entry.length ? '#3498db' : '#333';
+    }
+  }
+  function lock() {
+    if (locked || !isEnabled()) return;
+    locked  = true; entry = '';
+    setting = !getPin();
+    var t = document.getElementById('alTitle');
+    var s = document.getElementById('alSubtitle');
+    var e = document.getElementById('alError');
+    if (t) t.textContent = setting ? 'Set Your PIN' : 'Session Locked';
+    if (s) s.textContent = setting ? 'Choose a 4-digit PIN' : 'Enter your PIN to continue';
+    if (e) e.textContent = '';
+    updateDots();
+    var o = document.getElementById('alOverlay');
+    if (o) o.style.display = 'flex';
+  }
+  function unlock() {
+    locked = false; setting = false; entry = '';
+    updateDots();
+    var o = document.getElementById('alOverlay');
+    if (o) o.style.display = 'none';
+    resetTimer();
+  }
+  function resetTimer() {
+    clearTimeout(timer);
+    if (isEnabled()) timer = setTimeout(lock, getTimeoutMs());
+  }
+  window.alPress = function(num) {
+    if (entry.length >= 4) return;
+    entry += String(num);
+    updateDots();
+    var e = document.getElementById('alError');
+    if (e) e.textContent = '';
+    if (entry.length === 4) {
+      if (setting) {
+        localStorage.setItem(PIN_KEY, entry);
+        setTimeout(unlock, 300);
+      } else if (entry === getPin()) {
+        setTimeout(unlock, 200);
+      } else {
+        if (e) e.textContent = 'Incorrect PIN. Try again.';
+        setTimeout(function() { entry = ''; updateDots(); }, 600);
+      }
+    }
+  };
+  window.alBackspace = function() { entry = entry.slice(0,-1); updateDots(); };
+  window.alResetPin  = function() {
+    if (confirm('Reset PIN?')) {
+      localStorage.removeItem(PIN_KEY);
+      entry = ''; setting = true;
+      var t = document.getElementById('alTitle');
+      var s = document.getElementById('alSubtitle');
+      var e = document.getElementById('alError');
+      if (t) t.textContent = 'Set New PIN';
+      if (s) s.textContent = 'Choose a 4-digit PIN';
+      if (e) e.textContent = '';
+      updateDots();
+    }
+  };
+  window.alLockNow = lock;
+  window._alReset  = resetTimer;
+  ['mousedown','mousemove','keydown','touchstart','scroll','click'].forEach(function(ev) {
+    document.addEventListener(ev, resetTimer, {passive:true});
+  });
+  window.addEventListener('load', function() { setTimeout(resetTimer, 3000); });
 })();
 </script>
 </body>
