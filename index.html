@@ -892,9 +892,10 @@
         }
         .transaction-header h4 { font-size: 1rem; }
         .transactions-container {
-             max-height: 1000px; opacity: 1; margin-top: 10px;
+             max-height: 600px; opacity: 1; margin-top: 10px;
              transition: max-height 0.4s ease, opacity 0.3s ease, margin-top 0.3s ease;
-             overflow: hidden;
+             overflow-y: auto;
+             overflow-x: hidden;
         }
         .transactions-container.collapsed {
             max-height: 0;
@@ -6677,10 +6678,10 @@ renderPortfolioSummary() {
 
                             <div class="transaction-details">
                                 <div class="transaction-header collapsed">
-                                    <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
+                                    <h4>Transactions (${item.transactions?.length || 0} Txns) <span class="toggle-icon">▶</span></h4>
                                 </div>
                                 <div class="transactions-container collapsed">
-                                    ${this.renderTransactions(item.transactions, item.dividends, item.id, type)}
+                                    ${this.renderTransactions(item.transactions, [], item.id, type)}
                                 </div>
                             </div>
                         `;
@@ -6691,10 +6692,10 @@ renderPortfolioSummary() {
                             </div>
                             <div class="transaction-details">
                                 <div class="transaction-header collapsed">
-                                    <h4>Transactions (${(item.transactions?.length || 0) + (item.dividends?.length || 0)} Txns) <span class="toggle-icon">▶</span></h4>
+                                    <h4>Transactions (${item.transactions?.length || 0} Txns) <span class="toggle-icon">▶</span></h4>
                                 </div>
                                 <div class="transactions-container collapsed">
-                                    ${this.renderTransactions(item.transactions, item.dividends, item.id, type)}
+                                    ${this.renderTransactions(item.transactions, [], item.id, type)}
                                 </div>
                             </div>
                         `;
@@ -6776,14 +6777,6 @@ renderPortfolioSummary() {
                             <span id="earn-chevron-${item.id}" style="font-size:0.65rem;transition:transform 0.2s;">▶</span>
                           </button>
                           <div id="earn-content-${item.id}" style="display:none;margin-top:8px;"></div>
-                        </div>
-                        <div id="divnext-section-${item.id}" style="margin-top:6px;border-top:1px solid var(--border-color);padding-top:8px;">
-                          <button onclick="event.stopPropagation();window.stToggleNextDividend('${item.id}','${item.symbol}')"
-                            style="width:100%;text-align:left;background:transparent;border:none;cursor:pointer;font-size:0.78rem;font-weight:600;color:var(--text-secondary);padding:4px 0;display:flex;align-items:center;gap:6px;">
-                            <span>💰 Next Dividend</span>
-                            <span id="divnext-chevron-${item.id}" style="font-size:0.65rem;transition:transform 0.2s;">▶</span>
-                          </button>
-                          <div id="divnext-content-${item.id}" style="display:none;margin-top:8px;"></div>
                         </div>
                           </div><!-- end extra-wrap -->
                         </div><!-- end collapsible section -->
