@@ -7855,7 +7855,7 @@ getOldestTransactionDate(item) {
                 stock.splitHistory = [...(stock.splitHistory||[]), {type, ratio, date: new Date().toISOString().split('T')[0]}];
 
                 await this.saveData();
-                await this.refreshAllData();
+                await this.refreshCurrentTab();
                 document.getElementById('splitModal').style.display = 'none';
                 this.showToast(`✅ ${stock.symbol} ${type} split (${type==='forward'?ratio+':1':'1:'+ratio}) applied!`, 'success');
             }
