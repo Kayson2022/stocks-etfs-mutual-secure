@@ -5278,7 +5278,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                                 (stock.transactions || []).forEach(tx => {
                                     const platform = tx.platform || 'Uncategorized';
                                     const accountType = tx.accountType || '';
-                                    const key = `${platform}|||${accountType}`; // Use ||| as delimiter
+                                    const key = `${platform}|||${accountType}`;
                                     if (!platformAccountMap[key]) {
                                         platformAccountMap[key] = [];
                                     }
@@ -5288,7 +5288,6 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                                 // Create a virtual stock for each platform+accountType combination
                                 for (const key in platformAccountMap) {
                                     const [platform, accountType] = key.split('|||');
-                                    // Build display name: if accountType exists, show "SYMBOL (Platform - AccountType)", otherwise just "SYMBOL (Platform)"
                                     const displayName = accountType 
                                         ? `${stock.symbol} (${platform} - ${accountType})`
                                         : `${stock.symbol} (${platform})`;
@@ -6134,7 +6133,7 @@ renderPortfolioSummary() {
                         if (customPlatform && customPlatform.trim() !== '') {
                             platform = customPlatform.trim();
                         } else {
-                            return; // User cancelled or entered nothing
+                            return;
                         }
                     }
 
@@ -6143,7 +6142,7 @@ renderPortfolioSummary() {
                         if (customAccountType && customAccountType.trim() !== '') {
                             accountType = customAccountType.trim();
                         } else {
-                            return; // User cancelled or entered nothing
+                            return;
                         }
                     }
 
@@ -8667,13 +8666,12 @@ getOldestTransactionDate(item) {
                 this.elements.editStockCost.value = totalStats.averageCostBasis > 0 ? totalStats.averageCostBasis : '';
                 this.elements.editStockDate.value = firstBuy ? firstBuy.date.split('T')[0] : '';
                 
-                // Platform is now stored per transaction, but we can set a primary one for display if all are same
+                // Platform is now stored per transaction
                 const uniquePlatforms = [...new Set((item.transactions || []).map(t => t.platform))].filter(p => p);
-                this.elements.editStockPlatform.disabled = false; // Always start enabled
+                this.elements.editStockPlatform.disabled = false;
                 if (uniquePlatforms.length === 1) {
                     this.elements.editStockPlatform.value = uniquePlatforms[0];
                 } else if (uniquePlatforms.length > 1) {
-                    // Multiple platforms - can't set a single value, user needs to edit individual transactions
                     this.elements.editStockPlatform.value = '';
                     this.elements.editStockPlatform.disabled = true;
                 } else {
@@ -8682,11 +8680,10 @@ getOldestTransactionDate(item) {
 
                 // Account Type - same logic as platform
                 const uniqueAccountTypes = [...new Set((item.transactions || []).map(t => t.accountType))].filter(p => p);
-                this.elements.editStockAccountType.disabled = false; // Always start enabled
+                this.elements.editStockAccountType.disabled = false;
                 if (uniqueAccountTypes.length === 1) {
                     this.elements.editStockAccountType.value = uniqueAccountTypes[0];
                 } else if (uniqueAccountTypes.length > 1) {
-                    // Multiple account types - can't set a single value
                     this.elements.editStockAccountType.value = '';
                     this.elements.editStockAccountType.disabled = true;
                 } else {
@@ -8719,7 +8716,7 @@ getOldestTransactionDate(item) {
                     if (customPlatform && customPlatform.trim() !== '') {
                         newPlatform = customPlatform.trim();
                     } else {
-                        return; // User cancelled
+                        return;
                     }
                 }
 
@@ -8729,7 +8726,7 @@ getOldestTransactionDate(item) {
                     if (customAccountType && customAccountType.trim() !== '') {
                         newAccountType = customAccountType.trim();
                     } else {
-                        return; // User cancelled
+                        return;
                     }
                 }
                 
@@ -8740,7 +8737,7 @@ getOldestTransactionDate(item) {
                 }
                 
                 item.name = newName;
-                item.industry = item.industry.includes('Mutual Fund') ? 'Mutual Fund' : 'Custom Industry'; // Reset industry if name changed (optional)
+                item.industry = item.industry.includes('Mutual Fund') ? 'Mutual Fund' : 'Custom Industry';
 
                 // Update platform and account type across all transactions if not disabled
                 if (!this.elements.editStockPlatform.disabled && newPlatform) {
