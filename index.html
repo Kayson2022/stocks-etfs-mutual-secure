@@ -8,6 +8,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -3434,7 +3435,37 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 <div class="transaction-input-group">
 <label for="edit-stock-platform">Platform:</label>
-<input class="search-input" id="edit-stock-platform" placeholder="e.g., Fidelity, Robinhood" type="text"/>
+<select class="search-input" id="edit-stock-platform">
+<option value="">Select Platform</option>
+<option value="Fidelity">Fidelity</option>
+<option value="Vanguard">Vanguard</option>
+<option value="Charles Schwab">Charles Schwab</option>
+<option value="Robinhood">Robinhood</option>
+<option value="E*TRADE">E*TRADE</option>
+<option value="TD Ameritrade">TD Ameritrade</option>
+<option value="Merrill Edge">Merrill Edge</option>
+<option value="Webull">Webull</option>
+<option value="Interactive Brokers">Interactive Brokers</option>
+<option value="add_new">++ Add Custom Platform...</option>
+</select>
+</div>
+<div class="transaction-input-group">
+<label for="edit-stock-account-type">Account Type:</label>
+<select class="search-input" id="edit-stock-account-type">
+<option value="">Select Account Type</option>
+<option value="Regular Brokerage">Regular Brokerage</option>
+<option value="Roth IRA">Roth IRA</option>
+<option value="Traditional IRA">Traditional IRA</option>
+<option value="401k">401k</option>
+<option value="Roth 401k">Roth 401k</option>
+<option value="529">529 College Savings</option>
+<option value="HSA">HSA</option>
+<option value="SEP IRA">SEP IRA</option>
+<option value="SIMPLE IRA">SIMPLE IRA</option>
+<option value="Trust">Trust</option>
+<option value="Custodial">Custodial</option>
+<option value="add_new">++ Add Custom Account Type...</option>
+</select>
 </div>
 <button class="add-btn" id="save-stock-edit-btn">Save All Details</button>
 </div>
@@ -4771,6 +4802,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     editStockSymbol: document.getElementById('edit-stock-symbol'),
                     editStockName: document.getElementById('edit-stock-name'),
                     editStockPlatform: document.getElementById('edit-stock-platform'),
+                    editStockAccountType: document.getElementById('edit-stock-account-type'),
                     editStockShares: document.getElementById('edit-stock-shares'),
                     editStockCost: document.getElementById('edit-stock-cost'),
                     editStockDate: document.getElementById('edit-stock-date'),
@@ -8637,7 +8669,29 @@ getOldestTransactionDate(item) {
                 
                 // Platform is now stored per transaction, but we can set a primary one for display if all are same
                 const uniquePlatforms = [...new Set((item.transactions || []).map(t => t.platform))].filter(p => p);
-                this.elements.editStockPlatform.value = uniquePlatforms.length === 1 ? uniquePlatforms[0] : (uniquePlatforms.length > 1 ? 'Multiple Platforms' : '');
+                this.elements.editStockPlatform.disabled = false; // Always start enabled
+                if (uniquePlatforms.length === 1) {
+                    this.elements.editStockPlatform.value = uniquePlatforms[0];
+                } else if (uniquePlatforms.length > 1) {
+                    // Multiple platforms - can't set a single value, user needs to edit individual transactions
+                    this.elements.editStockPlatform.value = '';
+                    this.elements.editStockPlatform.disabled = true;
+                } else {
+                    this.elements.editStockPlatform.value = '';
+                }
+
+                // Account Type - same logic as platform
+                const uniqueAccountTypes = [...new Set((item.transactions || []).map(t => t.accountType))].filter(p => p);
+                this.elements.editStockAccountType.disabled = false; // Always start enabled
+                if (uniqueAccountTypes.length === 1) {
+                    this.elements.editStockAccountType.value = uniqueAccountTypes[0];
+                } else if (uniqueAccountTypes.length > 1) {
+                    // Multiple account types - can't set a single value
+                    this.elements.editStockAccountType.value = '';
+                    this.elements.editStockAccountType.disabled = true;
+                } else {
+                    this.elements.editStockAccountType.value = '';
+                }
 
                 // Allow editing Shares/Cost/Date even if there are multiple transactions.
 // When saved, we'll normalize the transaction log to match the edited core values.
@@ -8656,7 +8710,28 @@ getOldestTransactionDate(item) {
 
                 const newSymbol = this.elements.editStockSymbol ? this.elements.editStockSymbol.value.trim().toUpperCase() : item.symbol;
                 const newName = this.elements.editStockName ? this.elements.editStockName.value.trim() : item.name;
-                const newPlatform = this.elements.editStockPlatform ? this.elements.editStockPlatform.value.trim() : 'Uncategorized';
+                let newPlatform = this.elements.editStockPlatform ? this.elements.editStockPlatform.value.trim() : 'Uncategorized';
+                let newAccountType = this.elements.editStockAccountType ? this.elements.editStockAccountType.value.trim() : '';
+                
+                // Handle custom platform
+                if (newPlatform === 'add_new') {
+                    const customPlatform = prompt("Please enter the custom platform name:");
+                    if (customPlatform && customPlatform.trim() !== '') {
+                        newPlatform = customPlatform.trim();
+                    } else {
+                        return; // User cancelled
+                    }
+                }
+
+                // Handle custom account type
+                if (newAccountType === 'add_new') {
+                    const customAccountType = prompt("Please enter the custom account type:");
+                    if (customAccountType && customAccountType.trim() !== '') {
+                        newAccountType = customAccountType.trim();
+                    } else {
+                        return; // User cancelled
+                    }
+                }
                 
                 // Check if symbol changed and if new symbol is valid
                 if (newSymbol !== item.symbol) {
@@ -8667,9 +8742,12 @@ getOldestTransactionDate(item) {
                 item.name = newName;
                 item.industry = item.industry.includes('Mutual Fund') ? 'Mutual Fund' : 'Custom Industry'; // Reset industry if name changed (optional)
 
-                // Update platform across all transactions if it's not 'Multiple Platforms'
-                if (newPlatform !== 'Multiple Platforms') {
+                // Update platform and account type across all transactions if not disabled
+                if (!this.elements.editStockPlatform.disabled && newPlatform) {
                     (item.transactions || []).forEach(t => t.platform = newPlatform);
+                }
+                if (!this.elements.editStockAccountType.disabled && newAccountType) {
+                    (item.transactions || []).forEach(t => t.accountType = newAccountType);
                 }
 
                                 // Allow editing Shares/Cost/Date even with multiple transactions.
