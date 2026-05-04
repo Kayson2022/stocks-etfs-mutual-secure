@@ -5266,41 +5266,10 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         if(this.elements.platformFilter) this.elements.platformFilter.style.display = 'none';
                         const filterTerm = this.elements.portfolioFilter ? this.elements.portfolioFilter.value.toLowerCase() : '';
                         if (filterTerm) {
-                            // First filter by symbol/name
-                            const matchingItems = items.filter(item =>
+                            filteredItems = items.filter(item =>
                                 item.symbol.toLowerCase().includes(filterTerm) ||
                                 (item.name && item.name.toLowerCase().includes(filterTerm))
                             );
-                            
-                            // Then break down each matching item by platform + accountType
-                            const virtualItems = [];
-                            matchingItems.forEach(stock => {
-                                const platformAccountMap = {};
-                                (stock.transactions || []).forEach(tx => {
-                                    const platform = tx.platform || 'Uncategorized';
-                                    const accountType = tx.accountType || '';
-                                    const key = `${platform}|||${accountType}`;
-                                    if (!platformAccountMap[key]) {
-                                        platformAccountMap[key] = [];
-                                    }
-                                    platformAccountMap[key].push(tx);
-                                });
-                                
-                                // Create a virtual stock for each platform+accountType combination
-                                for (const key in platformAccountMap) {
-                                    const [platform, accountType] = key.split('|||');
-                                    const displayName = accountType 
-                                        ? `${stock.symbol} (${platform} - ${accountType})`
-                                        : `${stock.symbol} (${platform})`;
-                                    virtualItems.push({ 
-                                        ...stock, 
-                                        transactions: platformAccountMap[key],
-                                        displayName: displayName
-                                    });
-                                }
-                            });
-                            
-                            filteredItems = virtualItems;
                         }
                     }
                 }
@@ -6075,13 +6044,11 @@ renderPortfolioSummary() {
                 }
                 
                 const allItems = [...this.stocks, ...this.mutualFunds];
-                const predefinedPlatforms = ['Fidelity', 'Robinhood', 'Vanguard', 'Charles Schwab', 'E*TRADE', 'Merrill Edge', 'Uncategorized'];
-                const existingPlatforms = [...new Set(allItems.flatMap(s => s.transactions.map(t => t.platform)).filter(p => p))].sort();
-                const allPlatforms = [...new Set([...predefinedPlatforms, ...existingPlatforms])].sort();
+                const predefinedPlatforms = ['Fidelity', 'Robinhood', 'Vanguard', 'Charles Schwab', 'E*TRADE', 'Merrill Edge', 'TD Ameritrade', 'Webull', 'Interactive Brokers', 'Uncategorized'];
                 const platformSelect = this.elements.modalPlatform;
                 if(platformSelect) {
                     platformSelect.innerHTML = `<option value="">Select...</option>`;
-                    allPlatforms.forEach(p => {
+                    predefinedPlatforms.forEach(p => {
                         platformSelect.innerHTML += `<option value="${p}">${p}</option>`;
                     });
                     platformSelect.innerHTML += `<option value="add_new">++ Add New Platform...</option>`;
@@ -6529,7 +6496,7 @@ renderPortfolioSummary() {
                                 <div class="transaction-info">
                                     <span class="${transactionClass}"><strong>${actionText}</strong> ${this.formatNumber(entry.shares, 3)} shares @ ${this.formatCurrency(entry.price)}</span>
                                     <span style="font-size: 0.8rem; color: var(--text-secondary);">
-                                        ${entry.platform || 'Unspecified'} - ${new Date(entry.date).toLocaleDateString()}
+                                        ${entry.platform || 'Unspecified'}${entry.accountType ? ` - ${entry.accountType}` : ''} • ${new Date(entry.date).toLocaleDateString()}
                                     </span>
                                     ${entry.note ? `<span style="font-style: italic; color: var(--text-secondary); font-size: 0.8rem;">Note: ${entry.note}</span>` : ''}
                                     ${washWarning}
@@ -6704,7 +6671,7 @@ renderPortfolioSummary() {
                     // 2. Updated HTML with sessionLabel
                     card.innerHTML = `
                         <div class="stock-header">
-                            <span class="${type}-symbol stock-symbol">${item.displayName || item.symbol}</span>
+                            <span class="${type}-symbol stock-symbol">${item.symbol}</span>
                             <button class="remove-btn" onclick="event.stopPropagation();window.stockTracker.removeItem('${item.id}', '${type}')">×</button>
                         </div>
                         <div class="stock-price">${(() => {
