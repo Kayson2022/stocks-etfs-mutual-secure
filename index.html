@@ -8,6 +8,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -3268,7 +3269,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <button class="add-btn" id="exportBtn">📥 Export Data</button>
 <label class="add-btn" for="importFile" style="cursor: pointer;">📤 Import Data</label>
 <input accept=".json" id="importFile" style="display: none;" type="file"/>
-<button class="add-btn" onclick="openCSVImportModal()" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;">📊 Import CSV</button>
+<button class="add-btn" onclick="openCSVImportModal()" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;">📊 Import from CSV Tool</button>
 </div>
 <button class="add-btn" id="settingsBtn">⚙️ Settings</button>
 <button class="add-btn" onclick="window.stockTracker.openSplitModal()" style="background:#00bcd4;color:#000;">✂️ Stock Split</button>
@@ -17603,8 +17604,8 @@ document.addEventListener('click', function(e) {
                     <!-- Header -->
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px 30px; border-radius: 16px 16px 0 0; display: flex; justify-content: space-between; align-items: center;">
                         <div>
-                            <h2 style="margin: 0; font-size: 24px; font-weight: 700;">📊 Import CSV Transactions</h2>
-                            <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Multi-file upload with smart duplicate detection</p>
+                            <h2 style="margin: 0; font-size: 24px; font-weight: 700;">📊 Import from CSV Tool</h2>
+                            <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Upload the JSON file exported from CSV Importer Pro</p>
                         </div>
                         <button onclick="closeCSVImportModal()" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 28px; cursor: pointer; width: 40px; height: 40px; border-radius: 50%; line-height: 1; transition: all 0.2s;">&times;</button>
                     </div>
@@ -17615,9 +17616,9 @@ document.addEventListener('click', function(e) {
                         <div id="csvUploadSection">
                             <div style="border: 3px dashed #667eea; border-radius: 12px; padding: 50px 20px; text-align: center; background: #f8f9ff; margin-bottom: 20px; cursor: pointer; transition: all 0.3s;" id="csvDropZone">
                                 <div style="font-size: 48px; margin-bottom: 15px;">📁</div>
-                                <h3 style="color: #667eea; margin-bottom: 10px; font-size: 20px;">Drop CSV files here or click to browse</h3>
-                                <p style="color: #666; font-size: 14px;">Select one or multiple broker CSV files</p>
-                                <input type="file" id="csvMultiFileInput" accept=".csv" multiple style="display: none;">
+                                <h3 style="color: #667eea; margin-bottom: 10px; font-size: 20px;">Drop JSON file here or click to browse</h3>
+                                <p style="color: #666; font-size: 14px;">Select the JSON file exported from CSV Importer Pro</p>
+                                <input type="file" id="csvMultiFileInput" accept=".json" style="display: none;">
                             </div>
                             
                             <div id="csvFileListDisplay" style="display: none; margin-bottom: 20px;"></div>
@@ -17730,11 +17731,16 @@ document.addEventListener('click', function(e) {
     
     // Handle file selection
     function handleCSVFiles(files) {
-        uploadedCSVFiles = Array.from(files).filter(f => f.name.endsWith('.csv'));
+        uploadedCSVFiles = Array.from(files).filter(f => f.name.endsWith('.json'));
         
         if (uploadedCSVFiles.length === 0) {
-            alert('Please select CSV files');
+            alert('Please select a JSON file exported from CSV Importer Pro');
             return;
+        }
+        
+        if (uploadedCSVFiles.length > 1) {
+            alert('Please select only one JSON file at a time');
+            uploadedCSVFiles = [uploadedCSVFiles[0]];
         }
         
         displayFileList();
@@ -17773,14 +17779,27 @@ document.addEventListener('click', function(e) {
         }
     };
     
-    // Process files
+    // Process JSON file from CSV Importer Pro
     async function processCSVFiles() {
         parsedTransactions = [];
         
-        for (const file of uploadedCSVFiles) {
+        try {
+            const file = uploadedCSVFiles[0];
             const text = await file.text();
-            const transactions = parseCSVToTransactions(text, file.name);
-            parsedTransactions.push(...transactions);
+            const jsonData = JSON.parse(text);
+            
+            // Extract transactions from JSON (format from CSV Importer Pro)
+            if (jsonData.transactions && Array.isArray(jsonData.transactions)) {
+                parsedTransactions = jsonData.transactions;
+                console.log(`✅ Loaded ${parsedTransactions.length} transactions from JSON file`);
+            } else {
+                alert('Invalid JSON format. Please use a file exported from CSV Importer Pro.');
+                return;
+            }
+        } catch (err) {
+            console.error('Error parsing JSON:', err);
+            alert('Error reading JSON file: ' + err.message);
+            return;
         }
         
         // Get existing transactions from stockTracker
