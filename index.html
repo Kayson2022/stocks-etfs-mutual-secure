@@ -3389,14 +3389,34 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 
   <!-- Benchmark Comparison Chart -->
   <div style="background:var(--card-bg-color);border:1px solid var(--border-color);border-radius:14px;padding:18px;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-color-secondary);">📈 Fund vs Benchmark</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-        <button onclick="window.renderFundBenchmarkChart()" style="font-size:12px;font-weight:700;padding:5px 18px;border-radius:8px;border:1px solid rgba(0,212,255,0.4);background:rgba(0,212,255,0.12);color:#00d4ff;cursor:pointer;white-space:nowrap;transition:all 0.15s;" onmouseover="this.style.background='#00d4ff';this.style.color='#000'" onmouseout="this.style.background='rgba(0,212,255,0.12)';this.style.color='#00d4ff'">vs All 3</button>
-        <select id="fundBenchSelect" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--card-bg-color);color:var(--text-color);">
-          <option value="">Select Fund...</option>
+    <!-- Fund vs Benchmark Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-color,#e8f0fc);">📈 Fund vs Benchmark</div>
+    </div>
+
+    <!-- Controls row -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+
+      <!-- Fund selector -->
+      <div style="display:flex;align-items:center;gap:5px;">
+        <span style="font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:#8ba3be;">Fund:</span>
+        <select id="fundBenchSelect" onchange="window.renderFundBenchmarkChart()" style="font-size:12px;padding:4px 10px;border-radius:7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#e8f0fc;cursor:pointer;outline:none;">
+          <option value="">Loading...</option>
         </select>
-        <select id="fundBenchRange" onchange="window.renderFundBenchmarkChart()" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--card-bg-color);color:var(--text-color);">
+      </div>
+
+      <!-- Benchmark toggles — multi-select -->
+      <div style="display:flex;align-items:center;gap:5px;">
+        <span style="font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:#8ba3be;">vs:</span>
+        <button id="benchToggleSPY" onclick="window.toggleBenchmark('SPY',this)" style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:7px;border:1px solid #fbbf24;background:rgba(251,191,36,0.2);color:#fbbf24;cursor:pointer;transition:all 0.15s;">S&amp;P 500</button>
+        <button id="benchToggleQQQ" onclick="window.toggleBenchmark('QQQ',this)" style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:7px;border:1px solid rgba(167,139,250,0.4);background:transparent;color:#a78bfa;cursor:pointer;transition:all 0.15s;">NASDAQ</button>
+        <button id="benchToggleVTI" onclick="window.toggleBenchmark('VTI',this)" style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:7px;border:1px solid rgba(52,211,153,0.4);background:transparent;color:#34d399;cursor:pointer;transition:all 0.15s;">Total Mkt</button>
+      </div>
+
+      <!-- Range selector -->
+      <div style="margin-left:auto;display:flex;align-items:center;gap:5px;">
+        <span style="font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:#8ba3be;">Range:</span>
+        <select id="fundBenchRange" onchange="window.renderFundBenchmarkChart()" style="font-size:12px;padding:4px 10px;border-radius:7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#e8f0fc;cursor:pointer;outline:none;">
           <option value="1mo">1M</option>
           <option value="3mo">3M</option>
           <option value="6mo" selected>6M</option>
@@ -3405,8 +3425,9 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
         </select>
       </div>
     </div>
-    <div style="position:relative;height:190px;"><canvas id="fundBenchmarkChart"></canvas></div>
-    <div id="fundBenchStats" style="display:flex;gap:12px;margin-top:10px;flex-wrap:wrap;font-size:12px;"></div>
+
+    <div style="position:relative;height:200px;"><canvas id="fundBenchmarkChart"></canvas></div>
+    <div id="fundBenchStats" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;font-size:12px;"></div>
   </div>
 </div>
 
@@ -18277,11 +18298,25 @@ document.addEventListener('click', function(e) {
         }
     }
 
-    // ── 3. Benchmark Chart — all 3 benchmarks at once ──────────
-    window.setFundBenchmark = function(bench, btn) {
-        _currentBench = bench;
-        document.querySelectorAll('.fund-bench-btn').forEach(b => b.classList.remove('active'));
-        if (btn) btn.classList.add('active');
+    // ── 3. Benchmark Chart — multi-select with toggle buttons ───
+    // Track which benchmarks are active
+    let _activeBenchmarks = new Set(['SPY']); // SPY on by default
+
+    window.toggleBenchmark = function(bench, btn) {
+        if (_activeBenchmarks.has(bench)) {
+            // Only deactivate if at least one other is active
+            if (_activeBenchmarks.size > 1) {
+                _activeBenchmarks.delete(bench);
+                btn.style.background = 'transparent';
+                btn.style.opacity = '0.5';
+            }
+        } else {
+            _activeBenchmarks.add(bench);
+            btn.style.opacity = '1';
+            // Restore active color
+            const colors = { SPY:'#fbbf24', QQQ:'#a78bfa', VTI:'#34d399' };
+            btn.style.background = `rgba(${bench==='SPY'?'251,191,36':bench==='QQQ'?'167,139,250':'52,211,153'},0.2)`;
+        }
         renderFundBenchmarkChart();
     };
 
@@ -18297,7 +18332,7 @@ document.addEventListener('click', function(e) {
         if (!symbol) return;
 
         const statsEl = document.getElementById('fundBenchStats');
-        if (statsEl) statsEl.innerHTML = '<span style="color:var(--text-color-secondary);font-size:11px;">Fetching data...</span>';
+        if (statsEl) statsEl.innerHTML = '<span style="color:#8ba3be;font-size:11px;">Fetching data...</span>';
 
         const fetchHistory = async (sym) => {
             try {
@@ -18310,7 +18345,7 @@ document.addEventListener('click', function(e) {
                     date:  new Date(ts*1000).toLocaleDateString('en-US',{month:'short',day:'numeric'}),
                     close: (res?.indicators?.quote?.[0]?.close || [])[i]
                 })).filter(d => d.close != null);
-            } catch { return []; }
+            } catch(e) { console.warn('[Benchmark]', sym, e); return []; }
         };
 
         const normalize = data => {
@@ -18319,7 +18354,7 @@ document.addEventListener('click', function(e) {
             return data.map(d => ({ date:d.date, value:+((d.close-base)/base*100).toFixed(2) }));
         };
 
-        // Fetch fund + all 3 benchmarks in parallel
+        // Always fetch all benchmarks so toggling is instant
         const [fundData, spyData, qqqData, vtiData] = await Promise.all([
             fetchHistory(symbol), fetchHistory('SPY'), fetchHistory('QQQ'), fetchHistory('VTI')
         ]);
@@ -18329,36 +18364,36 @@ document.addEventListener('click', function(e) {
 
         if (_benchChart) { _benchChart.destroy(); _benchChart = null; }
 
-        const CHART_COLORS = {
-            fund: '#00d4ff',
-            SPY:  '#fbbf24',
-            QQQ:  '#a78bfa',
-            VTI:  '#34d399',
-        };
+        const COLORS = { fund:'#00d4ff', SPY:'#fbbf24', QQQ:'#a78bfa', VTI:'#34d399' };
+        const NAMES  = { SPY:'S&P 500', QQQ:'NASDAQ', VTI:'Total Mkt' };
+
+        const benchDataMap = { SPY: spyData, QQQ: qqqData, VTI: vtiData };
 
         const datasets = [
             {
                 label: symbol,
                 data: fundNorm.map(d=>d.value),
-                borderColor: CHART_COLORS.fund,
-                backgroundColor: 'rgba(0,212,255,0.08)',
+                borderColor: COLORS.fund,
+                backgroundColor: 'rgba(0,212,255,0.07)',
                 borderWidth: 2.5,
                 pointRadius: 0,
                 fill: true,
                 tension: 0.3,
                 order: 0,
             },
-            ...[['SPY',spyData],['QQQ',qqqData],['VTI',vtiData]].map(([name, data]) => ({
-                label: name,
-                data: normalize(data).slice(0, labels.length).map(d=>d.value),
-                borderColor: CHART_COLORS[name],
-                backgroundColor: 'transparent',
-                borderWidth: 1.5,
-                borderDash: [5,4],
-                pointRadius: 0,
-                fill: false,
-                tension: 0.3,
-            }))
+            ...['SPY','QQQ','VTI']
+                .filter(b => _activeBenchmarks.has(b))
+                .map(b => ({
+                    label: NAMES[b],
+                    data: normalize(benchDataMap[b]).slice(0, labels.length).map(d=>d.value),
+                    borderColor: COLORS[b],
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    borderDash: [5,4],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.3,
+                }))
         ];
 
         _benchChart = new Chart(canvas, {
@@ -18367,21 +18402,26 @@ document.addEventListener('click', function(e) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: { intersect: false, mode: 'index' },
+                interaction: { intersect:false, mode:'index' },
                 plugins: {
                     legend: {
                         display: true,
                         position: 'top',
                         labels: {
-                            color: 'var(--text-color)',
-                            font: { size: 11 },
-                            boxWidth: 14,
-                            padding: 14,
+                            color: '#e8f0fc',
+                            font: { size:11, weight:'600' },
+                            boxWidth: 12,
+                            padding: 16,
                             usePointStyle: true,
                             pointStyle: 'circle',
                         }
                     },
                     tooltip: {
+                        backgroundColor: 'rgba(10,20,35,0.95)',
+                        titleColor: '#e8f0fc',
+                        bodyColor: '#8ba3be',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
                         callbacks: {
                             label: ctx => ` ${ctx.dataset.label}: ${parseFloat(ctx.raw)>=0?'+':''}${ctx.raw}%`
                         }
@@ -18389,39 +18429,38 @@ document.addEventListener('click', function(e) {
                 },
                 scales: {
                     x: {
-                        ticks: { color:'var(--text-color-secondary)', font:{size:10}, maxTicksLimit:8 },
-                        grid:  { color:'rgba(128,128,128,0.08)' }
+                        ticks: { color:'#8ba3be', font:{size:10}, maxTicksLimit:8 },
+                        grid:  { color:'rgba(255,255,255,0.05)' }
                     },
                     y: {
                         ticks: {
-                            color:'var(--text-color-secondary)', font:{size:10},
+                            color:'#8ba3be', font:{size:10},
                             callback: v => (v>=0?'+':'')+v+'%'
                         },
-                        grid: { color:'rgba(128,128,128,0.08)' }
+                        grid: { color:'rgba(255,255,255,0.05)' }
                     }
                 }
             }
         });
 
-        // Stats bar
+        // Stats pills
         if (statsEl) {
             const makeStatPill = (name, data, color) => {
                 const norm = normalize(data);
                 const ret  = norm.length ? norm[norm.length-1].value : null;
                 if (ret === null) return '';
-                const sign = ret >= 0 ? '+' : '';
-                const col  = ret >= 0 ? '#34d399' : '#f87171';
-                return `<div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 12px;">
-                    <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;"></span>
-                    <span style="font-size:11px;color:var(--text-color-secondary);">${name}</span>
-                    <span style="font-size:13px;font-weight:700;color:${col};">${sign}${ret.toFixed(2)}%</span>
+                const col = ret >= 0 ? '#34d399' : '#f87171';
+                return `<div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 12px;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block;"></span>
+                    <span style="font-size:11px;color:#8ba3be;">${name}</span>
+                    <span style="font-size:13px;font-weight:700;color:${col};">${ret>=0?'+':''}${ret.toFixed(2)}%</span>
                 </div>`;
             };
             statsEl.innerHTML =
-                makeStatPill(symbol, fundData, CHART_COLORS.fund) +
-                makeStatPill('S&P 500', spyData, CHART_COLORS.SPY) +
-                makeStatPill('NASDAQ', qqqData, CHART_COLORS.QQQ) +
-                makeStatPill('Total Mkt', vtiData, CHART_COLORS.VTI);
+                makeStatPill(symbol, fundData, COLORS.fund) +
+                makeStatPill('S&P 500', spyData, COLORS.SPY) +
+                makeStatPill('NASDAQ', qqqData, COLORS.QQQ) +
+                makeStatPill('Total Mkt', vtiData, COLORS.VTI);
         }
     };
 
