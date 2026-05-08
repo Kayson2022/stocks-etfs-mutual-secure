@@ -3406,11 +3406,12 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
       </div>
 
       <!-- Benchmark toggles — multi-select -->
-      <div style="display:flex;align-items:center;gap:5px;">
+      <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
         <span style="font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:#8ba3be;">vs:</span>
-        <button id="benchToggleSPY" onclick="window.toggleBenchmark('SPY',this)" style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:7px;border:1px solid #fbbf24;background:rgba(251,191,36,0.2);color:#fbbf24;cursor:pointer;transition:all 0.15s;">S&amp;P 500</button>
-        <button id="benchToggleQQQ" onclick="window.toggleBenchmark('QQQ',this)" style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:7px;border:1px solid rgba(167,139,250,0.4);background:transparent;color:#a78bfa;cursor:pointer;transition:all 0.15s;">NASDAQ</button>
-        <button id="benchToggleVTI" onclick="window.toggleBenchmark('VTI',this)" style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:7px;border:1px solid rgba(52,211,153,0.4);background:transparent;color:#34d399;cursor:pointer;transition:all 0.15s;">Total Mkt</button>
+        <button id="benchToggleSPY"  onclick="window.toggleBenchmark('SPY')"  style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:7px;border:1px solid #fbbf24;background:rgba(251,191,36,0.2);color:#fbbf24;cursor:pointer;transition:all 0.15s;">S&amp;P 500</button>
+        <button id="benchToggleQQQ"  onclick="window.toggleBenchmark('QQQ')"  style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:7px;border:1px solid #a78bfa;background:transparent;color:#a78bfa;opacity:0.45;cursor:pointer;transition:all 0.15s;">NASDAQ</button>
+        <button id="benchToggleVTI"  onclick="window.toggleBenchmark('VTI')"  style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:7px;border:1px solid #34d399;background:transparent;color:#34d399;opacity:0.45;cursor:pointer;transition:all 0.15s;">Total Mkt</button>
+        <button id="benchToggleALL"  onclick="window.toggleBenchmark('ALL')"  style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:7px;border:1px solid rgba(255,255,255,0.3);background:transparent;color:#e8f0fc;opacity:0.45;cursor:pointer;transition:all 0.15s;">All</button>
       </div>
 
       <!-- Range selector -->
@@ -18302,21 +18303,50 @@ document.addEventListener('click', function(e) {
     // Track which benchmarks are active
     let _activeBenchmarks = new Set(['SPY']); // SPY on by default
 
-    window.toggleBenchmark = function(bench, btn) {
-        if (_activeBenchmarks.has(bench)) {
-            // Only deactivate if at least one other is active
-            if (_activeBenchmarks.size > 1) {
-                _activeBenchmarks.delete(bench);
-                btn.style.background = 'transparent';
-                btn.style.opacity = '0.5';
+    const BENCH_COLORS = {
+        SPY: { color:'#fbbf24', bg:'rgba(251,191,36,0.2)' },
+        QQQ: { color:'#a78bfa', bg:'rgba(167,139,250,0.2)' },
+        VTI: { color:'#34d399', bg:'rgba(52,211,153,0.2)' },
+    };
+
+    function syncBenchButtons() {
+        const allActive = _activeBenchmarks.has('SPY') && _activeBenchmarks.has('QQQ') && _activeBenchmarks.has('VTI');
+        ['SPY','QQQ','VTI'].forEach(b => {
+            const btn = document.getElementById('benchToggle'+b);
+            if (!btn) return;
+            const active = _activeBenchmarks.has(b);
+            btn.style.background = active ? BENCH_COLORS[b].bg : 'transparent';
+            btn.style.opacity    = active ? '1' : '0.45';
+        });
+        const allBtn = document.getElementById('benchToggleALL');
+        if (allBtn) {
+            allBtn.style.background = allActive ? 'rgba(255,255,255,0.12)' : 'transparent';
+            allBtn.style.opacity    = allActive ? '1' : '0.45';
+        }
+    }
+
+    window.toggleBenchmark = function(bench) {
+        if (bench === 'ALL') {
+            const allActive = _activeBenchmarks.has('SPY') && _activeBenchmarks.has('QQQ') && _activeBenchmarks.has('VTI');
+            if (allActive) {
+                // Deactivate all except SPY (must keep at least one)
+                _activeBenchmarks.clear();
+                _activeBenchmarks.add('SPY');
+            } else {
+                // Activate all
+                _activeBenchmarks.add('SPY');
+                _activeBenchmarks.add('QQQ');
+                _activeBenchmarks.add('VTI');
             }
         } else {
-            _activeBenchmarks.add(bench);
-            btn.style.opacity = '1';
-            // Restore active color
-            const colors = { SPY:'#fbbf24', QQQ:'#a78bfa', VTI:'#34d399' };
-            btn.style.background = `rgba(${bench==='SPY'?'251,191,36':bench==='QQQ'?'167,139,250':'52,211,153'},0.2)`;
+            if (_activeBenchmarks.has(bench)) {
+                if (_activeBenchmarks.size > 1) _activeBenchmarks.delete(bench);
+                // If only 1 left, don't allow deactivating last one
+            } else {
+                _activeBenchmarks.add(bench);
+            }
         }
+        syncBenchButtons();
         renderFundBenchmarkChart();
     };
 
