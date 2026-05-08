@@ -6584,30 +6584,36 @@ renderPortfolioSummary() {
                                 <span class="info-value ${realizedClass}" style="font-size:1.2em;">${this.formatCurrency(realizedPL)}</span>
                             </div>
                             <div class="info-row" style="margin-top:8px;">
-                                <span class="info-label">Last Price</span>
+                                <span class="info-label">Last Known Price</span>
                                 <span class="info-value" id="closed-price-${item.id}" style="font-family:var(--font-mono);">
                                     ${item.price > 0 ? this.formatCurrency(item.price) : '—'}
                                 </span>
                                 <button onclick="(async (btn, id, sym) => {
-                                    btn.textContent = '...';
+                                    btn.innerHTML = '⏳';
                                     btn.disabled = true;
                                     try {
                                         const r = await window.stockTracker.apiService.fetchStockEtfQuote(sym);
                                         if (r.success && r.data.price) {
                                             document.getElementById('closed-price-' + id).textContent = new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(r.data.price);
-                                            btn.textContent = '✓';
-                                            setTimeout(() => { btn.textContent = 'quote'; btn.disabled = false; }, 2000);
-                                        } else { btn.textContent = 'quote'; btn.disabled = false; }
-                                    } catch(e) { btn.textContent = 'quote'; btn.disabled = false; }
+                                            btn.innerHTML = '✓ Done';
+                                            setTimeout(() => { btn.innerHTML = '📡 Get Quote'; btn.disabled = false; }, 2000);
+                                        } else { btn.innerHTML = '📡 Get Quote'; btn.disabled = false; }
+                                    } catch(e) { btn.innerHTML = '📡 Get Quote'; btn.disabled = false; }
                                 })(this, '${item.id}', '${item.symbol}')" style="
-                                    font-size:10px;padding:2px 7px;border-radius:4px;
-                                    border:1px solid var(--border-color);
-                                    background:transparent;color:var(--text-secondary);
-                                    cursor:pointer;margin-left:6px;vertical-align:middle;
+                                    font-size:11px;font-weight:600;padding:4px 10px;
+                                    border-radius:6px;border:1px solid var(--accent-primary);
+                                    background:var(--accent-glow,rgba(59,130,246,0.1));
+                                    color:var(--accent-primary);cursor:pointer;
+                                    margin-left:8px;vertical-align:middle;
                                     font-family:var(--font-family);transition:all 0.15s;
-                                " onmouseover="this.style.borderColor='var(--accent-primary)';this.style.color='var(--accent-primary)'"
-                                   onmouseout="this.style.borderColor='var(--border-color)';this.style.color='var(--text-secondary)'"
-                                >quote</button>
+                                " onmouseover="this.style.background='var(--accent-primary)';this.style.color='#fff'"
+                                   onmouseout="this.style.background='var(--accent-glow,rgba(59,130,246,0.1))';this.style.color='var(--accent-primary)'"
+                                >📡 Get Quote</button>
+                            </div>
+                            <div style="margin-top:10px;text-align:center;">
+                                <span style="font-size:10px;color:var(--text-muted);">
+                                    Not fetched during auto-refresh · click to get live price
+                                </span>
                             </div>`;
                     } else if ((type === 'stock' || type === 'fund') && stats.totalSharesOwned < 0.0001 && (item.transactions || []).length === 0) {
                         // Data Mismatch
