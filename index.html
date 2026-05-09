@@ -6824,23 +6824,16 @@ renderPortfolioSummary() {
                                     ${_wlAlert.buy?`<span style="font-weight:700;color:${_cur52<=_wlAlert.buy?'#34d399':'#8ba3be'};">Buy ≤ ${this.formatCurrency(_wlAlert.buy)}</span>`:''}
                                     ${_wlAlert.sell?`<span style="font-weight:700;color:${_cur52>=_wlAlert.sell?'#f87171':'#8ba3be'};">Sell ≥ ${this.formatCurrency(_wlAlert.sell)}</span>`:''}
                                 </div>` : '';
-                            const _earnDate = item.earningsDate||item.nextEarningsDate;
-                            const _earnDays = _earnDate?Math.ceil((new Date(_earnDate)-new Date())/(864e5)):null;
-                            const _earnHtml = (_earnDays!==null&&_earnDays>=0&&_earnDays<=90) ? `
-                                <div style="margin-top:5px;font-size:11px;display:flex;align-items:center;gap:5px;">
-                                    <span style="color:#8ba3be;">📅 Earnings:</span>
-                                    <span style="font-weight:700;color:${_earnDays<=7?'#fbbf24':'#e8f0fc'};">${_earnDays===0?'Today!':_earnDays===1?'Tomorrow':_earnDays+' days'}</span>
-                                </div>` : '';
-                            const _rating = item.analystRating||item.recommendationKey;
-                            const _rCol={strongBuy:'#34d399',buy:'#86efac',hold:'#fbbf24',sell:'#f87171',strongSell:'#ef4444'};
-                            const _rLbl={strongBuy:'Strong Buy',buy:'Buy',hold:'Hold',sell:'Sell',strongSell:'Strong Sell'};
-                            const _rHtml = _rating?`<div style="margin-top:5px;font-size:11px;display:flex;align-items:center;gap:5px;"><span style="color:#8ba3be;">👥 Analyst:</span><span style="font-weight:700;color:${_rCol[_rating]||'#e8f0fc'};">${_rLbl[_rating]||_rating}</span></div>`:'';
+                            // Earnings — check all Yahoo field names
+                            // Earnings and analyst rating are now in expandable panels (buttons below)
+                            const _earnHtml = '';
+                            const _rHtml    = '';
                             const _note  = (window._wlNotes||{})[item.symbol]||'';
                             stockInfoHTML = `
                                 <div class="info-row"><span class="info-label">Open:</span><span class="info-value">${this.formatCurrency(item.open||0)}</span></div>
                                 <div class="info-row"><span class="info-label">High / Low:</span><span class="info-value">${this.formatCurrency(item.high||0)} / ${this.formatCurrency(item.low||0)}</span></div>
                                 <div class="info-row"><span class="info-label">Prev Close:</span><span class="info-value">${this.formatCurrency(item.previousClose||0)}</span></div>
-                                ${_wl52}${_alertHtml}${_earnHtml}${_rHtml}
+                                ${_wl52}${_alertHtml}
                                 ${_note?`<div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,0.04);border-radius:8px;font-size:11px;color:#8ba3be;border-left:2px solid rgba(0,212,255,0.4);">📝 ${_note}</div>`:''}
                             `;
                         } else { 
@@ -6884,6 +6877,22 @@ renderPortfolioSummary() {
                                 <button class="add-btn" onclick="window.openWlAlertModal('${item.symbol}','${item.price}')" style="font-size:12px;">🎯 Set Target</button>
                                 <button class="add-btn" onclick="window.openWlSimulator('${item.symbol}','${item.price}')" style="font-size:12px;">🔮 Simulator</button>
                                 <button class="add-btn" onclick="window.openWlNoteModal('${item.symbol}')" style="font-size:12px;">📝 ${((window._wlNotes||{})[item.symbol])?'Edit Note':'Add Note'}</button>
+                                <button class="add-btn" onclick="window.toggleWlPanel('earnings-${item.id}','${item.symbol}')" style="font-size:12px;">📅 Earnings</button>
+                                <button class="add-btn" onclick="window.toggleWlPanel('analyst-${item.id}','${item.symbol}')" style="font-size:12px;">👥 Analyst Rating</button>
+                            </div>
+                            <!-- Earnings panel -->
+                            <div id="earnings-${item.id}" style="display:none;margin-top:8px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;font-size:12px;">
+                                <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">📅 Next Earnings</div>
+                                <div id="earnings-val-${item.id}" style="color:#e8f0fc;">
+                                    <button onclick="window.fetchWlEarnings('${item.symbol}','${item.id}')" style="font-size:11px;padding:4px 14px;border-radius:6px;border:1px solid rgba(0,212,255,0.3);background:rgba(0,212,255,0.1);color:#00d4ff;cursor:pointer;">Fetch Earnings Date</button>
+                                </div>
+                            </div>
+                            <!-- Analyst Rating panel -->
+                            <div id="analyst-${item.id}" style="display:none;margin-top:8px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;font-size:12px;">
+                                <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">👥 Analyst Consensus</div>
+                                <div id="analyst-val-${item.id}" style="color:#e8f0fc;">
+                                    <button onclick="window.fetchWlRating('${item.symbol}','${item.id}')" style="font-size:11px;padding:4px 14px;border-radius:6px;border:1px solid rgba(0,212,255,0.3);background:rgba(0,212,255,0.1);color:#00d4ff;cursor:pointer;">Fetch Analyst Rating</button>
+                                </div>
                             </div>
                         `;
                     } else if (!isClosedPosition) {
@@ -18816,7 +18825,8 @@ document.addEventListener('click', function(e) {
         set('wl-gainers', `<span style="color:#34d399">${gainers.length}</span>`);
         set('wl-losers',  `<span style="color:#f87171">${losers.length}</span>`);
         set('wl-best',    best ? `<span style="color:#34d399">${best.sym} +${best.pct.toFixed(2)}%</span>` : '—');
-        set('wl-worst',   worst ? `<span style="color:#f87171">${worst.sym} ${worst.pct.toFixed(2)}%</span>` : '—');
+        const _worstCol = worst && worst.pct >= 0 ? '#34d399' : '#f87171';
+        set('wl-worst',   worst ? `<span style="color:${_worstCol}">${worst.sym} ${worst.pct>=0?'+':''}${worst.pct.toFixed(2)}%</span>` : '—');
         set('wl-avg-chg', `<span style="color:${avg>=0?'#34d399':'#f87171'}">${avg>=0?'+':''}${avg.toFixed(2)}%</span>`);
     }
 
@@ -18955,15 +18965,17 @@ document.addEventListener('click', function(e) {
         const buyPrice = parseFloat(document.getElementById('simBuyPrice')?.value) || currentPrice;
         if (!amount || !buyPrice) return;
         const shares = amount / buyPrice;
+        const fmtNum = n => n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+        const fmtInt = n => Math.round(n).toLocaleString('en-US');
         const rows = [
-            ['Shares purchased', shares.toFixed(4)],
-            ['Value at current price', `$${(shares*currentPrice).toFixed(2)}`],
+            ['Shares purchased', shares.toLocaleString('en-US', {minimumFractionDigits:4, maximumFractionDigits:4})],
+            ['Value at current price', `$${fmtNum(shares*currentPrice)}`],
             ['', ''],
             ...[['+10%',1.10],['+25%',1.25],['+50%',1.50],['+100%',2.00],['-10%',0.90],['-25%',0.75],['-50%',0.50]].map(([lbl,mult]) => {
                 const val  = shares * buyPrice * mult;
                 const gain = val - amount;
                 const col  = gain >= 0 ? '#34d399' : '#f87171';
-                return [lbl, `<span style="color:${col};">$${val.toFixed(0)} (${gain>=0?'+':''}$${gain.toFixed(0)})</span>`];
+                return [lbl, `<span style="color:${col};">$${fmtInt(val)} (${gain>=0?'+':'-'}$${fmtInt(Math.abs(gain))})</span>`];
             })
         ];
         const el = document.getElementById('wlSimResult');
@@ -18989,6 +19001,83 @@ document.addEventListener('click', function(e) {
     window.addEventListener('load', () => {
         setTimeout(() => updateWlSummaryBar(window.stockTracker?.watchlist || []), 2500);
     });
+
+    // ── Toggle panel open/close ──────────────────────────────────
+    window.toggleWlPanel = function(panelId, symbol) {
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+        const isOpen = panel.style.display !== 'none';
+        panel.style.display = isOpen ? 'none' : 'block';
+    };
+
+    // ── On-demand earnings fetch ──────────────────────────────────
+    window.fetchWlEarnings = async function(symbol, itemId) {
+        const val = document.getElementById('earnings-val-'+itemId);
+        if (!val) return;
+        val.innerHTML = '<span style="color:#8ba3be;">⏳ Fetching...</span>';
+        try {
+            const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+            const r   = await fetch(url, { cache:'no-store' });
+            const j   = await r.json();
+            const meta = j?.chart?.result?.[0]?.meta;
+            const ts   = meta?.earningsTimestamp || meta?.earningsTimestampStart;
+            if (ts && ts > 0) {
+                const ed   = new Date(ts * 1000);
+                const days = Math.ceil((ed - new Date()) / 864e5);
+                const col  = days <= 7 ? '#fbbf24' : days === 0 ? '#f87171' : '#e8f0fc';
+                const lbl  = days === 0 ? 'Today! 🚨' : days === 1 ? 'Tomorrow ⚠️' : `In ${days.toLocaleString()} days`;
+                val.innerHTML = `
+                    <div style="display:flex;flex-direction:column;gap:4px;">
+                        <div style="font-size:16px;font-weight:700;color:${col};">${lbl}</div>
+                        <div style="font-size:11px;color:#8ba3be;">${ed.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
+                        ${days<=30?'<div style="font-size:11px;color:#fbbf24;margin-top:4px;">⚠️ Earnings approaching — expect volatility</div>':''}
+                    </div>`;
+            } else {
+                val.innerHTML = '<span style="color:#8ba3be;">No upcoming earnings date found</span>';
+            }
+        } catch(e) {
+            val.innerHTML = '<span style="color:#f87171;">Failed to fetch — try again</span>';
+        }
+    };
+
+    // ── On-demand analyst rating fetch ───────────────────────────
+    window.fetchWlRating = async function(symbol, itemId) {
+        const val = document.getElementById('analyst-val-'+itemId);
+        if (!val) return;
+        val.innerHTML = '<span style="color:#8ba3be;">⏳ Fetching...</span>';
+        try {
+            const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=financialData`;
+            const r   = await fetch(url, { cache:'no-store' });
+            const j   = await r.json();
+            const fd  = j?.quoteSummary?.result?.[0]?.financialData;
+            const rec = fd?.recommendationKey;
+            const num = fd?.numberOfAnalystOpinions?.raw;
+            const tp  = fd?.targetMeanPrice?.raw;
+            const tpLow  = fd?.targetLowPrice?.raw;
+            const tpHigh = fd?.targetHighPrice?.raw;
+            const _rCol = {strongbuy:'#34d399',buy:'#86efac',hold:'#fbbf24',sell:'#f87171',strongsell:'#ef4444'};
+            const _rLbl = {strongbuy:'Strong Buy',buy:'Buy',hold:'Hold',sell:'Sell',strongsell:'Strong Sell'};
+            const key   = rec ? rec.toLowerCase().replace(/[^a-z]/g,'') : null;
+            if (key) {
+                const col = _rCol[key] || '#e8f0fc';
+                val.innerHTML = `
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span style="font-size:18px;font-weight:700;color:${col};">${_rLbl[key]||rec}</span>
+                            ${num?`<span style="font-size:11px;color:#8ba3be;">(${num.toLocaleString()} analysts)</span>`:''}
+                        </div>
+                        ${tp?`<div style="font-size:12px;color:#8ba3be;">
+                            Price target: <span style="color:#e8f0fc;font-weight:600;">$${tp.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                            ${tpLow&&tpHigh?`<span style="color:#8ba3be;"> ($${tpLow.toFixed(2)} – $${tpHigh.toFixed(2)})</span>`:''}
+                        </div>`:''}
+                    </div>`;
+            } else {
+                val.innerHTML = '<span style="color:#8ba3be;">No analyst data available</span>';
+            }
+        } catch(e) {
+            val.innerHTML = '<span style="color:#f87171;">Failed to fetch — try again</span>';
+        }
+    };
 
 })();
 </script>
