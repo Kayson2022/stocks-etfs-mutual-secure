@@ -3474,18 +3474,44 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 
 </div>
 <div class="tab-content" id="watchlist-tab">
+
+<!-- ── Search & Controls ── -->
 <div class="search-section">
-<div class="input-wrapper">
-<input class="search-input" id="watchlistInput" placeholder="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)" type="text"/>
-<span class="clear-input" data-target="watchlistInput">×</span>
+  <div class="input-wrapper">
+    <input class="search-input" id="watchlistInput" placeholder="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)" type="text"/>
+    <span class="clear-input" data-target="watchlistInput">×</span>
+  </div>
+  <button class="add-btn" id="addWatchlistBtn">Add to Watchlist</button>
+  <button class="add-btn" id="updateWatchlistBtn">🔄 Update</button>
+  <button class="add-btn" id="clearWatchlistBtn">🗑️ Clear All</button>
 </div>
-<button class="add-btn" id="addWatchlistBtn">Add to Watchlist</button>
+
+<!-- ── Watchlist Summary Bar ── -->
+<div id="wlSummaryBar" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:14px 20px;background:var(--surface2,var(--card-bg-color));border-bottom:1px solid var(--border-color);">
+  <div class="fund-stat-box"><div class="fund-stat-label">Watching</div><div class="fund-stat-value" id="wl-count">—</div></div>
+  <div class="fund-stat-box"><div class="fund-stat-label">Gainers Today</div><div class="fund-stat-value" id="wl-gainers">—</div></div>
+  <div class="fund-stat-box"><div class="fund-stat-label">Losers Today</div><div class="fund-stat-value" id="wl-losers">—</div></div>
+  <div class="fund-stat-box"><div class="fund-stat-label">Best Today</div><div class="fund-stat-value" id="wl-best">—</div></div>
+  <div class="fund-stat-box"><div class="fund-stat-label">Worst Today</div><div class="fund-stat-value" id="wl-worst">—</div></div>
+  <div class="fund-stat-box"><div class="fund-stat-label">Avg Change</div><div class="fund-stat-value" id="wl-avg-chg">—</div></div>
 </div>
-<div class="watchlist-controls">
-<button class="add-btn" id="updateWatchlistBtn">🔄 Update Watchlist</button>
-<button class="add-btn" id="clearWatchlistBtn">🗑️ Clear Watchlist</button>
+
+<!-- ── Sort & Filter bar ── -->
+<div style="display:flex;align-items:center;gap:8px;padding:10px 20px;background:var(--card-bg-color);border-bottom:1px solid var(--border-color);flex-wrap:wrap;">
+  <span style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;">Sort:</span>
+  <button class="wl-sort-btn active" data-sort="change" onclick="window.sortWatchlist('change',this)">% Change</button>
+  <button class="wl-sort-btn" data-sort="price" onclick="window.sortWatchlist('price',this)">Price</button>
+  <button class="wl-sort-btn" data-sort="alpha" onclick="window.sortWatchlist('alpha',this)">A→Z</button>
+  <button class="wl-sort-btn" data-sort="52wh" onclick="window.sortWatchlist('52wh',this)">52W Position</button>
+  <span style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;margin-left:12px;">Filter:</span>
+  <button class="wl-sort-btn active" data-filter="all" onclick="window.filterWatchlist('all',this)">All</button>
+  <button class="wl-sort-btn" data-filter="gainers" onclick="window.filterWatchlist('gainers',this)">Gainers</button>
+  <button class="wl-sort-btn" data-filter="losers" onclick="window.filterWatchlist('losers',this)">Losers</button>
+  <button class="wl-sort-btn" data-filter="alert" onclick="window.filterWatchlist('alert',this)">Has Alert</button>
 </div>
-<h3 class="watchlist-title"><span>Your Watchlist <span id="watchlist-count">(0)</span></span></h3>
+
+<h3 class="watchlist-title" style="padding:10px 20px;"><span>Watchlist <span id="watchlist-count">(0)</span></span></h3>
+
 </div>
 
 <div class="stocks-grid" id="stocksGrid"></div>
@@ -6775,10 +6801,48 @@ renderPortfolioSummary() {
                         const positiveClass = value => value >= 0 ? 'positive' : 'negative';
                 
                         if (type === 'watchlist') {
-                            stockInfoHTML = `<div class="info-row"><span class="info-label">Open:</span><span class="info-value">${this.formatCurrency(item.open || 0)}</span></div>
-<div class="info-row"><span class="info-label">High:</span><span class="info-value">${this.formatCurrency(item.high || 0)}</span></div>
-<div class="info-row"><span class="info-label">Low:</span><span class="info-value">${this.formatCurrency(item.low || 0)}</span></div>
-<div class="info-row"><span class="info-label">Prev. Close:</span><span class="info-value">${this.formatCurrency(item.previousClose || 0)}</span></div>`;
+                            const _cur52  = item.price || 0;
+                            const _lo52   = item.fiftyTwoWeekLow  || 0;
+                            const _hi52   = item.fiftyTwoWeekHigh || 0;
+                            const _pct52  = (_hi52>_lo52) ? Math.min(100,Math.max(0,((_cur52-_lo52)/(_hi52-_lo52))*100)) : 50;
+                            const _clr52  = _pct52>=75?'#34d399':_pct52<=25?'#f87171':'#fbbf24';
+                            const _wl52   = (_hi52&&_lo52) ? `
+                                <div style="margin:10px 0 4px;padding-top:8px;border-top:1px solid var(--border-color);">
+                                    <div style="display:flex;justify-content:space-between;font-size:10px;color:#8ba3be;margin-bottom:5px;font-weight:600;">
+                                        <span>52W L: ${this.formatCurrency(_lo52)}</span>
+                                        <span style="color:${_clr52};font-weight:700;">${_pct52.toFixed(0)}% of range</span>
+                                        <span>52W H: ${this.formatCurrency(_hi52)}</span>
+                                    </div>
+                                    <div style="background:rgba(255,255,255,0.06);border-radius:999px;height:7px;overflow:hidden;">
+                                        <div style="height:100%;width:${_pct52}%;background:${_clr52};border-radius:999px;transition:width 0.4s;"></div>
+                                    </div>
+                                </div>` : '';
+                            const _wlAlert = (window._wlAlerts||{})[item.symbol];
+                            const _alertHtml = _wlAlert ? `
+                                <div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:11px;flex-wrap:wrap;">
+                                    <span style="color:#8ba3be;">🎯 Target:</span>
+                                    ${_wlAlert.buy?`<span style="font-weight:700;color:${_cur52<=_wlAlert.buy?'#34d399':'#8ba3be'};">Buy ≤ ${this.formatCurrency(_wlAlert.buy)}</span>`:''}
+                                    ${_wlAlert.sell?`<span style="font-weight:700;color:${_cur52>=_wlAlert.sell?'#f87171':'#8ba3be'};">Sell ≥ ${this.formatCurrency(_wlAlert.sell)}</span>`:''}
+                                </div>` : '';
+                            const _earnDate = item.earningsDate||item.nextEarningsDate;
+                            const _earnDays = _earnDate?Math.ceil((new Date(_earnDate)-new Date())/(864e5)):null;
+                            const _earnHtml = (_earnDays!==null&&_earnDays>=0&&_earnDays<=90) ? `
+                                <div style="margin-top:5px;font-size:11px;display:flex;align-items:center;gap:5px;">
+                                    <span style="color:#8ba3be;">📅 Earnings:</span>
+                                    <span style="font-weight:700;color:${_earnDays<=7?'#fbbf24':'#e8f0fc'};">${_earnDays===0?'Today!':_earnDays===1?'Tomorrow':_earnDays+' days'}</span>
+                                </div>` : '';
+                            const _rating = item.analystRating||item.recommendationKey;
+                            const _rCol={strongBuy:'#34d399',buy:'#86efac',hold:'#fbbf24',sell:'#f87171',strongSell:'#ef4444'};
+                            const _rLbl={strongBuy:'Strong Buy',buy:'Buy',hold:'Hold',sell:'Sell',strongSell:'Strong Sell'};
+                            const _rHtml = _rating?`<div style="margin-top:5px;font-size:11px;display:flex;align-items:center;gap:5px;"><span style="color:#8ba3be;">👥 Analyst:</span><span style="font-weight:700;color:${_rCol[_rating]||'#e8f0fc'};">${_rLbl[_rating]||_rating}</span></div>`:'';
+                            const _note  = (window._wlNotes||{})[item.symbol]||'';
+                            stockInfoHTML = `
+                                <div class="info-row"><span class="info-label">Open:</span><span class="info-value">${this.formatCurrency(item.open||0)}</span></div>
+                                <div class="info-row"><span class="info-label">High / Low:</span><span class="info-value">${this.formatCurrency(item.high||0)} / ${this.formatCurrency(item.low||0)}</span></div>
+                                <div class="info-row"><span class="info-label">Prev Close:</span><span class="info-value">${this.formatCurrency(item.previousClose||0)}</span></div>
+                                ${_wl52}${_alertHtml}${_earnHtml}${_rHtml}
+                                ${_note?`<div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,0.04);border-radius:8px;font-size:11px;color:#8ba3be;border-left:2px solid rgba(0,212,255,0.4);">📝 ${_note}</div>`:''}
+                            `;
                         } else { 
                             stockInfoHTML = `
                                 <div class="info-row"> <span class="info-label">Open:</span> <span class="info-value">${this.formatCurrency(item.open || 0)}</span> </div>
@@ -6815,9 +6879,11 @@ renderPortfolioSummary() {
                     let cardActionsHTML = '';
                     if (type === 'watchlist') {
                          cardActionsHTML = `
-                            <div class="card-actions" style="grid-template-columns: 1fr 1fr;">
-                                <button class="add-btn move-to-portfolio-btn" data-id="${item.id}" data-type="${type}">Move to Portfolio</button>
-                                <button class="add-btn set-alert-btn" data-id="${item.id}" data-type="${type}">Set Price Alert</button>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:10px;">
+                                <button class="add-btn move-to-portfolio-btn" data-id="${item.id}" data-type="${type}" style="font-size:12px;">📈 Add to Portfolio</button>
+                                <button class="add-btn" onclick="window.openWlAlertModal('${item.symbol}','${item.price}')" style="font-size:12px;">🎯 Set Target</button>
+                                <button class="add-btn" onclick="window.openWlSimulator('${item.symbol}','${item.price}')" style="font-size:12px;">🔮 Simulator</button>
+                                <button class="add-btn" onclick="window.openWlNoteModal('${item.symbol}')" style="font-size:12px;">📝 ${((window._wlNotes||{})[item.symbol])?'Edit Note':'Add Note'}</button>
                             </div>
                         `;
                     } else if (!isClosedPosition) {
@@ -18664,6 +18730,265 @@ document.addEventListener('click', function(e) {
 
     window.addEventListener('load', () => setTimeout(refreshFundTabWidgets, 2500));
     window.refreshFundTabWidgets = refreshFundTabWidgets;
+
+})();
+</script>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  WATCHLIST TAB — Enhanced Features
+//  1. Summary Bar
+//  2. Price Alert Indicators
+//  3. Buy Simulator
+//  4. 52-Week Range Bar
+//  5. Analyst Ratings
+//  6. Notes & Thesis
+//  7. Earnings Countdown
+//  8. Sort & Filter
+// ═══════════════════════════════════════════════════════════════
+(function() {
+    'use strict';
+
+    // Persistent storage for notes and alerts
+    window._wlNotes  = JSON.parse(localStorage.getItem('wl_notes')  || '{}');
+    window._wlAlerts = JSON.parse(localStorage.getItem('wl_alerts') || '{}');
+
+    function saveWlNotes()  { localStorage.setItem('wl_notes',  JSON.stringify(window._wlNotes)); }
+    function saveWlAlerts() { localStorage.setItem('wl_alerts', JSON.stringify(window._wlAlerts)); }
+
+    // ── CSS ─────────────────────────────────────────────────────
+    const style = document.createElement('style');
+    style.textContent = `
+        .wl-sort-btn {
+            font-size: 11px; font-weight: 600; padding: 4px 12px;
+            border-radius: 7px; border: 1px solid rgba(255,255,255,0.15);
+            background: transparent; color: #8ba3be;
+            cursor: pointer; transition: all 0.15s; white-space: nowrap;
+        }
+        .wl-sort-btn:hover { color: #e8f0fc; border-color: rgba(255,255,255,0.3); }
+        .wl-sort-btn.active { background: rgba(0,212,255,0.15); border-color: #00d4ff; color: #00d4ff; }
+        .wl-modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(6px); z-index: 10000;
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .wl-modal {
+            background: #111d2e; border: 1px solid rgba(0,212,255,0.2);
+            border-top: 2px solid #00d4ff; border-radius: 16px;
+            padding: 28px; max-width: 480px; width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+        }
+        .wl-modal h3 { font-size: 16px; font-weight: 700; color: #e8f0fc; margin-bottom: 20px; }
+        .wl-modal label { font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #8ba3be; display: block; margin-bottom: 5px; margin-top: 14px; }
+        .wl-modal input, .wl-modal textarea {
+            width: 100%; font-size: 13px; padding: 8px 12px;
+            border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.05); color: #e8f0fc; outline: none;
+        }
+        .wl-modal input:focus, .wl-modal textarea:focus { border-color: #00d4ff; }
+        .wl-modal textarea { min-height: 80px; resize: vertical; }
+        .wl-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+        .wl-btn-save { padding: 8px 24px; border-radius: 8px; border: none; background: #00d4ff; color: #000; font-weight: 700; font-size: 13px; cursor: pointer; }
+        .wl-btn-cancel { padding: 8px 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); background: transparent; color: #8ba3be; font-size: 13px; cursor: pointer; }
+        .wl-sim-result { margin-top: 14px; padding: 14px; background: rgba(0,212,255,0.06); border: 1px solid rgba(0,212,255,0.2); border-radius: 10px; }
+        .wl-sim-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .wl-sim-row:last-child { border-bottom: none; }
+    `;
+    document.head.appendChild(style);
+
+    // ── 1. Summary Bar ──────────────────────────────────────────
+    function updateWlSummaryBar(items) {
+        if (!items || !items.length) return;
+        const active = items.filter(i => i.price > 0);
+        const changes = active.map(i => {
+            const prev = i.previousClose || i.price;
+            return { sym: i.symbol, pct: prev ? ((i.price - prev)/prev*100) : 0 };
+        });
+        const gainers = changes.filter(c => c.pct > 0);
+        const losers  = changes.filter(c => c.pct < 0);
+        const best    = changes.length ? changes.reduce((a,b) => a.pct>b.pct?a:b) : null;
+        const worst   = changes.length ? changes.reduce((a,b) => a.pct<b.pct?a:b) : null;
+        const avg     = changes.length ? changes.reduce((s,c)=>s+c.pct,0)/changes.length : 0;
+
+        const set = (id, html) => { const el=document.getElementById(id); if(el) el.innerHTML=html; };
+        set('wl-count',   `<span style="color:#e8f0fc">${active.length}</span>`);
+        set('wl-gainers', `<span style="color:#34d399">${gainers.length}</span>`);
+        set('wl-losers',  `<span style="color:#f87171">${losers.length}</span>`);
+        set('wl-best',    best ? `<span style="color:#34d399">${best.sym} +${best.pct.toFixed(2)}%</span>` : '—');
+        set('wl-worst',   worst ? `<span style="color:#f87171">${worst.sym} ${worst.pct.toFixed(2)}%</span>` : '—');
+        set('wl-avg-chg', `<span style="color:${avg>=0?'#34d399':'#f87171'}">${avg>=0?'+':''}${avg.toFixed(2)}%</span>`);
+    }
+
+    // ── 8. Sort & Filter ────────────────────────────────────────
+    let _wlSort   = 'change';
+    let _wlFilter = 'all';
+
+    window.sortWatchlist = function(sort, btn) {
+        _wlSort = sort;
+        document.querySelectorAll('.wl-sort-btn[data-sort]').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        window.stockTracker?.renderContent();
+    };
+
+    window.filterWatchlist = function(filter, btn) {
+        _wlFilter = filter;
+        document.querySelectorAll('.wl-sort-btn[data-filter]').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        window.stockTracker?.renderContent();
+    };
+
+    // Patch renderContent to apply watchlist sort/filter
+    const _origRender = window.stockTracker?.renderContent?.bind(window.stockTracker);
+    if (window.stockTracker) {
+        const origRenderCards = window.stockTracker.renderCards?.bind(window.stockTracker);
+        if (origRenderCards) {
+            window.stockTracker.renderCards = function(itemList, container, type) {
+                if (type === 'watchlist') {
+                    // Filter
+                    if (_wlFilter === 'gainers') {
+                        itemList = itemList.filter(i => (i.changePercent||0) > 0);
+                    } else if (_wlFilter === 'losers') {
+                        itemList = itemList.filter(i => (i.changePercent||0) < 0);
+                    } else if (_wlFilter === 'alert') {
+                        itemList = itemList.filter(i => window._wlAlerts[i.symbol]);
+                    }
+                    // Sort
+                    itemList = [...itemList].sort((a,b) => {
+                        if (_wlSort === 'price')  return (b.price||0) - (a.price||0);
+                        if (_wlSort === 'alpha')  return a.symbol.localeCompare(b.symbol);
+                        if (_wlSort === '52wh') {
+                            const pctA = a.fiftyTwoWeekHigh>a.fiftyTwoWeekLow ? ((a.price-a.fiftyTwoWeekLow)/(a.fiftyTwoWeekHigh-a.fiftyTwoWeekLow)) : 0.5;
+                            const pctB = b.fiftyTwoWeekHigh>b.fiftyTwoWeekLow ? ((b.price-b.fiftyTwoWeekLow)/(b.fiftyTwoWeekHigh-b.fiftyTwoWeekLow)) : 0.5;
+                            return pctB - pctA;
+                        }
+                        // default: change%
+                        return (b.changePercent||0) - (a.changePercent||0);
+                    });
+
+                    // Fire summary bar update
+                    updateWlSummaryBar(window.stockTracker.watchlist || []);
+                }
+                return origRenderCards.call(this, itemList, container, type);
+            };
+        }
+    }
+
+    // ── 6. Notes Modal ──────────────────────────────────────────
+    window.openWlNoteModal = function(symbol) {
+        const existing = window._wlNotes[symbol] || '';
+        const overlay  = document.createElement('div');
+        overlay.className = 'wl-modal-overlay';
+        overlay.innerHTML = `
+            <div class="wl-modal">
+                <h3>📝 Note for ${symbol}</h3>
+                <label>Why are you watching this?</label>
+                <textarea id="wlNoteText" placeholder="e.g. Watching for breakout above $200. Strong earnings growth. Wait for dip to $180...">${existing}</textarea>
+                <div class="wl-modal-actions">
+                    <button class="wl-btn-cancel" onclick="this.closest('.wl-modal-overlay').remove()">Cancel</button>
+                    ${existing?`<button class="wl-btn-cancel" onclick="window._wlNotes['${symbol}']='';window.saveWlNotes();this.closest('.wl-modal-overlay').remove();window.stockTracker?.renderContent();">Clear</button>`:''}
+                    <button class="wl-btn-save" onclick="window._wlNotes['${symbol}']=document.getElementById('wlNoteText').value.trim();window.saveWlNotes();this.closest('.wl-modal-overlay').remove();window.stockTracker?.renderContent();">Save Note</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+        setTimeout(() => overlay.querySelector('textarea')?.focus(), 100);
+    };
+    window.saveWlNotes = saveWlNotes;
+
+    // ── 2. Price Alert / Target Modal ───────────────────────────
+    window.openWlAlertModal = function(symbol, currentPrice) {
+        const existing = window._wlAlerts[symbol] || {};
+        const overlay  = document.createElement('div');
+        overlay.className = 'wl-modal-overlay';
+        overlay.innerHTML = `
+            <div class="wl-modal">
+                <h3>🎯 Price Target for ${symbol}</h3>
+                <div style="font-size:12px;color:#8ba3be;margin-bottom:14px;">Current: <strong style="color:#00d4ff;">$${parseFloat(currentPrice).toFixed(2)}</strong></div>
+                <label>Buy Target (≤ this price, alert turns green)</label>
+                <input type="number" id="wlAlertBuy" placeholder="e.g. 180.00" value="${existing.buy||''}" step="0.01">
+                <label>Sell Target (≥ this price, alert turns red)</label>
+                <input type="number" id="wlAlertSell" placeholder="e.g. 220.00" value="${existing.sell||''}" step="0.01">
+                <div class="wl-modal-actions">
+                    <button class="wl-btn-cancel" onclick="this.closest('.wl-modal-overlay').remove()">Cancel</button>
+                    ${existing.buy||existing.sell?`<button class="wl-btn-cancel" onclick="delete window._wlAlerts['${symbol}'];window.saveWlAlerts();this.closest('.wl-modal-overlay').remove();window.stockTracker?.renderContent();">Clear</button>`:''}
+                    <button class="wl-btn-save" onclick="
+                        const b=parseFloat(document.getElementById('wlAlertBuy').value)||null;
+                        const s=parseFloat(document.getElementById('wlAlertSell').value)||null;
+                        if(b||s){window._wlAlerts['${symbol}']={buy:b,sell:s};}
+                        window.saveWlAlerts();
+                        this.closest('.wl-modal-overlay').remove();
+                        window.stockTracker?.renderContent();
+                    ">Save Target</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+    };
+    window.saveWlAlerts = saveWlAlerts;
+
+    // ── 3. Buy Simulator ────────────────────────────────────────
+    window.openWlSimulator = function(symbol, currentPrice) {
+        const price = parseFloat(currentPrice) || 0;
+        const overlay = document.createElement('div');
+        overlay.className = 'wl-modal-overlay';
+        overlay.innerHTML = `
+            <div class="wl-modal">
+                <h3>🔮 Buy Simulator — ${symbol}</h3>
+                <div style="font-size:12px;color:#8ba3be;margin-bottom:14px;">Current price: <strong style="color:#00d4ff;">$${price.toFixed(2)}</strong></div>
+                <label>If I invest $</label>
+                <input type="number" id="simAmount" placeholder="e.g. 10000" value="10000" oninput="window.calcWlSim(${price})">
+                <label>At price $</label>
+                <input type="number" id="simBuyPrice" placeholder="${price.toFixed(2)}" value="${price.toFixed(2)}" step="0.01" oninput="window.calcWlSim(${price})">
+                <div id="wlSimResult" class="wl-sim-result"></div>
+                <div class="wl-modal-actions">
+                    <button class="wl-btn-save" onclick="this.closest('.wl-modal-overlay').remove()">Close</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+        setTimeout(() => window.calcWlSim(price), 50);
+    };
+
+    window.calcWlSim = function(currentPrice) {
+        const amount   = parseFloat(document.getElementById('simAmount')?.value) || 0;
+        const buyPrice = parseFloat(document.getElementById('simBuyPrice')?.value) || currentPrice;
+        if (!amount || !buyPrice) return;
+        const shares = amount / buyPrice;
+        const rows = [
+            ['Shares purchased', shares.toFixed(4)],
+            ['Value at current price', `$${(shares*currentPrice).toFixed(2)}`],
+            ['', ''],
+            ...[['+10%',1.10],['+25%',1.25],['+50%',1.50],['+100%',2.00],['-10%',0.90],['-25%',0.75],['-50%',0.50]].map(([lbl,mult]) => {
+                const val  = shares * buyPrice * mult;
+                const gain = val - amount;
+                const col  = gain >= 0 ? '#34d399' : '#f87171';
+                return [lbl, `<span style="color:${col};">$${val.toFixed(0)} (${gain>=0?'+':''}$${gain.toFixed(0)})</span>`];
+            })
+        ];
+        const el = document.getElementById('wlSimResult');
+        if (el) el.innerHTML = rows.map(([l,v]) => l ? `<div class="wl-sim-row"><span style="color:#8ba3be;">${l}</span><span style="color:#e8f0fc;font-weight:600;">${v}</span></div>` : '<div style="height:6px;"></div>').join('');
+    };
+
+    // ── Wire up on tab switch ───────────────────────────────────
+    const wlTab = document.getElementById('watchlist-tab');
+    if (wlTab) {
+        new MutationObserver(() => {
+            if (wlTab.classList.contains('active')) {
+                updateWlSummaryBar(window.stockTracker?.watchlist || []);
+            }
+        }).observe(wlTab, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    setInterval(() => {
+        if (document.getElementById('watchlist-tab')?.classList.contains('active')) {
+            updateWlSummaryBar(window.stockTracker?.watchlist || []);
+        }
+    }, 5000);
+
+    window.addEventListener('load', () => {
+        setTimeout(() => updateWlSummaryBar(window.stockTracker?.watchlist || []), 2500);
+    });
 
 })();
 </script>
