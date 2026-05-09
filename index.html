@@ -6884,14 +6884,14 @@ renderPortfolioSummary() {
                             <div id="earnings-${item.id}" style="display:none;margin-top:8px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;font-size:12px;">
                                 <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">📅 Next Earnings</div>
                                 <div id="earnings-val-${item.id}" style="color:#e8f0fc;">
-                                    <button onclick="window.fetchWlEarnings('${item.symbol}','${item.id}')" style="font-size:11px;padding:4px 14px;border-radius:6px;border:1px solid rgba(0,212,255,0.3);background:rgba(0,212,255,0.1);color:#00d4ff;cursor:pointer;">Fetch Earnings Date</button>
+                                    <span style="color:#8ba3be;font-size:11px;">⏳ Loading...</span>
                                 </div>
                             </div>
                             <!-- Analyst Rating panel -->
                             <div id="analyst-${item.id}" style="display:none;margin-top:8px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;font-size:12px;">
                                 <div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">👥 Analyst Consensus</div>
                                 <div id="analyst-val-${item.id}" style="color:#e8f0fc;">
-                                    <button onclick="window.fetchWlRating('${item.symbol}','${item.id}')" style="font-size:11px;padding:4px 14px;border-radius:6px;border:1px solid rgba(0,212,255,0.3);background:rgba(0,212,255,0.1);color:#00d4ff;cursor:pointer;">Fetch Analyst Rating</button>
+                                    <span style="color:#8ba3be;font-size:11px;">⏳ Loading...</span>
                                 </div>
                             </div>
                         `;
@@ -19002,12 +19002,23 @@ document.addEventListener('click', function(e) {
         setTimeout(() => updateWlSummaryBar(window.stockTracker?.watchlist || []), 2500);
     });
 
-    // ── Toggle panel open/close ──────────────────────────────────
+    // ── Toggle panel open/close — auto-fetch on first open ──────
     window.toggleWlPanel = function(panelId, symbol) {
         const panel = document.getElementById(panelId);
         if (!panel) return;
         const isOpen = panel.style.display !== 'none';
         panel.style.display = isOpen ? 'none' : 'block';
+        if (!isOpen) {
+            // Auto-fetch on first open
+            const itemId = panelId.replace('earnings-','').replace('analyst-','');
+            if (panelId.startsWith('earnings-') && !panel.dataset.fetched) {
+                panel.dataset.fetched = '1';
+                window.fetchWlEarnings(symbol, itemId);
+            } else if (panelId.startsWith('analyst-') && !panel.dataset.fetched) {
+                panel.dataset.fetched = '1';
+                window.fetchWlRating(symbol, itemId);
+            }
+        }
     };
 
     // ── On-demand earnings fetch ──────────────────────────────────
@@ -19016,27 +19027,49 @@ document.addEventListener('click', function(e) {
         if (!val) return;
         val.innerHTML = '<span style="color:#8ba3be;">⏳ Fetching...</span>';
         try {
-            const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-            const r   = await fetch(url, { cache:'no-store' });
-            const j   = await r.json();
-            const meta = j?.chart?.result?.[0]?.meta;
-            const ts   = meta?.earningsTimestamp || meta?.earningsTimestampStart;
-            if (ts && ts > 0) {
-                const ed   = new Date(ts * 1000);
+            // Try Finnhub first (no CORS issues, reliable)
+            const FINNHUB_KEY = 'cttdfphr01qhb6eg2gagcttdfphr01qhb6eg2gb0';
+            const fbUrl = `https://finnhub.io/api/v1/calendar/earnings?symbol=${symbol}&token=${FINNHUB_KEY}`;
+            let ts = null, earnDate = null;
+            try {
+                const fb = await fetch(fbUrl, { cache:'no-store' });
+                const fj = await fb.json();
+                const upcoming = (fj?.earningsCalendar || [])
+                    .filter(e => new Date(e.date) >= new Date())
+                    .sort((a,b) => new Date(a.date)-new Date(b.date));
+                if (upcoming.length) {
+                    earnDate = upcoming[0].date; // "YYYY-MM-DD"
+                }
+            } catch(e) {}
+
+            // Fallback: Yahoo Worker (your own Cloudflare Worker)
+            if (!earnDate) {
+                try {
+                    const wUrl = `https://yahoo-proxy.giolamchieu1975.workers.dev?symbol=${symbol}`;
+                    const wr   = await fetch(wUrl, { cache:'no-store' });
+                    const wj   = await wr.json();
+                    const meta = wj?.data?.meta;
+                    ts = meta?.earningsTimestamp || meta?.earningsTimestampStart;
+                    if (ts && ts > 0) earnDate = new Date(ts*1000).toISOString().split('T')[0];
+                } catch(e) {}
+            }
+
+            if (earnDate) {
+                const ed   = new Date(earnDate + 'T00:00:00');
                 const days = Math.ceil((ed - new Date()) / 864e5);
-                const col  = days <= 7 ? '#fbbf24' : days === 0 ? '#f87171' : '#e8f0fc';
+                const col  = days === 0 ? '#f87171' : days <= 7 ? '#fbbf24' : '#e8f0fc';
                 const lbl  = days === 0 ? 'Today! 🚨' : days === 1 ? 'Tomorrow ⚠️' : `In ${days.toLocaleString()} days`;
                 val.innerHTML = `
-                    <div style="display:flex;flex-direction:column;gap:4px;">
-                        <div style="font-size:16px;font-weight:700;color:${col};">${lbl}</div>
+                    <div style="display:flex;flex-direction:column;gap:5px;">
+                        <div style="font-size:17px;font-weight:700;color:${col};">${lbl}</div>
                         <div style="font-size:11px;color:#8ba3be;">${ed.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
-                        ${days<=30?'<div style="font-size:11px;color:#fbbf24;margin-top:4px;">⚠️ Earnings approaching — expect volatility</div>':''}
+                        ${days<=30?`<div style="font-size:11px;color:#fbbf24;margin-top:2px;">⚠️ Earnings approaching — expect volatility</div>`:''}
                     </div>`;
             } else {
-                val.innerHTML = '<span style="color:#8ba3be;">No upcoming earnings date found</span>';
+                val.innerHTML = '<span style="color:#8ba3be;">No upcoming earnings date found for ' + symbol + '</span>';
             }
         } catch(e) {
-            val.innerHTML = '<span style="color:#f87171;">Failed to fetch — try again</span>';
+            val.innerHTML = `<span style="color:#f87171;">Fetch failed: ${e.message}</span>`;
         }
     };
 
@@ -19046,36 +19079,71 @@ document.addEventListener('click', function(e) {
         if (!val) return;
         val.innerHTML = '<span style="color:#8ba3be;">⏳ Fetching...</span>';
         try {
-            const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=financialData`;
+            // Use Finnhub recommendation trends
+            const FINNHUB_KEY = 'cttdfphr01qhb6eg2gagcttdfphr01qhb6eg2gb0';
+            const url = `https://finnhub.io/api/v1/stock/recommendation?symbol=${symbol}&token=${FINNHUB_KEY}`;
             const r   = await fetch(url, { cache:'no-store' });
             const j   = await r.json();
-            const fd  = j?.quoteSummary?.result?.[0]?.financialData;
-            const rec = fd?.recommendationKey;
-            const num = fd?.numberOfAnalystOpinions?.raw;
-            const tp  = fd?.targetMeanPrice?.raw;
-            const tpLow  = fd?.targetLowPrice?.raw;
-            const tpHigh = fd?.targetHighPrice?.raw;
-            const _rCol = {strongbuy:'#34d399',buy:'#86efac',hold:'#fbbf24',sell:'#f87171',strongsell:'#ef4444'};
-            const _rLbl = {strongbuy:'Strong Buy',buy:'Buy',hold:'Hold',sell:'Sell',strongsell:'Strong Sell'};
-            const key   = rec ? rec.toLowerCase().replace(/[^a-z]/g,'') : null;
-            if (key) {
-                const col = _rCol[key] || '#e8f0fc';
-                val.innerHTML = `
-                    <div style="display:flex;flex-direction:column;gap:6px;">
-                        <div style="display:flex;align-items:center;gap:8px;">
-                            <span style="font-size:18px;font-weight:700;color:${col};">${_rLbl[key]||rec}</span>
-                            ${num?`<span style="font-size:11px;color:#8ba3be;">(${num.toLocaleString()} analysts)</span>`:''}
+
+            // Also fetch price target from Finnhub
+            const ptUrl = `https://finnhub.io/api/v1/stock/price-target?symbol=${symbol}&token=${FINNHUB_KEY}`;
+            const ptr   = await fetch(ptUrl, { cache:'no-store' });
+            const ptj   = await ptr.json();
+
+            const latest = Array.isArray(j) && j.length ? j[0] : null;
+            if (latest) {
+                const { strongBuy=0, buy=0, hold=0, sell=0, strongSell=0, period='' } = latest;
+                const total = strongBuy + buy + hold + sell + strongSell;
+                // Determine consensus
+                const buyVotes  = strongBuy + buy;
+                const sellVotes = sell + strongSell;
+                let consensus, consCol;
+                if (buyVotes > total*0.6)       { consensus='Strong Buy';  consCol='#34d399'; }
+                else if (buyVotes > total*0.4)   { consensus='Buy';         consCol='#86efac'; }
+                else if (sellVotes > total*0.4)  { consensus='Sell';        consCol='#f87171'; }
+                else if (sellVotes > total*0.6)  { consensus='Strong Sell'; consCol='#ef4444'; }
+                else                             { consensus='Hold';        consCol='#fbbf24'; }
+
+                const tp    = ptj?.targetMean;
+                const tpHigh= ptj?.targetHigh;
+                const tpLow = ptj?.targetLow;
+                const fmt   = n => n?.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+                // Bar chart of recommendations
+                const bar = (label, count, col) => {
+                    const pct = total > 0 ? Math.round((count/total)*100) : 0;
+                    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                        <span style="min-width:80px;font-size:11px;color:#8ba3be;">${label}</span>
+                        <div style="flex:1;background:rgba(255,255,255,0.06);border-radius:3px;height:8px;overflow:hidden;">
+                            <div style="width:${pct}%;height:100%;background:${col};border-radius:3px;"></div>
                         </div>
-                        ${tp?`<div style="font-size:12px;color:#8ba3be;">
-                            Price target: <span style="color:#e8f0fc;font-weight:600;">$${tp.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
-                            ${tpLow&&tpHigh?`<span style="color:#8ba3be;"> ($${tpLow.toFixed(2)} – $${tpHigh.toFixed(2)})</span>`:''}
-                        </div>`:''}
+                        <span style="min-width:28px;font-size:11px;color:${col};font-weight:600;text-align:right;">${count}</span>
+                    </div>`;
+                };
+
+                val.innerHTML = `
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span style="font-size:18px;font-weight:700;color:${consCol};">${consensus}</span>
+                            <span style="font-size:11px;color:#8ba3be;">${total.toLocaleString()} analysts · ${period}</span>
+                        </div>
+                        <div style="padding:8px 0;">
+                            ${bar('Strong Buy', strongBuy, '#34d399')}
+                            ${bar('Buy',         buy,       '#86efac')}
+                            ${bar('Hold',        hold,      '#fbbf24')}
+                            ${bar('Sell',        sell,      '#f87171')}
+                            ${bar('Strong Sell', strongSell,'#ef4444')}
+                        </div>
+                        ${tp ? `<div style="font-size:12px;color:#8ba3be;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);">
+                            Price target: <span style="color:#e8f0fc;font-weight:600;">$${fmt(tp)}</span>
+                            ${tpLow&&tpHigh?`<span style="color:#8ba3be;"> (Low $${fmt(tpLow)} – High $${fmt(tpHigh)})</span>`:''}
+                        </div>` : ''}
                     </div>`;
             } else {
-                val.innerHTML = '<span style="color:#8ba3be;">No analyst data available</span>';
+                val.innerHTML = '<span style="color:#8ba3be;">No analyst data available for ' + symbol + '</span>';
             }
         } catch(e) {
-            val.innerHTML = '<span style="color:#f87171;">Failed to fetch — try again</span>';
+            val.innerHTML = `<span style="color:#f87171;">Fetch failed: ${e.message}</span>`;
         }
     };
 
