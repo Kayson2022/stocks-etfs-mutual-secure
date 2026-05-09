@@ -19205,300 +19205,187 @@ document.addEventListener('click', function(e) {
 </script>
 
 
-<script>
-// ═══════════════════════════════════════════════════════════════
-//  TELEGRAM ALERT SYSTEM — Secure App
-//  Browser → Cloudflare Worker → Telegram
-// ═══════════════════════════════════════════════════════════════
-(function() {
-    'use strict';
-
-    const WORKER_URL  = 'https://yahoo-proxy.giolamchieu1975.workers.dev/telegram';
-    const COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours per alert
-    const IMMEDIATE_THRESHOLD = 10; // >10% fires immediately, not batched
-
-    // VIP stocks with lower thresholds
-    const VIP_THRESHOLDS = {
-        'AVGO': 3, 'DELL': 3, 'AAPL': 3
-    };
-    const DEFAULT_THRESHOLD = 5;
-
-    // ── Send to Telegram via Worker ──────────────────────────────
-    async function sendTelegram(message) {
-        try {
-            await fetch(WORKER_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message })
-            });
-        } catch(e) {
-            console.warn('[Telegram] Send failed:', e.message);
-        }
-    }
-
-    // ── Cooldown management ──────────────────────────────────────
-    function getCooldowns() {
-        try { return JSON.parse(localStorage.getItem('tg_cooldowns') || '{}'); }
-        catch { return {}; }
-    }
-
-    function saveCooldowns(cd) {
-        localStorage.setItem('tg_cooldowns', JSON.stringify(cd));
-    }
-
-    function isOnCooldown(key) {
-        const cd  = getCooldowns();
-        const now = Date.now();
-        // Clean up expired cooldowns
-        Object.keys(cd).forEach(k => { if (now - cd[k] > COOLDOWN_MS) delete cd[k]; });
-        saveCooldowns(cd);
-        return !!cd[key];
-    }
-
-    function setCooldown(key) {
-        const cd = getCooldowns();
-        cd[key]  = Date.now();
-        saveCooldowns(cd);
-    }
-
-    // ── Format currency ──────────────────────────────────────────
-    function fmt(n) {
-        return '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-    }
-
-    // ── Check stock price alerts ─────────────────────────────────
-    async function checkStockAlerts(stocks) {
-        if (!stocks || !stocks.length) return;
-
-        const gainers   = [];
-        const losers    = [];
-        const immediate = [];
-
-        stocks.forEach(stock => {
-            const sym     = stock.symbol;
-            const price   = stock.price || 0;
-            const prev    = stock.previousClose || stock.previousClosePrice || price;
-            if (!prev || !price) return;
-
-            const pct     = ((price - prev) / prev) * 100;
-            const absPct  = Math.abs(pct);
-            const thresh  = VIP_THRESHOLDS[sym] || DEFAULT_THRESHOLD;
-
-            // >10% — fire immediately regardless
-            if (absPct > IMMEDIATE_THRESHOLD) {
-                const key = `immediate_${sym}_${pct > 0 ? 'up' : 'down'}_${new Date().toDateString()}`;
-                if (!isOnCooldown(key)) {
-                    immediate.push({ sym, pct, price, prev });
-                    setCooldown(key);
-                }
-                return;
-            }
-
-            if (absPct >= thresh) {
-                const key = `${sym}_${pct > 0 ? 'up' : 'down'}_${new Date().toDateString()}`;
-                if (!isOnCooldown(key)) {
-                    if (pct > 0) gainers.push({ sym, pct, price, thresh });
-                    else losers.push({ sym, pct, price, thresh });
-                    setCooldown(key);
-                }
-            }
-        });
-
-        // Send immediate alerts (>10%) one by one
-        for (const s of immediate) {
-            const arrow = s.pct > 0 ? '🚀' : '💥';
-            const sign  = s.pct > 0 ? '+' : '';
-            await sendTelegram(
-                `${arrow} <b>MAJOR MOVE — ${s.sym}</b>
-` +
-                `${sign}${s.pct.toFixed(2)}% today
-` +
-                `Price: ${fmt(s.price)} (prev close: ${fmt(s.prev)})
-` +
-                `<i>Secure App Alert</i>`
-            );
-        }
-
-        // Batch gainers
-        if (gainers.length) {
-            const batchKey = `batch_up_${new Date().toDateString()}_${gainers.map(g=>g.sym).join('_')}`;
-            if (!isOnCooldown(batchKey)) {
-                const lines = gainers
-                    .sort((a,b) => b.pct - a.pct)
-                    .map(g => `  📈 <b>${g.sym}</b> +${g.pct.toFixed(2)}% @ ${fmt(g.price)}`)
-                    .join('
-');
-                await sendTelegram(
-                    `📈 <b>MOVERS UP — ${gainers.length} stock${gainers.length>1?'s':''}</b>
-${lines}
-<i>Secure App Alert</i>`
-                );
-                setCooldown(batchKey);
-            }
-        }
-
-        // Batch losers
-        if (losers.length) {
-            const batchKey = `batch_down_${new Date().toDateString()}_${losers.map(l=>l.sym).join('_')}`;
-            if (!isOnCooldown(batchKey)) {
-                const lines = losers
-                    .sort((a,b) => a.pct - b.pct)
-                    .map(l => `  📉 <b>${l.sym}</b> ${l.pct.toFixed(2)}% @ ${fmt(l.price)}`)
-                    .join('
-');
-                await sendTelegram(
-                    `📉 <b>MOVERS DOWN — ${losers.length} stock${losers.length>1?'s':''}</b>
-${lines}
-<i>Secure App Alert</i>`
-                );
-                setCooldown(batchKey);
-            }
-        }
-    }
-
-    // ── Check watchlist price targets ────────────────────────────
-    async function checkWatchlistTargets(watchlist) {
-        if (!watchlist || !watchlist.length) return;
-        const alerts = window._wlAlerts || {};
-
-        for (const item of watchlist) {
-            const sym   = item.symbol;
-            const price = item.price || 0;
-            const alert = alerts[sym];
-            if (!alert || !price) continue;
-
-            // Buy target hit
-            if (alert.buy && price <= alert.buy) {
-                const key = `wl_buy_${sym}_${new Date().toDateString()}`;
-                if (!isOnCooldown(key)) {
-                    await sendTelegram(
-                        `🎯 <b>BUY TARGET HIT — ${sym}</b>
-` +
-                        `Current: ${fmt(price)} ≤ Target: ${fmt(alert.buy)}
-` +
-                        `<i>Watchlist Alert — Secure App</i>`
-                    );
-                    setCooldown(key);
-                }
-            }
-
-            // Sell target hit
-            if (alert.sell && price >= alert.sell) {
-                const key = `wl_sell_${sym}_${new Date().toDateString()}`;
-                if (!isOnCooldown(key)) {
-                    await sendTelegram(
-                        `🎯 <b>SELL TARGET HIT — ${sym}</b>
-` +
-                        `Current: ${fmt(price)} ≥ Target: ${fmt(alert.sell)}
-` +
-                        `<i>Watchlist Alert — Secure App</i>`
-                    );
-                    setCooldown(key);
-                }
-            }
-        }
-    }
-
-    // ── Check earnings today ─────────────────────────────────────
-    async function checkEarningsToday(stocks) {
-        const key = `earnings_today_${new Date().toDateString()}`;
-        if (isOnCooldown(key)) return;
-
-        const FINNHUB_KEY = window.stockTracker?.config?.finnhubApiKey || '';
-        if (!FINNHUB_KEY) return;
-
-        const today   = new Date().toISOString().split('T')[0];
-        const symbols = stocks.map(s => s.symbol);
-        const reporting = [];
-
-        for (const sym of symbols) {
-            try {
-                const url = `https://finnhub.io/api/v1/calendar/earnings?symbol=${sym}&from=${today}&to=${today}&token=${FINNHUB_KEY}`;
-                const j   = await (await fetch(url, {cache:'no-store'})).json();
-                if ((j?.earningsCalendar || []).some(e => e.date === today)) {
-                    reporting.push(sym);
-                }
-            } catch(e) {}
-        }
-
-        if (reporting.length) {
-            await sendTelegram(
-                `📅 <b>EARNINGS TODAY</b>
-` +
-                reporting.map(s => `  • <b>${s}</b>`).join('
-') + '
-' +
-                `<i>Expect volatility — Secure App</i>`
-            );
-            setCooldown(key);
-        }
-    }
-
-    // ── Main alert runner ────────────────────────────────────────
-    let _lastAlertRun = 0;
-    const ALERT_INTERVAL = 5 * 60 * 1000; // check every 5 minutes
-
-    async function runAlerts() {
-        const now = Date.now();
-        if (now - _lastAlertRun < ALERT_INTERVAL) return;
-        _lastAlertRun = now;
-
-        // Only run during market hours (ET)
-        const et  = new Date(new Date().toLocaleString('en-US', {timeZone:'America/New_York'}));
-        const h   = et.getHours(), m = et.getMinutes(), day = et.getDay();
-        const min = h * 60 + m;
-        const isMarketHours = day >= 1 && day <= 5 && min >= 570 && min < 960;
-        if (!isMarketHours) return;
-
-        const tracker  = window.stockTracker;
-        if (!tracker) return;
-
-        const stocks   = tracker.stocks    || [];
-        const watchlist= tracker.watchlist || [];
-
-        await checkStockAlerts(stocks);
-        await checkWatchlistTargets(watchlist);
-
-        // Check earnings once at market open (9:30-9:45 AM ET)
-        if (min >= 570 && min <= 585) {
-            await checkEarningsToday(stocks);
-        }
-    }
-
-    // Run on every price refresh
-    const _origRefresh = window.stockTracker?.refreshCurrentTab;
-    if (window.stockTracker) {
-        const origUpdate = window.stockTracker.updatePricesAndRender?.bind(window.stockTracker);
-        if (origUpdate) {
-            window.stockTracker.updatePricesAndRender = async function(...args) {
-                const result = await origUpdate.apply(this, args);
-                setTimeout(runAlerts, 2000); // slight delay after prices update
-                return result;
-            };
-        }
-    }
-
-    // Also run on interval as backup
-    setInterval(runAlerts, ALERT_INTERVAL);
-
-    // Run once on load (after data ready)
-    window.addEventListener('load', () => setTimeout(runAlerts, 5000));
-
-    // Expose for manual testing
-    window.testTelegramAlert = async function() {
-        await sendTelegram(
-            `✅ <b>Telegram Alert Test</b>
-` +
-            `Your Secure App alerts are working!
-` +
-            `Time: ${new Date().toLocaleString('en-US', {timeZone:'America/Los_Angeles'})} PT`
-        );
-        alert('Test message sent! Check Telegram.');
-    };
-
-    console.log('[TelegramAlerts] Secure App alert system loaded ✅');
-
-})();
-</script>
 
 </body>
+<script>
+(function() {
+var WORKER = 'https://yahoo-proxy.giolamchieu1975.workers.dev/telegram';
+var COOLDOWN_MS = 86400000;
+var VIP = { 'AVGO': 3, 'DELL': 3, 'AAPL': 3 };
+var DEFAULT_THRESH = 5;
+var IMMEDIATE_THRESH = 10;
+
+function sendTg(msg) {
+    return fetch(WORKER, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg })
+    }).catch(function(e) { console.warn('[TG]', e); });
+}
+
+function getCd() {
+    try { return JSON.parse(localStorage.getItem('tg_cd') || '{}'); } catch(e) { return {}; }
+}
+
+function isCD(key) {
+    var cd = getCd(); var now = Date.now();
+    Object.keys(cd).forEach(function(k) { if (now - cd[k] > COOLDOWN_MS) delete cd[k]; });
+    localStorage.setItem('tg_cd', JSON.stringify(cd));
+    return !!cd[key];
+}
+
+function setCD(key) {
+    var cd = getCd(); cd[key] = Date.now();
+    localStorage.setItem('tg_cd', JSON.stringify(cd));
+}
+
+function fmtMoney(n) {
+    return '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function today() { return new Date().toDateString(); }
+
+function isMarketHours() {
+    var et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    var d = et.getDay(), h = et.getHours(), m = et.getMinutes();
+    var min = h * 60 + m;
+    return d >= 1 && d <= 5 && min >= 570 && min < 960;
+}
+
+async function checkStocks() {
+    if (!window.stockTracker) return;
+    var stocks = window.stockTracker.stocks || [];
+    if (!stocks.length) return;
+
+    var gainers = [], losers = [], immediate = [];
+
+    stocks.forEach(function(s) {
+        var sym = s.symbol;
+        var price = s.price || 0;
+        var prev = s.previousClose || s.previousClosePrice || price;
+        if (!prev || !price) return;
+        var pct = ((price - prev) / prev) * 100;
+        var abs = Math.abs(pct);
+        var thresh = VIP[sym] || DEFAULT_THRESH;
+
+        if (abs > IMMEDIATE_THRESH) {
+            var k = 'imm_' + sym + '_' + (pct > 0 ? 'up' : 'dn') + '_' + today();
+            if (!isCD(k)) { immediate.push({ sym: sym, pct: pct, price: price }); setCD(k); }
+            return;
+        }
+        if (abs >= thresh) {
+            var k2 = sym + '_' + (pct > 0 ? 'up' : 'dn') + '_' + today();
+            if (!isCD(k2)) {
+                if (pct > 0) gainers.push({ sym: sym, pct: pct, price: price });
+                else losers.push({ sym: sym, pct: pct, price: price });
+                setCD(k2);
+            }
+        }
+    });
+
+    for (var i = 0; i < immediate.length; i++) {
+        var s = immediate[i];
+        var arrow = s.pct > 0 ? '🚀' : '💥';
+        await sendTg(arrow + ' MAJOR MOVE - ' + s.sym + '\n' +
+            (s.pct > 0 ? '+' : '') + s.pct.toFixed(2) + '% today\n' +
+            'Price: ' + fmtMoney(s.price) + '\n' +
+            'Secure App Alert');
+    }
+
+    if (gainers.length) {
+        var gk = 'batch_up_' + gainers.map(function(g) { return g.sym; }).join('_') + '_' + today();
+        if (!isCD(gk)) {
+            var lines = gainers.sort(function(a,b){return b.pct-a.pct;})
+                .map(function(g) { return g.sym + ' +' + g.pct.toFixed(2) + '% @ ' + fmtMoney(g.price); })
+                .join('\n');
+            await sendTg('📈 MOVERS UP (' + gainers.length + ')\n' + lines + '\nSecure App Alert');
+            setCD(gk);
+        }
+    }
+
+    if (losers.length) {
+        var lk = 'batch_dn_' + losers.map(function(l) { return l.sym; }).join('_') + '_' + today();
+        if (!isCD(lk)) {
+            var lines2 = losers.sort(function(a,b){return a.pct-b.pct;})
+                .map(function(l) { return l.sym + ' ' + l.pct.toFixed(2) + '% @ ' + fmtMoney(l.price); })
+                .join('\n');
+            await sendTg('📉 MOVERS DOWN (' + losers.length + ')\n' + lines2 + '\nSecure App Alert');
+            setCD(lk);
+        }
+    }
+}
+
+async function checkWatchlist() {
+    if (!window.stockTracker) return;
+    var watchlist = window.stockTracker.watchlist || [];
+    var alerts = window._wlAlerts || {};
+    for (var i = 0; i < watchlist.length; i++) {
+        var item = watchlist[i];
+        var sym = item.symbol, price = item.price || 0;
+        var al = alerts[sym];
+        if (!al || !price) continue;
+        if (al.buy && price <= al.buy) {
+            var k = 'wl_buy_' + sym + '_' + today();
+            if (!isCD(k)) {
+                await sendTg('🎯 BUY TARGET HIT - ' + sym + '\nCurrent: ' + fmtMoney(price) + ' <= Target: ' + fmtMoney(al.buy) + '\nWatchlist Alert');
+                setCD(k);
+            }
+        }
+        if (al.sell && price >= al.sell) {
+            var k2 = 'wl_sell_' + sym + '_' + today();
+            if (!isCD(k2)) {
+                await sendTg('🎯 SELL TARGET HIT - ' + sym + '\nCurrent: ' + fmtMoney(price) + ' >= Target: ' + fmtMoney(al.sell) + '\nWatchlist Alert');
+                setCD(k2);
+            }
+        }
+    }
+}
+
+async function checkEarnings() {
+    var k = 'earnings_' + today();
+    if (isCD(k)) return;
+    var fk = window.stockTracker && window.stockTracker.config && window.stockTracker.config.finnhubApiKey;
+    if (!fk) return;
+    var stocks = (window.stockTracker && window.stockTracker.stocks) || [];
+    var todayStr = new Date().toISOString().split('T')[0];
+    var reporting = [];
+    for (var i = 0; i < stocks.length; i++) {
+        var sym = stocks[i].symbol;
+        try {
+            var r = await fetch('https://finnhub.io/api/v1/calendar/earnings?symbol=' + sym + '&from=' + todayStr + '&to=' + todayStr + '&token=' + fk);
+            var j = await r.json();
+            if ((j.earningsCalendar || []).some(function(e) { return e.date === todayStr; })) {
+                reporting.push(sym);
+            }
+        } catch(e) {}
+    }
+    if (reporting.length) {
+        await sendTg('📅 EARNINGS TODAY\n' + reporting.join(', ') + '\nExpect volatility - Secure App');
+        setCD(k);
+    }
+}
+
+var lastRun = 0;
+async function runAlerts() {
+    if (!isMarketHours()) return;
+    var now = Date.now();
+    if (now - lastRun < 300000) return;
+    lastRun = now;
+    await checkStocks();
+    await checkWatchlist();
+    var et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    var min = et.getHours() * 60 + et.getMinutes();
+    if (min >= 570 && min <= 585) await checkEarnings();
+}
+
+setInterval(runAlerts, 300000);
+window.addEventListener('load', function() { setTimeout(runAlerts, 5000); });
+
+window.testTelegramAlert = async function() {
+    await sendTg('Test from Secure App - ' + new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }) + ' PT');
+    alert('Sent! Check Telegram.');
+};
+
+console.log('[TG Alerts] Secure App loaded OK');
+})();
+</script>
