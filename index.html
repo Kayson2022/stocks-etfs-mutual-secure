@@ -19042,44 +19042,56 @@ document.addEventListener('click', function(e) {
                 val.innerHTML = '<span style="color:#fbbf24;">⚠️ No Finnhub API key set. Add it in Settings.</span>';
                 return;
             }
-            const fbUrl = `https://finnhub.io/api/v1/calendar/earnings?symbol=${symbol}&token=${FINNHUB_KEY}`;
-            let ts = null, earnDate = null;
-            try {
-                const fb = await fetch(fbUrl, { cache:'no-store' });
-                const fj = await fb.json();
-                const upcoming = (fj?.earningsCalendar || [])
-                    .filter(e => new Date(e.date) >= new Date())
-                    .sort((a,b) => new Date(a.date)-new Date(b.date));
-                if (upcoming.length) {
-                    earnDate = upcoming[0].date; // "YYYY-MM-DD"
-                }
-            } catch(e) {}
+            // Finnhub requires from/to — search next 365 days
+            const _now  = new Date();
+            const _from = _now.toISOString().split('T')[0];
+            const _to   = new Date(_now.getTime() + 365*864e5).toISOString().split('T')[0];
+            let earnDate = null, earnEps = null, earnHour = null;
 
-            // Fallback: Yahoo Worker (your own Cloudflare Worker)
+            // Try 1: Finnhub earnings calendar with date range
+            try {
+                const fbUrl = `https://finnhub.io/api/v1/calendar/earnings?symbol=${symbol}&from=${_from}&to=${_to}&token=${FINNHUB_KEY}`;
+                const fj = await (await fetch(fbUrl, { cache:'no-store' })).json();
+                const upcoming = (fj?.earningsCalendar || [])
+                    .filter(e => e.date >= _from)
+                    .sort((a,b) => a.date.localeCompare(b.date));
+                if (upcoming.length) {
+                    earnDate = upcoming[0].date;
+                    earnEps  = upcoming[0].epsEstimate;
+                    earnHour = upcoming[0].hour; // BMO or AMC
+                }
+            } catch(e) { console.warn('[Earnings Finnhub]', e); }
+
+            // Try 2: Yahoo Worker fallback
             if (!earnDate) {
                 try {
-                    const wUrl = `https://yahoo-proxy.giolamchieu1975.workers.dev?symbol=${symbol}`;
-                    const wr   = await fetch(wUrl, { cache:'no-store' });
-                    const wj   = await wr.json();
+                    const wj   = await (await fetch(`https://yahoo-proxy.giolamchieu1975.workers.dev?symbol=${symbol}`, {cache:'no-store'})).json();
                     const meta = wj?.data?.meta;
-                    ts = meta?.earningsTimestamp || meta?.earningsTimestampStart;
-                    if (ts && ts > 0) earnDate = new Date(ts*1000).toISOString().split('T')[0];
-                } catch(e) {}
+                    const ts   = meta?.earningsTimestamp || meta?.earningsTimestampStart;
+                    if (ts && ts > Math.floor(_now.getTime()/1000)) {
+                        earnDate = new Date(ts*1000).toISOString().split('T')[0];
+                    }
+                } catch(e) { console.warn('[Earnings Yahoo]', e); }
             }
 
             if (earnDate) {
-                const ed   = new Date(earnDate + 'T00:00:00');
-                const days = Math.ceil((ed - new Date()) / 864e5);
+                const ed   = new Date(earnDate + 'T12:00:00');
+                const days = Math.ceil((ed - _now) / 864e5);
                 const col  = days === 0 ? '#f87171' : days <= 7 ? '#fbbf24' : '#e8f0fc';
                 const lbl  = days === 0 ? 'Today! 🚨' : days === 1 ? 'Tomorrow ⚠️' : `In ${days.toLocaleString()} days`;
+                const hourLbl = earnHour === 'BMO' ? '· Before Market Open' : earnHour === 'AMC' ? '· After Market Close' : '';
                 val.innerHTML = `
                     <div style="display:flex;flex-direction:column;gap:5px;">
                         <div style="font-size:17px;font-weight:700;color:${col};">${lbl}</div>
-                        <div style="font-size:11px;color:#8ba3be;">${ed.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
-                        ${days<=30?`<div style="font-size:11px;color:#fbbf24;margin-top:2px;">⚠️ Earnings approaching — expect volatility</div>`:''}
+                        <div style="font-size:11px;color:#8ba3be;">
+                            ${ed.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}
+                            <span style="color:#e8f0fc;">${hourLbl}</span>
+                        </div>
+                        ${earnEps != null ? `<div style="font-size:11px;color:#8ba3be;margin-top:2px;">EPS estimate: <span style="color:#e8f0fc;font-weight:600;">${earnEps >= 0 ? '+' : ''}$${Math.abs(earnEps).toFixed(2)}</span></div>` : ''}
+                        ${days >= 0 && days <= 30 ? `<div style="font-size:11px;color:#fbbf24;margin-top:4px;">⚠️ Earnings approaching — expect volatility</div>` : ''}
                     </div>`;
             } else {
-                val.innerHTML = '<span style="color:#8ba3be;">No upcoming earnings date found for ' + symbol + '</span>';
+                val.innerHTML = `<span style="color:#8ba3be;">No upcoming earnings found for <strong style="color:#e8f0fc;">${symbol}</strong></span>`;
             }
         } catch(e) {
             val.innerHTML = `<span style="color:#f87171;">Fetch failed: ${e.message}</span>`;
