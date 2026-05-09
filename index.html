@@ -18945,9 +18945,18 @@ document.addEventListener('click', function(e) {
         overlay.innerHTML = `
             <div class="wl-modal">
                 <h3>🔮 Buy Simulator — ${symbol}</h3>
-                <div style="font-size:12px;color:#8ba3be;margin-bottom:14px;">Current price: <strong style="color:#00d4ff;">$${price.toFixed(2)}</strong></div>
+                <div style="font-size:12px;color:#8ba3be;margin-bottom:14px;">Current price: <strong style="color:#00d4ff;">$${price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></div>
                 <label>If I invest $</label>
-                <input type="number" id="simAmount" placeholder="e.g. 10000" value="10000" oninput="window.calcWlSim(${price})">
+                <div style="position:relative;">
+                    <input type="text" id="simAmount" placeholder="e.g. 10,000" value="10,000"
+                        style="padding-right:10px;"
+                        oninput="
+                            const raw = this.value.replace(/[^0-9]/g,'');
+                            const cursor = this.selectionStart - (this.value.length - raw.length);
+                            this.value = raw ? parseInt(raw).toLocaleString('en-US') : '';
+                            window.calcWlSim(${price});
+                        ">
+                </div>
                 <label>At price $</label>
                 <input type="number" id="simBuyPrice" placeholder="${price.toFixed(2)}" value="${price.toFixed(2)}" step="0.01" oninput="window.calcWlSim(${price})">
                 <div id="wlSimResult" class="wl-sim-result"></div>
@@ -18961,7 +18970,7 @@ document.addEventListener('click', function(e) {
     };
 
     window.calcWlSim = function(currentPrice) {
-        const amount   = parseFloat(document.getElementById('simAmount')?.value) || 0;
+        const amount   = parseFloat((document.getElementById('simAmount')?.value||'').replace(/,/g,'')) || 0;
         const buyPrice = parseFloat(document.getElementById('simBuyPrice')?.value) || currentPrice;
         if (!amount || !buyPrice) return;
         const shares = amount / buyPrice;
@@ -19027,8 +19036,12 @@ document.addEventListener('click', function(e) {
         if (!val) return;
         val.innerHTML = '<span style="color:#8ba3be;">⏳ Fetching...</span>';
         try {
-            // Try Finnhub first (no CORS issues, reliable)
-            const FINNHUB_KEY = 'cttdfphr01qhb6eg2gagcttdfphr01qhb6eg2gb0';
+            // Use the app's own Finnhub key from settings
+            const FINNHUB_KEY = window.stockTracker?.config?.finnhubApiKey || '';
+            if (!FINNHUB_KEY) {
+                val.innerHTML = '<span style="color:#fbbf24;">⚠️ No Finnhub API key set. Add it in Settings.</span>';
+                return;
+            }
             const fbUrl = `https://finnhub.io/api/v1/calendar/earnings?symbol=${symbol}&token=${FINNHUB_KEY}`;
             let ts = null, earnDate = null;
             try {
@@ -19079,8 +19092,12 @@ document.addEventListener('click', function(e) {
         if (!val) return;
         val.innerHTML = '<span style="color:#8ba3be;">⏳ Fetching...</span>';
         try {
-            // Use Finnhub recommendation trends
-            const FINNHUB_KEY = 'cttdfphr01qhb6eg2gagcttdfphr01qhb6eg2gb0';
+            // Use the app's own Finnhub key from settings
+            const FINNHUB_KEY = window.stockTracker?.config?.finnhubApiKey || '';
+            if (!FINNHUB_KEY) {
+                val.innerHTML = '<span style="color:#fbbf24;">⚠️ No Finnhub API key set. Add it in Settings.</span>';
+                return;
+            }
             const url = `https://finnhub.io/api/v1/stock/recommendation?symbol=${symbol}&token=${FINNHUB_KEY}`;
             const r   = await fetch(url, { cache:'no-store' });
             const j   = await r.json();
