@@ -3806,17 +3806,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 </div>
 
-<div class="modal" id="confirmModal" style="display: none; z-index: 2000;">
-<div class="modal-content">
-<button class="close-modal-btn" id="closeConfirmModalBtn" onclick="window.stockTracker.closeConfirmModal()">×</button>
-<h3 class="modal-title">Are you sure?</h3>
-<p id="confirm-modal-text" style="text-align: center; margin-bottom: 20px;"></p>
-<div class="modal-actions">
-<button class="add-btn" id="confirm-modal-cancel-btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Cancel</button>
-<button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: var(--color-negative);">Confirm Delete</button>
-</div>
-</div>
-</div>
+
 <div class="modal" id="priceAlertModal" style="display: none;">
 <div class="modal-content">
 <button class="close-modal-btn" onclick="window.stockTracker.closePriceAlertModal()">×</button>
@@ -19207,6 +19197,17 @@ document.addEventListener('click', function(e) {
 
 
 
+<div class="modal" id="confirmModal" style="display: none;">
+<div class="modal-content">
+<button class="close-modal-btn" id="closeConfirmModalBtn" onclick="window.stockTracker.closeConfirmModal()">×</button>
+<h3 class="modal-title">Are you sure?</h3>
+<p id="confirm-modal-text" style="text-align: center; margin-bottom: 20px;"></p>
+<div class="modal-actions">
+<button class="add-btn" id="confirm-modal-cancel-btn" style="background-color: var(--bg-tertiary); color: var(--text-primary);">Cancel</button>
+<button class="add-btn" id="confirm-modal-confirm-btn" style="background-color: var(--color-negative);">Confirm Delete</button>
+</div>
+</div>
+</div>
 </body>
 <script>
 (function() {
