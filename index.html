@@ -1590,6 +1590,15 @@ input::placeholder, textarea::placeholder {
   position: relative;
   z-index: 1;
 }
+.summary-arrow {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.summary-arrow.positive { color: var(--color-positive, #00c853); }
+.summary-arrow.negative { color: var(--color-negative, #ff5252); }
+.summary-subline-sep { display: inline-block; width: 14px; }
 
 /* Buttons */
 .add-btn,
@@ -3174,9 +3183,10 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-label">Combined Total</div>
 <div class="summary-total"><span class="summary-value" id="combined-total-value">$0.00</span></div>
 <div class="summary-subline">
+<span class="summary-arrow" id="total-pl-arrow">▲</span>
 <span class="summary-value" id="total-pl-today">$0.00</span>
-       · 
-      <span class="summary-value" id="total-pl-percent-today">0.00%</span>
+<span class="summary-subline-sep">&nbsp;&nbsp;&nbsp;</span>
+<span class="summary-value" id="total-pl-percent-today">0.00%</span>
 <span class="summary-subline-tail" id="total-pl-today-label"> today</span>
 </div>
 <div class="summary-badges">
@@ -6005,6 +6015,12 @@ renderPortfolioSummary() {
                     el.textContent = isPercent ? `${this.formatNumber(value, 2)}%` : this.formatCurrency(value);
                     el.className = `summary-value ${value >= 0 ? 'positive' : 'negative'}`;
                 };
+                // Update arrow indicator
+                const arrowEl = document.getElementById('total-pl-arrow');
+                if (arrowEl) {
+                    arrowEl.textContent = totalPLTodayFinal >= 0 ? '▲' : '▼';
+                    arrowEl.className = 'summary-arrow ' + (totalPLTodayFinal >= 0 ? 'positive' : 'negative');
+                }
                 
                 // 💰 Update all summary labels
                 setElement(document.getElementById('combined-total-value'), combinedMetrics.totalCurrentValue);
