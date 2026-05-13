@@ -5483,6 +5483,11 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
 
             async saveData() {
                 if (!this.userId) return;
+                // NEVER save during demo mode
+                if (window._demoModeActive) {
+                    console.warn('[SaveData] Blocked — demo mode is active');
+                    return;
+                }
                 if (this._isSaving) {
                     console.warn('Save already in progress — skipping duplicate save.');
                     return;
@@ -19363,6 +19368,7 @@ document.addEventListener('click', function(e) {
         if (!tracker) { alert('App not ready yet'); return; }
 
         _demoMode = !_demoMode;
+        window._demoModeActive = _demoMode;
 
         if (_demoMode) {
             // Save real data
