@@ -3278,6 +3278,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
 <div class="import-wrapper">
 <button class="add-btn" id="exportBtn">📥 Export Data</button>
+<button class="add-btn" id="telegramBackupBtn" onclick="window.sendSecureBackupToTelegram()">📲 Backup to Telegram</button>
 <label class="add-btn" for="importFile" style="cursor: pointer;">📤 Import Data</label>
 <input accept=".json" id="importFile" style="display: none;" type="file"/>
 <button class="add-btn" onclick="openCSVImportModal()" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;">📊 Import from CSV Tool</button>
@@ -19493,6 +19494,65 @@ document.addEventListener('click', function(e) {
 
     console.log('[DemoMode] Loaded — demo mode is safe, saveData blocked during demo');
 })();
+</script>
+
+<script>
+// ── Secure App — Backup to Telegram ─────────────────────────
+window.sendSecureBackupToTelegram = async function() {
+    var btn = document.getElementById('telegramBackupBtn');
+    if (btn) { btn.textContent = '⏳ Sending...'; btn.disabled = true; }
+
+    try {
+        var tracker = window.stockTracker;
+        if (!tracker) throw new Error('App not ready');
+
+        var data = {
+            stocks:      tracker.stocks      || [],
+            mutualFunds: tracker.mutualFunds || [],
+            watchlist:   tracker.watchlist   || [],
+            exportDate:  new Date().toISOString(),
+            totalStocks: (tracker.stocks || []).length,
+            totalFunds:  (tracker.mutualFunds || []).length
+        };
+
+        var TG_TOKEN   = '8693017310:AAHM3RHmxU5LymlAFxgsktl7kLd9nMoEIv0';
+        var TG_CHAT_ID = '8748935089';
+        var nowFile    = new Date().toISOString().split('T')[0];
+        var now        = new Date().toLocaleString('en-US', {timeZone:'America/Los_Angeles'});
+        var jsonStr    = JSON.stringify(data, null, 2);
+        var sizekb     = Math.round(jsonStr.length / 1024);
+        var fileName   = 'secure-backup-' + nowFile + '.json';
+
+        var blob     = new Blob([jsonStr], { type: 'application/json' });
+        var formData = new FormData();
+        formData.append('chat_id', TG_CHAT_ID);
+        formData.append('caption',
+            'Secure App Portfolio Backup\n' +
+            'Date: ' + now + ' PT\n' +
+            'Stocks: ' + data.totalStocks + '\n' +
+            'Funds: ' + data.totalFunds + '\n' +
+            'Size: ' + sizekb + 'KB\n' +
+            'Use Import Data in the app to restore.'
+        );
+        formData.append('document', blob, fileName);
+
+        var res    = await fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendDocument', { method: 'POST', body: formData });
+        var result = await res.json();
+
+        if (result.ok) {
+            if (btn) { btn.textContent = '✅ Sent!'; btn.disabled = false; }
+            setTimeout(function() { if (btn) btn.textContent = '📲 Backup to Telegram'; }, 3000);
+            console.log('Secure app backup sent to Telegram ✅', sizekb + 'KB');
+        } else {
+            throw new Error(result.description || 'Telegram error');
+        }
+    } catch(e) {
+        console.error('Telegram backup failed:', e);
+        if (btn) { btn.textContent = '❌ Failed'; btn.disabled = false; }
+        setTimeout(function() { if (btn) btn.textContent = '📲 Backup to Telegram'; }, 3000);
+    }
+};
+</script>
 </script>
 
 </body>
