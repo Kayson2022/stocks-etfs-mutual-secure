@@ -19475,8 +19475,23 @@ document.addEventListener('click', function(e) {
         }
     }
 
-    // ── Demo Mode accessible via console: window.toggleDemoMode() ──
-    console.log('[DemoMode] Loaded — run window.toggleDemoMode() in console to activate');
+    // ── Add Demo Mode button to header ───────────────────────────
+    window.addEventListener('load', function() {
+        setTimeout(function() {
+            const headerRight = document.querySelector('.header-right') ||
+                                document.querySelector('header .right') ||
+                                document.querySelector('header');
+            if (!headerRight) return;
+            const btn = document.createElement('button');
+            btn.id = 'demoModeBtn';
+            btn.textContent = '🎬 Demo Mode';
+            btn.style.cssText = 'font-size:12px;font-weight:600;padding:5px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:#8ba3be;cursor:pointer;transition:all 0.15s;';
+            btn.onclick = window.toggleDemoMode;
+            headerRight.appendChild(btn);
+        }, 2000);
+    });
+
+    console.log('[DemoMode] Loaded — demo mode is safe, saveData blocked during demo');
 })();
 </script>
 
