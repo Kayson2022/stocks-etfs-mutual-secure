@@ -5969,7 +5969,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     }
 
                     totalContributions += (item.transactions || []).reduce((sum, t) => sum + (t.type === 'buy' ? t.shares * t.price : -t.shares * t.price), 0);
-                    totalDividends += (item.dividends || []).reduce((divSum, div) => divSum + div.totalAmount, 0);
+                    totalDividends += (item.dividends || []).reduce((divSum, div) => divSum + (div.totalAmount || div.amount || 0), 0);
                 });
 
                 return { totalCurrentValue, totalUnrealizedPL, totalRealizedPL, totalPLToday, totalPreviousDayValue, totalContributions, totalDividends, activeCount };
@@ -6197,7 +6197,7 @@ renderPortfolioSummary() {
             calculateAnnualizedDividendYield(item) {
                  if (!item.dividends || item.dividends.length === 0 || item.price === 0) return 0;
                  const now = new Date(), lastYear = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-                 const totalDividendsLastYear = item.dividends.filter(d => new Date(d.date) > lastYear).reduce((sum, d) => sum + d.totalAmount, 0);
+                 const totalDividendsLastYear = item.dividends.filter(d => new Date(d.date) > lastYear).reduce((sum, d) => sum + (d.totalAmount || d.amount || 0), 0);
                  return totalDividendsLastYear > 0 ? (totalDividendsLastYear / item.price) * 100 : 0;
             }
             openEditTransactionModal(id, type, index) {
@@ -19469,33 +19469,8 @@ document.addEventListener('click', function(e) {
         }
     }
 
-    // ── Add Demo Mode button to header ───────────────────────────
-    window.addEventListener('load', function() {
-        setTimeout(function() {
-            // Add to header right side
-            const headerRight = document.querySelector('.header-right') ||
-                                document.querySelector('header .right') ||
-                                document.querySelector('header');
-            if (!headerRight) return;
-
-            const btn = document.createElement('button');
-            btn.id = 'demoModeBtn';
-            btn.textContent = '🎬 Demo Mode';
-            btn.style.cssText = [
-                'font-family:var(--font-family,"DM Sans",sans-serif)',
-                'font-size:12px', 'font-weight:600',
-                'padding:5px 14px', 'border-radius:6px',
-                'border:1px solid var(--border-color,rgba(255,255,255,0.1))',
-                'background:transparent',
-                'color:var(--text-secondary,"#8ba3be")',
-                'cursor:pointer', 'transition:all 0.15s'
-            ].join(';');
-            btn.onclick = window.toggleDemoMode;
-            headerRight.appendChild(btn);
-        }, 2000);
-    });
-
-    console.log('[DemoMode] Loaded — click "Demo Mode" button in header to activate');
+    // ── Demo Mode accessible via console: window.toggleDemoMode() ──
+    console.log('[DemoMode] Loaded — run window.toggleDemoMode() in console to activate');
 })();
 </script>
 
