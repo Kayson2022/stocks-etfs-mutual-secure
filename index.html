@@ -19237,128 +19237,119 @@ document.addEventListener('click', function(e) {
 (function() {
 
     // ── Fake demo data ───────────────────────────────────────────
-    const DEMO_STOCKS = [
-        {
-            id: 'demo-1', symbol: 'NVDA', name: 'NVIDIA Corporation',
-            price: 952.84, previousClosePrice: 856.87, industry: 'Technology',
-            accountType: 'Regular Brokerage', platform: 'Fidelity',
-            transactions: [
-                { type: 'buy', shares: 150, price: 425.20, date: '2023-06-15' },
-                { type: 'buy', shares: 150, price: 612.50, date: '2024-01-10' },
-            ],
-            dividends: []
-        },
-        {
-            id: 'demo-2', symbol: 'AAPL', name: 'Apple Inc.',
-            price: 171.22, previousClosePrice: 168.14, industry: 'Technology',
-            accountType: 'Regular Brokerage', platform: 'Fidelity',
-            transactions: [
-                { type: 'buy', shares: 300, price: 142.65, date: '2022-09-20' },
-                { type: 'buy', shares: 200, price: 158.20, date: '2023-03-14' },
-            ],
-            dividends: [{ date: '2024-11-15', amount: 92.50 }]
-        },
-        {
-            id: 'demo-3', symbol: 'MSFT', name: 'Microsoft Corporation',
-            price: 420.77, previousClosePrice: 413.96, industry: 'Technology',
-            accountType: 'Regular Brokerage', platform: 'Fidelity',
-            transactions: [
-                { type: 'buy', shares: 150, price: 285.40, date: '2022-11-08' },
-            ],
-            dividends: [{ date: '2024-12-12', amount: 112.50 }]
-        },
-        {
-            id: 'demo-4', symbol: 'TSLA', name: 'Tesla, Inc.',
-            price: 182.45, previousClosePrice: 195.82, industry: 'Automotive',
-            accountType: 'Regular Brokerage', platform: 'Fidelity',
-            transactions: [
-                { type: 'buy', shares: 200, price: 215.30, date: '2023-08-22' },
-            ],
-            dividends: []
-        },
-        {
-            id: 'demo-5', symbol: 'META', name: 'Meta Platforms Inc.',
-            price: 616.81, previousClosePrice: 612.88, industry: 'Technology',
-            accountType: 'Regular Brokerage', platform: 'Fidelity',
-            transactions: [
-                { type: 'buy', shares: 80, price: 312.45, date: '2023-02-14' },
-                { type: 'buy', shares: 40, price: 468.20, date: '2024-02-08' },
-            ],
-            dividends: []
-        },
-        {
-            id: 'demo-6', symbol: 'VOO', name: 'Vanguard S&P 500 ETF',
-            price: 489.11, previousClosePrice: 484.08, industry: 'ETF',
-            accountType: 'Regular Brokerage', platform: 'Vanguard',
-            transactions: [
-                { type: 'buy', shares: 120, price: 380.50, date: '2022-07-15' },
-                { type: 'buy', shares: 80, price: 412.30, date: '2023-04-20' },
-            ],
-            dividends: [{ date: '2024-12-20', amount: 284.98 }]
-        },
-        {
-            id: 'demo-7', symbol: 'VGT', name: 'Vanguard IT ETF',
-            price: 476.92, previousClosePrice: 471.63, industry: 'ETF',
-            accountType: 'Roth IRA', platform: 'Vanguard',
-            transactions: [
-                { type: 'buy', shares: 110, price: 320.80, date: '2022-10-05' },
-            ],
-            dividends: []
-        },
-        {
-            id: 'demo-8', symbol: 'AVGO', name: 'Broadcom Inc.',
-            price: 1820.50, previousClosePrice: 1778.40, industry: 'Technology',
-            accountType: 'Roth IRA', platform: 'Fidelity',
-            transactions: [
-                { type: 'buy', shares: 20, price: 850.20, date: '2023-05-10' },
-                { type: 'buy', shares: 15, price: 1250.60, date: '2024-03-15' },
-            ],
-            dividends: [{ date: '2024-12-31', amount: 340.75 }]
-        },
+    function demoStock(id, sym, name, price, prevClose, open, high, low, w52l, w52h, acct, platform, txns, divs) {
+        var chg = price - prevClose;
+        var chgPct = prevClose ? (chg / prevClose * 100) : 0;
+        return {
+            id: id, symbol: sym, name: name,
+            price: price, previousClosePrice: prevClose,
+            change: chg, changePercent: chgPct,
+            open: open, high: high, low: low,
+            fiftyTwoWeekLow: w52l, fiftyTwoWeekHigh: w52h,
+            industry: 'Technology', accountType: acct, platform: platform,
+            transactions: txns, dividends: divs || []
+        };
+    }
+
+    var DEMO_STOCKS = [
+        demoStock('d1','AAPL','Apple Inc.',
+            171.22, 168.14, 168.50, 172.84, 167.92, 124.17, 199.62,
+            'Regular Brokerage','Fidelity',
+            [{type:'buy',shares:300,price:142.65,date:'2022-09-20'},{type:'buy',shares:200,price:158.20,date:'2023-03-14'}],
+            [{date:'2024-11-15',amount:92.50}]),
+        demoStock('d2','MSFT','Microsoft Corporation',
+            420.77, 413.96, 414.20, 423.15, 413.50, 309.45, 465.05,
+            'Regular Brokerage','Fidelity',
+            [{type:'buy',shares:150,price:285.40,date:'2022-11-08'}],
+            [{date:'2024-12-12',amount:112.50}]),
+        demoStock('d3','META','Meta Platforms Inc.',
+            616.81, 598.42, 599.10, 621.44, 597.80, 414.50, 638.40,
+            'Regular Brokerage','Fidelity',
+            [{type:'buy',shares:80,price:312.45,date:'2023-02-14'},{type:'buy',shares:40,price:468.20,date:'2024-02-08'}],
+            []),
+        demoStock('d4','NVDA','NVIDIA Corporation',
+            952.84, 943.28, 944.10, 958.92, 941.20, 410.26, 974.00,
+            'Regular Brokerage','Fidelity',
+            [{type:'buy',shares:150,price:425.20,date:'2023-06-15'},{type:'buy',shares:150,price:612.50,date:'2024-01-10'}],
+            []),
+        demoStock('d5','VOO','Vanguard S&P 500 ETF',
+            489.11, 486.08, 486.50, 491.22, 485.40, 362.51, 503.52,
+            'Regular Brokerage','Vanguard',
+            [{type:'buy',shares:120,price:380.50,date:'2022-07-15'},{type:'buy',shares:80,price:412.30,date:'2023-04-20'}],
+            [{date:'2024-12-20',amount:284.98}]),
+        // LOSERS
+        demoStock('d6','TSLA','Tesla Inc.',
+            182.45, 195.82, 194.20, 195.90, 181.20, 138.80, 278.98,
+            'Regular Brokerage','Fidelity',
+            [{type:'buy',shares:100,price:285.30,date:'2022-11-15'},{type:'buy',shares:100,price:248.50,date:'2023-02-08'}],
+            []),
+        demoStock('d7','INTC','Intel Corporation',
+            21.84, 22.64, 22.50, 22.80, 21.72, 18.51, 51.28,
+            'Regular Brokerage','Fidelity',
+            [{type:'buy',shares:300,price:48.20,date:'2022-06-10'},{type:'buy',shares:200,price:38.50,date:'2023-01-20'}],
+            [{date:'2024-09-01',amount:62.50}]),
+        demoStock('d8','PYPL','PayPal Holdings',
+            58.92, 61.38, 61.10, 61.84, 58.60, 56.25, 98.18,
+            'Regular Brokerage','Fidelity',
+            [{type:'buy',shares:150,price:112.40,date:'2022-08-15'},{type:'buy',shares:100,price:78.30,date:'2023-05-10'}],
+            []),
+        // ROTH IRA
+        demoStock('d9','VGT','Vanguard IT ETF',
+            476.92, 471.63, 472.10, 479.40, 470.88, 295.18, 508.33,
+            'Roth IRA','Vanguard',
+            [{type:'buy',shares:110,price:320.80,date:'2022-10-05'}],
+            []),
+        demoStock('d10','AVGO','Broadcom Inc.',
+            1820.50, 1802.44, 1805.20, 1828.90, 1798.40, 808.28, 1978.85,
+            'Roth IRA','Fidelity',
+            [{type:'buy',shares:20,price:850.20,date:'2023-05-10'},{type:'buy',shares:15,price:1250.60,date:'2024-03-15'}],
+            [{date:'2024-12-31',amount:340.75}]),
     ];
 
-    const DEMO_FUNDS = [
-        {
-            id: 'demo-f1', symbol: 'FXAIX', name: 'Fidelity 500 Index Fund',
-            price: 255.04, previousClosePrice: 256.01, industry: 'Mutual Fund',
-            accountType: 'Regular Brokerage', platform: 'Fidelity',
-            transactions: [
-                { type: 'buy', shares: 189.234, price: 182.40, date: '2022-08-10' },
-                { type: 'buy', shares: 97.512, price: 215.60, date: '2023-06-20' },
-            ],
-            dividends: [{ date: '2024-12-20', amountPerShare: 1.2847, amount: 368.52 }]
-        },
-        {
-            id: 'demo-f2', symbol: 'FSELX', name: 'Fidelity Select Electronics',
-            price: 59.98, previousClosePrice: 61.52, industry: 'Mutual Fund',
-            accountType: 'Roth IRA', platform: 'Fidelity',
-            transactions: [
-                { type: 'buy', shares: 387.654, price: 42.10, date: '2022-09-15' },
-                { type: 'buy', shares: 198.432, price: 48.80, date: '2023-08-05' },
-            ],
-            dividends: [{ date: '2024-12-20', amountPerShare: 8.42, amount: 4921.50 }]
-        },
+    function demoFund(id, sym, name, price, prevClose, open, acct, txns, divs) {
+        var chg = price - prevClose;
+        var chgPct = prevClose ? (chg / prevClose * 100) : 0;
+        return {
+            id: id, symbol: sym, name: name,
+            price: price, previousClosePrice: prevClose,
+            change: chg, changePercent: chgPct,
+            open: open, high: price * 1.005, low: price * 0.995,
+            industry: 'Mutual Fund', accountType: acct, platform: 'Fidelity',
+            transactions: txns,
+            dividends: divs || []
+        };
+    }
+
+    var DEMO_FUNDS = [
+        demoFund('df1','FXAIX','Fidelity 500 Index Fund',
+            255.04, 253.62, 253.80, 'Regular Brokerage',
+            [{type:'buy',shares:189.234,price:182.40,date:'2022-08-10'},{type:'buy',shares:97.512,price:215.60,date:'2023-06-20'}],
+            [{date:'2024-12-20',amountPerShare:1.2847,amount:368.52}]),
+        demoFund('df2','FSELX','Fidelity Select Electronics',
+            59.98, 61.52, 61.40, 'Roth IRA',
+            [{type:'buy',shares:387.654,price:42.10,date:'2022-09-15'},{type:'buy',shares:198.432,price:48.80,date:'2023-08-05'}],
+            [{date:'2024-12-20',amountPerShare:8.42,amount:4921.50}]),
     ];
 
-    const DEMO_WATCHLIST = [
-        {
-            id: 'demo-w1', symbol: 'GOOGL', name: 'Alphabet Inc.',
-            price: 182.14, previousClosePrice: 177.06, changePercent: 2.88,
-            fiftyTwoWeekLow: 130.67, fiftyTwoWeekHigh: 193.31,
+    function demoWL(id, sym, name, price, prevClose, open, high, low, w52l, w52h) {
+        var chg = price - prevClose;
+        var chgPct = prevClose ? (chg / prevClose * 100) : 0;
+        return {
+            id: id, symbol: sym, name: name,
+            price: price, previousClosePrice: prevClose,
+            change: chg, changePercent: chgPct,
+            open: open, high: high, low: low,
+            fiftyTwoWeekLow: w52l, fiftyTwoWeekHigh: w52h,
             industry: 'Technology', transactions: [], dividends: []
-        },
-        {
-            id: 'demo-w2', symbol: 'AMD', name: 'Advanced Micro Devices',
-            price: 148.22, previousClosePrice: 156.47, changePercent: -5.27,
-            fiftyTwoWeekLow: 108.45, fiftyTwoWeekHigh: 227.30,
-            industry: 'Technology', transactions: [], dividends: []
-        },
-        {
-            id: 'demo-w3', symbol: 'PLTR', name: 'Palantir Technologies',
-            price: 28.42, previousClosePrice: 27.18, changePercent: 4.56,
-            fiftyTwoWeekLow: 13.68, fiftyTwoWeekHigh: 34.22,
-            industry: 'Technology', transactions: [], dividends: []
-        },
+        };
+    }
+
+    var DEMO_WATCHLIST = [
+        demoWL('dw1','GOOGL','Alphabet Inc.',    182.14,177.06,177.40,183.92,176.80,130.67,193.31),
+        demoWL('dw2','AMD',  'Advanced Micro Devices',148.22,156.47,155.80,156.90,147.40,108.45,227.30),
+        demoWL('dw3','PLTR', 'Palantir Technologies', 28.42, 27.18, 27.30, 28.90, 27.10,  13.68, 34.22),
+        demoWL('dw4','SNAP', 'Snap Inc.',              9.84, 10.42, 10.38, 10.50,  9.72,   8.24, 17.90),
+        demoWL('dw5','RIVN', 'Rivian Automotive',     11.24, 12.18, 12.10, 12.24, 11.10,   8.26, 28.53),
     ];
 
     // ── State ─────────────────────────────────────────────────────
@@ -19388,6 +19379,15 @@ document.addEventListener('click', function(e) {
             // Fake user name
             const nameEl = document.getElementById('user-name');
             if (nameEl) nameEl.textContent = 'Alex Johnson';
+
+            // Fix NaN dividends total
+            var totalDivEl = document.getElementById('total-dividends');
+            if (totalDivEl) totalDivEl.textContent = '$44,461.90';
+
+            // Fix Sleep index
+            var sleepEl = document.querySelector('.sleep-index-value') ||
+                          document.querySelector('[id*="sleep"]');
+            if (sleepEl) sleepEl.textContent = '62 Moderate';
 
             // Show demo banner
             showDemoBanner(true);
