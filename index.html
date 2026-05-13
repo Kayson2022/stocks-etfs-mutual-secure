@@ -19228,6 +19228,277 @@ document.addEventListener('click', function(e) {
 </div>
 </div>
 </div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  DEMO MODE — swaps real data with fake demo data
+//  Toggle via the Demo Mode button in settings or header
+// ═══════════════════════════════════════════════════════════════
+(function() {
+
+    // ── Fake demo data ───────────────────────────────────────────
+    const DEMO_STOCKS = [
+        {
+            id: 'demo-1', symbol: 'NVDA', name: 'NVIDIA Corporation',
+            price: 952.84, previousClosePrice: 856.87, industry: 'Technology',
+            accountType: 'Regular Brokerage', platform: 'Fidelity',
+            transactions: [
+                { type: 'buy', shares: 150, price: 425.20, date: '2023-06-15' },
+                { type: 'buy', shares: 150, price: 612.50, date: '2024-01-10' },
+            ],
+            dividends: []
+        },
+        {
+            id: 'demo-2', symbol: 'AAPL', name: 'Apple Inc.',
+            price: 171.22, previousClosePrice: 168.14, industry: 'Technology',
+            accountType: 'Regular Brokerage', platform: 'Fidelity',
+            transactions: [
+                { type: 'buy', shares: 300, price: 142.65, date: '2022-09-20' },
+                { type: 'buy', shares: 200, price: 158.20, date: '2023-03-14' },
+            ],
+            dividends: [{ date: '2024-11-15', amount: 92.50 }]
+        },
+        {
+            id: 'demo-3', symbol: 'MSFT', name: 'Microsoft Corporation',
+            price: 420.77, previousClosePrice: 413.96, industry: 'Technology',
+            accountType: 'Regular Brokerage', platform: 'Fidelity',
+            transactions: [
+                { type: 'buy', shares: 150, price: 285.40, date: '2022-11-08' },
+            ],
+            dividends: [{ date: '2024-12-12', amount: 112.50 }]
+        },
+        {
+            id: 'demo-4', symbol: 'TSLA', name: 'Tesla, Inc.',
+            price: 182.45, previousClosePrice: 195.82, industry: 'Automotive',
+            accountType: 'Regular Brokerage', platform: 'Fidelity',
+            transactions: [
+                { type: 'buy', shares: 200, price: 215.30, date: '2023-08-22' },
+            ],
+            dividends: []
+        },
+        {
+            id: 'demo-5', symbol: 'META', name: 'Meta Platforms Inc.',
+            price: 616.81, previousClosePrice: 612.88, industry: 'Technology',
+            accountType: 'Regular Brokerage', platform: 'Fidelity',
+            transactions: [
+                { type: 'buy', shares: 80, price: 312.45, date: '2023-02-14' },
+                { type: 'buy', shares: 40, price: 468.20, date: '2024-02-08' },
+            ],
+            dividends: []
+        },
+        {
+            id: 'demo-6', symbol: 'VOO', name: 'Vanguard S&P 500 ETF',
+            price: 489.11, previousClosePrice: 484.08, industry: 'ETF',
+            accountType: 'Regular Brokerage', platform: 'Vanguard',
+            transactions: [
+                { type: 'buy', shares: 120, price: 380.50, date: '2022-07-15' },
+                { type: 'buy', shares: 80, price: 412.30, date: '2023-04-20' },
+            ],
+            dividends: [{ date: '2024-12-20', amount: 284.98 }]
+        },
+        {
+            id: 'demo-7', symbol: 'VGT', name: 'Vanguard IT ETF',
+            price: 476.92, previousClosePrice: 471.63, industry: 'ETF',
+            accountType: 'Roth IRA', platform: 'Vanguard',
+            transactions: [
+                { type: 'buy', shares: 110, price: 320.80, date: '2022-10-05' },
+            ],
+            dividends: []
+        },
+        {
+            id: 'demo-8', symbol: 'AVGO', name: 'Broadcom Inc.',
+            price: 1820.50, previousClosePrice: 1778.40, industry: 'Technology',
+            accountType: 'Roth IRA', platform: 'Fidelity',
+            transactions: [
+                { type: 'buy', shares: 20, price: 850.20, date: '2023-05-10' },
+                { type: 'buy', shares: 15, price: 1250.60, date: '2024-03-15' },
+            ],
+            dividends: [{ date: '2024-12-31', amount: 340.75 }]
+        },
+    ];
+
+    const DEMO_FUNDS = [
+        {
+            id: 'demo-f1', symbol: 'FXAIX', name: 'Fidelity 500 Index Fund',
+            price: 255.04, previousClosePrice: 256.01, industry: 'Mutual Fund',
+            accountType: 'Regular Brokerage', platform: 'Fidelity',
+            transactions: [
+                { type: 'buy', shares: 189.234, price: 182.40, date: '2022-08-10' },
+                { type: 'buy', shares: 97.512, price: 215.60, date: '2023-06-20' },
+            ],
+            dividends: [{ date: '2024-12-20', amountPerShare: 1.2847, amount: 368.52 }]
+        },
+        {
+            id: 'demo-f2', symbol: 'FSELX', name: 'Fidelity Select Electronics',
+            price: 59.98, previousClosePrice: 61.52, industry: 'Mutual Fund',
+            accountType: 'Roth IRA', platform: 'Fidelity',
+            transactions: [
+                { type: 'buy', shares: 387.654, price: 42.10, date: '2022-09-15' },
+                { type: 'buy', shares: 198.432, price: 48.80, date: '2023-08-05' },
+            ],
+            dividends: [{ date: '2024-12-20', amountPerShare: 8.42, amount: 4921.50 }]
+        },
+    ];
+
+    const DEMO_WATCHLIST = [
+        {
+            id: 'demo-w1', symbol: 'GOOGL', name: 'Alphabet Inc.',
+            price: 182.14, previousClosePrice: 177.06, changePercent: 2.88,
+            fiftyTwoWeekLow: 130.67, fiftyTwoWeekHigh: 193.31,
+            industry: 'Technology', transactions: [], dividends: []
+        },
+        {
+            id: 'demo-w2', symbol: 'AMD', name: 'Advanced Micro Devices',
+            price: 148.22, previousClosePrice: 156.47, changePercent: -5.27,
+            fiftyTwoWeekLow: 108.45, fiftyTwoWeekHigh: 227.30,
+            industry: 'Technology', transactions: [], dividends: []
+        },
+        {
+            id: 'demo-w3', symbol: 'PLTR', name: 'Palantir Technologies',
+            price: 28.42, previousClosePrice: 27.18, changePercent: 4.56,
+            fiftyTwoWeekLow: 13.68, fiftyTwoWeekHigh: 34.22,
+            industry: 'Technology', transactions: [], dividends: []
+        },
+    ];
+
+    // ── State ─────────────────────────────────────────────────────
+    let _demoMode = false;
+    let _realStocks = null, _realFunds = null, _realWatchlist = null;
+    let _realUserName = null;
+
+    // ── Toggle function ───────────────────────────────────────────
+    window.toggleDemoMode = function() {
+        const tracker = window.stockTracker;
+        if (!tracker) { alert('App not ready yet'); return; }
+
+        _demoMode = !_demoMode;
+
+        if (_demoMode) {
+            // Save real data
+            _realStocks    = tracker.stocks;
+            _realFunds     = tracker.mutualFunds;
+            _realWatchlist = tracker.watchlist;
+            _realUserName  = document.getElementById('user-name')?.textContent;
+
+            // Inject fake data
+            tracker.stocks      = DEMO_STOCKS;
+            tracker.mutualFunds = DEMO_FUNDS;
+            tracker.watchlist   = DEMO_WATCHLIST;
+
+            // Fake user name
+            const nameEl = document.getElementById('user-name');
+            if (nameEl) nameEl.textContent = 'Alex Johnson';
+
+            // Show demo banner
+            showDemoBanner(true);
+
+        } else {
+            // Restore real data
+            tracker.stocks      = _realStocks;
+            tracker.mutualFunds = _realFunds;
+            tracker.watchlist   = _realWatchlist;
+
+            const nameEl = document.getElementById('user-name');
+            if (nameEl) nameEl.textContent = _realUserName || '';
+
+            showDemoBanner(false);
+        }
+
+        // Re-render everything
+        tracker.renderContent();
+        if (typeof tracker.updateSummaryMetrics === 'function') tracker.updateSummaryMetrics();
+        if (typeof tracker.calculateAndDisplaySummaryMetrics === 'function') tracker.calculateAndDisplaySummaryMetrics();
+
+        // Update button label
+        updateDemoBtnLabel();
+
+        // Trigger price update display with demo prices
+        if (_demoMode) {
+            setTimeout(() => {
+                // Manually trigger display update with demo prices
+                DEMO_STOCKS.forEach(s => {
+                    const cache = window.priceCache || {};
+                    cache[s.symbol] = {
+                        currentPrice: s.price,
+                        previousClosePrice: s.previousClosePrice,
+                        manualPrice: null
+                    };
+                });
+                DEMO_FUNDS.forEach(f => {
+                    const cache = window.priceCache || {};
+                    cache[f.symbol] = {
+                        currentPrice: f.price,
+                        previousClosePrice: f.previousClosePrice,
+                        manualPrice: null
+                    };
+                });
+                if (typeof tracker.updateDisplay === 'function') tracker.updateDisplay();
+                else if (typeof updateDisplay === 'function') updateDisplay();
+            }, 100);
+        }
+    };
+
+    // ── Demo banner ───────────────────────────────────────────────
+    function showDemoBanner(show) {
+        let banner = document.getElementById('demoBanner');
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'demoBanner';
+            banner.style.cssText = [
+                'position:fixed', 'bottom:16px', 'left:50%',
+                'transform:translateX(-50%)', 'z-index:9999',
+                'background:#fbbf24', 'color:#000',
+                'font-family:var(--font-family,"DM Sans",sans-serif)',
+                'font-size:12px', 'font-weight:700',
+                'padding:8px 20px', 'border-radius:999px',
+                'box-shadow:0 4px 20px rgba(0,0,0,0.4)',
+                'letter-spacing:0.5px', 'pointer-events:none'
+            ].join(';');
+            banner.textContent = '⚡ DEMO MODE — Fake data only';
+            document.body.appendChild(banner);
+        }
+        banner.style.display = show ? 'block' : 'none';
+    }
+
+    function updateDemoBtnLabel() {
+        const btn = document.getElementById('demoModeBtn');
+        if (btn) {
+            btn.textContent = _demoMode ? '🔴 Exit Demo' : '🎬 Demo Mode';
+            btn.style.borderColor  = _demoMode ? 'var(--color-negative,#ff5252)' : '';
+            btn.style.color        = _demoMode ? 'var(--color-negative,#ff5252)' : '';
+        }
+    }
+
+    // ── Add Demo Mode button to header ───────────────────────────
+    window.addEventListener('load', function() {
+        setTimeout(function() {
+            // Add to header right side
+            const headerRight = document.querySelector('.header-right') ||
+                                document.querySelector('header .right') ||
+                                document.querySelector('header');
+            if (!headerRight) return;
+
+            const btn = document.createElement('button');
+            btn.id = 'demoModeBtn';
+            btn.textContent = '🎬 Demo Mode';
+            btn.style.cssText = [
+                'font-family:var(--font-family,"DM Sans",sans-serif)',
+                'font-size:12px', 'font-weight:600',
+                'padding:5px 14px', 'border-radius:6px',
+                'border:1px solid var(--border-color,rgba(255,255,255,0.1))',
+                'background:transparent',
+                'color:var(--text-secondary,"#8ba3be")',
+                'cursor:pointer', 'transition:all 0.15s'
+            ].join(';');
+            btn.onclick = window.toggleDemoMode;
+            headerRight.appendChild(btn);
+        }, 2000);
+    });
+
+    console.log('[DemoMode] Loaded — click "Demo Mode" button in header to activate');
+})();
+</script>
+
 </body>
 <script>
 (function() {
