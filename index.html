@@ -3281,6 +3281,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <button class="add-btn" id="telegramBackupBtn" onclick="window.sendSecureBackupToTelegram()">📲 Backup to Telegram</button>
 <button class="add-btn" id="autoBackupSecureBtn" onclick="window.toggleAutoBackupSecure()">⏸️ Pause Auto-Backup</button>
 <button class="add-btn" onclick="window.openReconcile()" style="background:rgba(251,191,36,0.1);border-color:rgba(251,191,36,0.3);color:#fbbf24;">⚖️ Reconcile Shares</button>
+<button class="add-btn" onclick="window.openPlatformAudit()" style="background:rgba(167,139,250,0.1);border-color:rgba(167,139,250,0.3);color:#a78bfa;">🏦 Platform Audit</button>
 <label class="add-btn" for="importFile" style="cursor: pointer;">📤 Import Data</label>
 <input accept=".json" id="importFile" style="display: none;" type="file"/>
 <button class="add-btn" onclick="openCSVImportModal()" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;">📊 Import from CSV Tool</button>
@@ -20336,6 +20337,14 @@ function renderReconcileTable() {
                     '<input type="number" value="' + (storedCost||'') + '" step="0.01" placeholder="Cost basis $" ' +
                     'onchange="window.saveRecCost(\'' + s.symbol + '\',this.value)" ' +
                     'style="width:120px;padding:5px 8px;border-radius:6px;border:1px solid rgba(96,165,250,0.3);background:rgba(96,165,250,0.05);color:#60a5fa;font-size:12px;text-align:right;outline:none;">' +
+                    '<select onchange="window.saveRecPlatform(\'' + s.symbol + '\',this.value)" ' +
+                    'style="width:120px;padding:5px 8px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#8ba3be;font-size:11px;outline:none;margin-top:0;">' +
+                    '<option value="">Platform...</option>' +
+                    ['Fidelity Regular Brokerage','Fidelity Roth IRA','Vanguard','Charles Schwab','Merrill Edge'].map(function(p) {
+                        var stored2 = localStorage.getItem('rec_platform_' + s.symbol) || '';
+                        return '<option value="' + p + '"' + (stored2 === p ? ' selected' : '') + '>' + p + '</option>';
+                    }).join('') +
+                    '</select>' +
                     '</div></td>' +
                 '<td style="padding:10px 12px;text-align:right;font-size:12px;vertical-align:middle;white-space:nowrap;">' + diffHtml + '</td>' +
                 '<td style="padding:10px 12px;text-align:center;font-size:11px;vertical-align:middle;white-space:nowrap;">' + statusHtml + '</td>' +
@@ -20358,6 +20367,10 @@ window.saveRecActual = function(symbol, val) {
 
 window.saveRecCost = function(symbol, val) {
     localStorage.setItem(COST_KEY + symbol, val);
+};
+
+window.saveRecPlatform = function(symbol, val) {
+    localStorage.setItem('rec_platform_' + symbol, val);
 };
 
 window.toggleVerified = function(symbol, checked) {
@@ -20387,12 +20400,13 @@ window.fixAllReconcile = async function() {
             var costDiff = actualCost - appCost;
             adjPrice = costDiff > 0 ? costDiff / diff : 0;
         }
+        var recPlatform = localStorage.getItem('rec_platform_' + s.symbol) || 'Reconciliation';
         s.transactions.push({
             type: diff > 0 ? 'buy' : 'sell',
             shares: Math.abs(parseFloat(diff.toFixed(3))),
             price: parseFloat(adjPrice.toFixed(4)),
             date: today,
-            platform: 'Reconciliation',
+            platform: recPlatform,
             note: 'Reconciliation ' + today + (adjPrice > 0 ? ' @ ' + fmt(adjPrice) : ' — enter cost basis for accuracy')
         });
         localStorage.setItem(VERIFY_KEY + s.symbol, 'yes');
@@ -20477,3 +20491,223 @@ console.log('[Reconcile] Verification Dashboard loaded');
 })();
 </script>
 
+
+<!-- ═══════════════════════════════════════════════════════
+     PLATFORM AUDIT MODAL
+══════════════════════════════════════════════════════ -->
+<div id="platformAuditModal" style="display:none;position:fixed;inset:0;z-index:8500;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;">
+  <div style="background:#0d1827;border:1px solid rgba(167,139,250,0.25);border-top:3px solid #a78bfa;border-radius:16px;width:100%;max-width:960px;margin:20px auto;box-shadow:0 24px 80px rgba(0,0,0,0.7);">
+
+    <!-- Header -->
+    <div style="padding:20px 24px 14px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div>
+        <h2 style="font-size:16px;font-weight:700;color:#e8f0fc;margin-bottom:3px;">🏦 Platform Audit</h2>
+        <div style="font-size:11px;color:#8ba3be;">See exactly how many shares of each stock are held at each brokerage platform.</div>
+      </div>
+      <button onclick="window.closePlatformAudit()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:#8ba3be;font-size:18px;width:32px;height:32px;border-radius:8px;cursor:pointer;">×</button>
+    </div>
+
+    <!-- Controls -->
+    <div style="padding:12px 24px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <input id="auditSearch" type="text" placeholder="🔍 Filter by symbol..." oninput="window.renderPlatformAudit()"
+        style="flex:1;min-width:150px;padding:7px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:13px;outline:none;">
+      <select id="auditPlatform" onchange="window.renderPlatformAudit()"
+        style="padding:7px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:12px;outline:none;">
+        <option value="">All Platforms</option>
+      </select>
+      <select id="auditFilter" onchange="window.renderPlatformAudit()"
+        style="padding:7px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:12px;outline:none;">
+        <option value="all">All stocks</option>
+        <option value="multi">Multi-platform only</option>
+        <option value="single">Single platform only</option>
+        <option value="unknown">Unknown platform</option>
+      </select>
+    </div>
+
+    <!-- Summary pills -->
+    <div id="auditSummaryPills" style="padding:12px 24px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;gap:8px;flex-wrap:wrap;"></div>
+
+    <!-- Table -->
+    <div style="overflow-x:auto;max-height:60vh;overflow-y:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead style="position:sticky;top:0;background:#0d1827;z-index:1;">
+          <tr style="border-bottom:2px solid rgba(255,255,255,0.1);">
+            <th style="text-align:left;padding:8px 12px;color:#8ba3be;font-size:10px;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;">SYMBOL</th>
+            <th style="text-align:right;padding:8px 12px;color:#8ba3be;font-size:10px;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;">TOTAL SHARES</th>
+            <th style="text-align:left;padding:8px 12px;color:#a78bfa;font-size:10px;letter-spacing:1px;text-transform:uppercase;">PLATFORM BREAKDOWN</th>
+            <th style="text-align:center;padding:8px 12px;color:#8ba3be;font-size:10px;letter-spacing:1px;text-transform:uppercase;">PLATFORMS</th>
+          </tr>
+        </thead>
+        <tbody id="auditBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:14px 24px;border-top:1px solid rgba(255,255,255,0.07);display:flex;gap:10px;justify-content:flex-end;">
+      <button onclick="window.closePlatformAudit()" style="padding:9px 20px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#8ba3be;font-size:13px;cursor:pointer;">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+var PLATFORM_COLORS = {
+    'Fidelity Regular Brokerage': '#60a5fa',
+    'Fidelity Roth IRA':          '#34d399',
+    'Vanguard':                   '#fbbf24',
+    'Charles Schwab':             '#f87171',
+    'Merrill Edge':               '#a78bfa',
+    'Reconciliation':             '#8ba3be',
+    'Imported':                   '#8ba3be',
+};
+
+function getColor(platform) {
+    return PLATFORM_COLORS[platform] || '#00d4ff';
+}
+
+function getNetSharesByPlatform(stock) {
+    var byPlatform = {};
+    stock.transactions.forEach(function(t) {
+        var p = t.platform || 'Unknown';
+        if (!byPlatform[p]) byPlatform[p] = 0;
+        byPlatform[p] += t.type === 'buy' ? t.shares : -t.shares;
+    });
+    return byPlatform;
+}
+
+window.openPlatformAudit = function() {
+    document.getElementById('platformAuditModal').style.display = 'flex';
+    populatePlatformDropdown();
+    renderPlatformAudit();
+};
+
+window.closePlatformAudit = function() {
+    document.getElementById('platformAuditModal').style.display = 'none';
+};
+
+document.getElementById('platformAuditModal').addEventListener('click', function(e) {
+    if (e.target === this) window.closePlatformAudit();
+});
+
+function populatePlatformDropdown() {
+    var stocks   = (window.stockTracker && window.stockTracker.stocks) || [];
+    var platforms = new Set();
+    stocks.forEach(function(s) {
+        s.transactions.forEach(function(t) {
+            if (t.platform) platforms.add(t.platform);
+        });
+    });
+    var sel = document.getElementById('auditPlatform');
+    sel.innerHTML = '<option value="">All Platforms</option>';
+    Array.from(platforms).sort().forEach(function(p) {
+        sel.innerHTML += '<option value="' + p + '">' + p + '</option>';
+    });
+}
+
+window.renderPlatformAudit = function() {
+    var stocks       = (window.stockTracker && window.stockTracker.stocks) || [];
+    var search       = (document.getElementById('auditSearch').value || '').toUpperCase();
+    var platFilter   = document.getElementById('auditPlatform').value;
+    var filterType   = document.getElementById('auditFilter').value;
+    var tbody        = document.getElementById('auditBody');
+    var pillsEl      = document.getElementById('auditSummaryPills');
+
+    // Build platform totals for summary
+    var platformTotals = {};
+    stocks.forEach(function(s) {
+        var byPlat = getNetSharesByPlatform(s);
+        Object.keys(byPlat).forEach(function(p) {
+            if (!platformTotals[p]) platformTotals[p] = { stocks: 0, value: 0 };
+            if (byPlat[p] > 0) {
+                platformTotals[p].stocks++;
+                platformTotals[p].value += byPlat[p] * (s.price || 0);
+            }
+        });
+    });
+
+    // Summary pills
+    pillsEl.innerHTML = Object.keys(platformTotals).sort().map(function(p) {
+        var c = getColor(p);
+        return '<div style="padding:5px 12px;border-radius:999px;border:1px solid ' + c + '44;background:' + c + '11;font-size:11px;font-weight:600;color:' + c + ';">' +
+            p + ': <strong>' + platformTotals[p].stocks + ' stocks</strong>' +
+            ' · $' + platformTotals[p].value.toLocaleString('en-US',{maximumFractionDigits:0}) +
+        '</div>';
+    }).join('');
+
+    // Filter stocks
+    var filtered = stocks.filter(function(s) {
+        if (search && !s.symbol.includes(search)) return false;
+        var byPlat = getNetSharesByPlatform(s);
+        var platKeys = Object.keys(byPlat).filter(function(p) { return byPlat[p] > 0.001; });
+
+        if (platFilter && !platKeys.includes(platFilter)) return false;
+
+        if (filterType === 'multi')   return platKeys.length > 1;
+        if (filterType === 'single')  return platKeys.length === 1;
+        if (filterType === 'unknown') return platKeys.includes('Unknown') || platKeys.includes('Imported') || platKeys.includes('Reconciliation');
+        return true;
+    });
+
+    // Sort: multi-platform first, then alphabetical
+    filtered.sort(function(a, b) {
+        var aPlats = Object.keys(getNetSharesByPlatform(a)).filter(function(p) { return getNetSharesByPlatform(a)[p] > 0.001; }).length;
+        var bPlats = Object.keys(getNetSharesByPlatform(b)).filter(function(p) { return getNetSharesByPlatform(b)[p] > 0.001; }).length;
+        if (aPlats > 1 && bPlats === 1) return -1;
+        if (bPlats > 1 && aPlats === 1) return 1;
+        return a.symbol.localeCompare(b.symbol);
+    });
+
+    var rows = '';
+    filtered.forEach(function(s) {
+        var byPlat    = getNetSharesByPlatform(s);
+        var totalShares = Object.values(byPlat).reduce(function(sum, v) { return sum + v; }, 0);
+        var activePlats = Object.keys(byPlat).filter(function(p) { return byPlat[p] > 0.001; });
+        var isMulti   = activePlats.length > 1;
+        var hasUnknown = activePlats.some(function(p) { return p === 'Unknown' || p === 'Imported' || p === 'Reconciliation'; });
+        var rowBg     = hasUnknown ? 'background:rgba(251,191,36,0.03);' : (isMulti ? 'background:rgba(167,139,250,0.03);' : '');
+
+        // Platform breakdown bars
+        var breakdown = activePlats.map(function(p) {
+            var shares = byPlat[p];
+            var pct    = totalShares > 0 ? (shares / totalShares * 100).toFixed(1) : 0;
+            var c      = getColor(p);
+            return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+                '<div style="width:8px;height:8px;border-radius:50%;background:' + c + ';flex-shrink:0;"></div>' +
+                '<span style="color:' + c + ';font-weight:600;min-width:200px;font-size:11px;">' + p + '</span>' +
+                '<div style="flex:1;max-width:120px;height:6px;background:rgba(255,255,255,0.06);border-radius:999px;overflow:hidden;">' +
+                    '<div style="width:' + pct + '%;height:100%;background:' + c + ';border-radius:999px;"></div>' +
+                '</div>' +
+                '<span style="font-family:monospace;font-size:11px;color:#e8f0fc;min-width:70px;text-align:right;">' + shares.toFixed(3) + '</span>' +
+                '<span style="font-size:10px;color:#8ba3be;">(' + pct + '%)</span>' +
+            '</div>';
+        }).join('');
+
+        var platBadge = isMulti ?
+            '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(167,139,250,0.15);color:#a78bfa;">' + activePlats.length + ' platforms</span>' :
+            '<span style="font-size:10px;color:' + getColor(activePlats[0]) + ';">' + (activePlats[0]||'—') + '</span>';
+
+        if (hasUnknown) {
+            platBadge += '<br><span style="font-size:10px;color:#fbbf24;">⚠️ Has untagged</span>';
+        }
+
+        rows += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);' + rowBg + '">' +
+            '<td style="padding:10px 12px;font-weight:700;color:#00d4ff;vertical-align:top;white-space:nowrap;">' +
+                s.symbol + '<br><span style="font-size:10px;color:#8ba3be;font-weight:400;">' + (s.name||'') + '</span>' +
+            '</td>' +
+            '<td style="padding:10px 12px;text-align:right;font-family:monospace;vertical-align:top;white-space:nowrap;">' +
+                '<span style="color:#e8f0fc;font-size:13px;">' + totalShares.toFixed(3) + '</span>' +
+                '<br><span style="color:#8ba3be;font-size:11px;">$' + (totalShares * (s.price||0)).toLocaleString('en-US',{maximumFractionDigits:0}) + '</span>' +
+            '</td>' +
+            '<td style="padding:10px 12px;vertical-align:top;">' + breakdown + '</td>' +
+            '<td style="padding:10px 12px;text-align:center;vertical-align:top;">' + platBadge + '</td>' +
+        '</tr>';
+    });
+
+    tbody.innerHTML = rows || '<tr><td colspan="4" style="padding:20px;text-align:center;color:#8ba3be;">No stocks match filter</td></tr>';
+};
+
+console.log('[PlatformAudit] Loaded');
+})();
+</script>
