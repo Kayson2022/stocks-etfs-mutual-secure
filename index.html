@@ -6912,7 +6912,8 @@ renderPortfolioSummary() {
                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
                                 <button class="add-btn buy-btn transaction-btn" data-id="${item.id}" data-type="${type}">Buy</button>
                                 <button class="add-btn sell-btn transaction-btn" data-id="${item.id}" data-type="${type}">Sell</button>
-                                <button class="add-btn set-alert-btn" data-id="${item.id}" data-type="${type}">Alert</button>
+                                <button class="add-btn set-alert-btn" data-id="${item.id}" data-type="${type}">🔔 Alert</button>
+                                <button class="add-btn" onclick="window.openTradeScenario('${item.symbol}','${item.price}')" style="background:rgba(0,212,255,0.1);border-color:rgba(0,212,255,0.3);color:#00d4ff;font-size:12px;">📊 Scenarios</button>
                                 <button class="add-btn edit-btn" data-id="${item.id}" data-type="${type}">Edit Details</button>
                                 <button class="add-btn transaction-btn" style="background-color:var(--color-positive);opacity:0.8;grid-column:span 1;" onclick="window.stockTracker.openTransactionModal('${item.id}','${type}','dividend')">💵 Dividend</button>
                                 <button class="add-btn" onclick="window.stockTracker.openTaxLotModal('${item.id}','${type}')" style="font-size:0.82rem;">🧾 Tax Lots</button>
@@ -19736,5 +19737,336 @@ window.testTelegramAlert = async function() {
 };
 
 console.log('[TG Alerts] Secure App loaded OK');
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     TRADE SCENARIO MODAL
+═══════════════════════════════════════════════════════════ -->
+<div id="tradeScenarioModal" style="display:none;position:fixed;inset:0;z-index:7000;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#111d2e;border:1px solid rgba(0,212,255,0.2);border-top:2px solid #00d4ff;border-radius:16px;padding:24px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <h3 style="font-size:15px;font-weight:700;color:#e8f0fc;">📊 Trade Scenarios — <span id="tsSymbol" style="color:#00d4ff;"></span></h3>
+      <button onclick="window.closeTSModal()" style="background:none;border:none;color:#8ba3be;font-size:20px;cursor:pointer;">×</button>
+    </div>
+
+    <!-- Existing scenarios list -->
+    <div id="tsExistingList" style="margin-bottom:16px;"></div>
+
+    <!-- Add new scenario -->
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;margin-bottom:12px;">➕ Add Scenario</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div style="grid-column:1/-1;">
+          <label style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;display:block;margin-bottom:4px;">Scenario Name</label>
+          <input id="tsName" type="text" placeholder='e.g. "Buy the dip"' style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:13px;outline:none;">
+        </div>
+
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;display:block;margin-bottom:4px;">Entry Low $</label>
+          <input id="tsEntryLow" type="number" placeholder="190.00" step="0.01" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:13px;outline:none;">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;display:block;margin-bottom:4px;">Entry High $</label>
+          <input id="tsEntryHigh" type="number" placeholder="198.00" step="0.01" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:13px;outline:none;">
+        </div>
+
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;display:block;margin-bottom:4px;">Stop Loss $</label>
+          <input id="tsStop" type="number" placeholder="185.00" step="0.01" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:13px;outline:none;">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;display:block;margin-bottom:4px;">Stop Type</label>
+          <select id="tsStopType" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:13px;outline:none;">
+            <option value="market">Stop-Market (exit any price)</option>
+            <option value="limit">Stop-Limit (hold if gap)</option>
+          </select>
+        </div>
+
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#34d399;display:block;margin-bottom:4px;">TP1 $</label>
+          <input id="tsTP1" type="number" placeholder="210.00" step="0.01" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(52,211,153,0.2);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:13px;outline:none;">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#34d399;display:block;margin-bottom:4px;">TP2 $ (optional)</label>
+          <input id="tsTP2" type="number" placeholder="230.00" step="0.01" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(52,211,153,0.2);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:13px;outline:none;">
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#34d399;display:block;margin-bottom:4px;">TP3 $ (optional)</label>
+          <input id="tsTP3" type="number" placeholder="250.00" step="0.01" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(52,211,153,0.2);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:13px;outline:none;">
+        </div>
+        <div style="grid-column:1/-1;">
+          <label style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#8ba3be;display:block;margin-bottom:4px;">Notes</label>
+          <input id="tsNotes" type="text" placeholder='e.g. "Technical rebound play"' style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:13px;outline:none;">
+        </div>
+      </div>
+
+      <button onclick="window.saveTSScenario()" style="width:100%;margin-top:14px;padding:10px;background:#00d4ff;color:#000;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">💾 Save Scenario</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+'use strict';
+
+var TG_WORKER   = 'https://yahoo-proxy.giolamchieu1975.workers.dev/telegram';
+var STORE_KEY   = 'tradeScenarios';
+var _currentSym = null;
+var _scenarios  = {}; // { symbol: [scenario, ...] }
+
+// ── Load/Save from localStorage ──────────────────────────────
+function loadScenarios() {
+    try { _scenarios = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); }
+    catch(e) { _scenarios = {}; }
+}
+function saveScenarios() {
+    localStorage.setItem(STORE_KEY, JSON.stringify(_scenarios));
+}
+loadScenarios();
+
+// ── Open modal ────────────────────────────────────────────────
+window.openTradeScenario = function(symbol, currentPrice) {
+    _currentSym = symbol;
+    document.getElementById('tsSymbol').textContent = symbol + ' @ $' + parseFloat(currentPrice).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    ['tsName','tsEntryLow','tsEntryHigh','tsStop','tsTP1','tsTP2','tsTP3','tsNotes'].forEach(function(id) {
+        document.getElementById(id).value = '';
+    });
+    renderExistingScenarios(symbol, currentPrice);
+    var modal = document.getElementById('tradeScenarioModal');
+    modal.style.display = 'flex';
+};
+
+window.closeTSModal = function() {
+    document.getElementById('tradeScenarioModal').style.display = 'none';
+};
+
+// ── Render existing scenarios ─────────────────────────────────
+function renderExistingScenarios(symbol, currentPrice) {
+    var list = document.getElementById('tsExistingList');
+    var scenarios = (_scenarios[symbol] || []);
+    if (!scenarios.length) { list.innerHTML = ''; return; }
+
+    var price = parseFloat(currentPrice) || 0;
+    list.innerHTML = scenarios.map(function(s, i) {
+        // Determine current zone
+        var zone = getZone(s, price);
+        var zoneColor = zone.color;
+        var zoneLabel = zone.label;
+
+        // Visual price ladder
+        var ladder = buildLadder(s, price);
+
+        return '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-left:3px solid ' + zoneColor + ';border-radius:10px;padding:14px;margin-bottom:10px;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+                '<div>' +
+                    '<span style="font-weight:700;color:#e8f0fc;font-size:13px;">' + s.name + '</span>' +
+                    '<span style="margin-left:8px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:' + zoneColor + '22;color:' + zoneColor + ';">' + zoneLabel + '</span>' +
+                '</div>' +
+                '<button onclick="window.deleteTSScenario(\'' + symbol + '\',' + i + ')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:14px;">🗑️</button>' +
+            '</div>' +
+            ladder +
+            (s.notes ? '<div style="font-size:11px;color:#8ba3be;margin-top:6px;font-style:italic;">📝 ' + s.notes + '</div>' : '') +
+        '</div>';
+    }).join('');
+}
+
+function getZone(s, price) {
+    if (price <= s.stop)                               return { label: '🔴 STOP ZONE',  color: '#f87171' };
+    if (price >= s.entryLow && price <= s.entryHigh)  return { label: '🟢 ENTRY ZONE', color: '#34d399' };
+    if (s.tp3 && price >= s.tp3)                      return { label: '🎯 TP3 HIT',    color: '#a78bfa' };
+    if (s.tp2 && price >= s.tp2)                      return { label: '🎯 TP2 HIT',    color: '#a78bfa' };
+    if (s.tp1 && price >= s.tp1)                      return { label: '🎯 TP1 HIT',    color: '#fbbf24' };
+    if (price < s.entryLow && price > s.stop)         return { label: '⏳ WAIT',        color: '#8ba3be' };
+    if (price > s.entryHigh && price < (s.tp1||9999)) return { label: '📈 ABOVE ENTRY', color: '#60a5fa' };
+    return { label: '—', color: '#8ba3be' };
+}
+
+function buildLadder(s, price) {
+    var levels = [];
+    if (s.tp3) levels.push({ p: s.tp3, label: 'TP3', color: '#a78bfa' });
+    if (s.tp2) levels.push({ p: s.tp2, label: 'TP2', color: '#a78bfa' });
+    if (s.tp1) levels.push({ p: s.tp1, label: 'TP1', color: '#fbbf24' });
+    levels.push({ p: s.entryHigh, label: 'Entry H', color: '#34d399' });
+    levels.push({ p: s.entryLow,  label: 'Entry L', color: '#34d399' });
+    levels.push({ p: s.stop, label: 'Stop (' + (s.stopType === 'limit' ? 'Limit' : 'Market') + ')', color: '#f87171' });
+    levels.sort(function(a,b) { return b.p - a.p; });
+
+    var html = '<div style="display:flex;flex-direction:column;gap:3px;margin:8px 0;">';
+    levels.forEach(function(lv) {
+        var isCurrent = price >= lv.p * 0.995 && price <= lv.p * 1.005;
+        var isBelow   = price < lv.p;
+        html += '<div style="display:flex;align-items:center;gap:8px;">' +
+            '<span style="min-width:65px;font-size:10px;font-weight:700;color:' + lv.color + ';">' + lv.label + '</span>' +
+            '<span style="min-width:70px;font-family:monospace;font-size:11px;color:#e8f0fc;">$' + lv.p.toLocaleString('en-US', {minimumFractionDigits:2}) + '</span>' +
+            (isCurrent ? '<span style="font-size:11px;color:#00d4ff;font-weight:700;">← $' + price.toFixed(2) + ' HERE</span>' : '') +
+            (isBelow && !isCurrent ? '<span style="font-size:9px;color:#3d5a7a;">▼ price below</span>' : '') +
+        '</div>';
+    });
+    html += '</div>';
+    return html;
+}
+
+// ── Save scenario ─────────────────────────────────────────────
+window.saveTSScenario = function() {
+    var name      = document.getElementById('tsName').value.trim();
+    var entryLow  = parseFloat(document.getElementById('tsEntryLow').value);
+    var entryHigh = parseFloat(document.getElementById('tsEntryHigh').value);
+    var stop      = parseFloat(document.getElementById('tsStop').value);
+    var stopType  = document.getElementById('tsStopType').value;
+    var tp1       = parseFloat(document.getElementById('tsTP1').value) || null;
+    var tp2       = parseFloat(document.getElementById('tsTP2').value) || null;
+    var tp3       = parseFloat(document.getElementById('tsTP3').value) || null;
+    var notes     = document.getElementById('tsNotes').value.trim();
+
+    if (!name)                        { alert('Please enter a scenario name'); return; }
+    if (isNaN(entryLow) || isNaN(entryHigh)) { alert('Please enter entry range'); return; }
+    if (isNaN(stop))                  { alert('Please enter stop loss price'); return; }
+    if (!tp1)                         { alert('Please enter at least TP1'); return; }
+
+    if (!_scenarios[_currentSym]) _scenarios[_currentSym] = [];
+    _scenarios[_currentSym].push({
+        name: name, entryLow: entryLow, entryHigh: entryHigh,
+        stop: stop, stopType: stopType,
+        tp1: tp1, tp2: tp2, tp3: tp3,
+        notes: notes, created: new Date().toISOString(),
+        alertedEntry: false, alertedStop: false,
+        alertedTP1: false, alertedTP2: false, alertedTP3: false
+    });
+    saveScenarios();
+
+    // Refresh modal
+    var tracker = window.stockTracker;
+    var allItems = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[]), ...(tracker.watchlist||[])];
+    var item = allItems.find(function(x) { return x.symbol === _currentSym; });
+    var price = item ? (item.price || 0) : 0;
+    renderExistingScenarios(_currentSym, price);
+
+    ['tsName','tsEntryLow','tsEntryHigh','tsStop','tsTP1','tsTP2','tsTP3','tsNotes'].forEach(function(id) {
+        document.getElementById(id).value = '';
+    });
+};
+
+// ── Delete scenario ───────────────────────────────────────────
+window.deleteTSScenario = function(symbol, index) {
+    if (!confirm('Delete this scenario?')) return;
+    if (_scenarios[symbol]) {
+        _scenarios[symbol].splice(index, 1);
+        if (!_scenarios[symbol].length) delete _scenarios[symbol];
+        saveScenarios();
+        var tracker = window.stockTracker;
+        var allItems = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[]), ...(tracker.watchlist||[])];
+        var item = allItems.find(function(x) { return x.symbol === symbol; });
+        var price = item ? (item.price || 0) : 0;
+        renderExistingScenarios(symbol, price);
+    }
+};
+
+// ── Check alerts ──────────────────────────────────────────────
+function sendTg(msg) {
+    fetch(TG_WORKER, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg })
+    }).catch(function(e) { console.warn('[TS Alert]', e.message); });
+}
+
+function fmt(n) { return '$' + parseFloat(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+window.checkTradeScenarioAlerts = function(symbol, price) {
+    var scenarios = _scenarios[symbol];
+    if (!scenarios || !scenarios.length || !price) return;
+
+    scenarios.forEach(function(s, i) {
+        var prevPrice = s._lastPrice || price;
+        s._lastPrice  = price;
+
+        // Stop loss breached
+        if (!s.alertedStop && price <= s.stop) {
+            var gapped = prevPrice > s.stop && price < s.stop * 0.99;
+            var msg = (gapped ? 'GAP ALERT' : 'STOP LOSS BREACHED') + ' - ' + symbol + '\n' +
+                'Scenario: ' + s.name + '\n' +
+                'Current: ' + fmt(price) + '\n' +
+                'Stop: ' + fmt(s.stop) + ' (' + (s.stopType === 'limit' ? 'Stop-Limit - consider holding' : 'Stop-Market - consider exiting') + ')\n' +
+                (gapped ? 'PRICE GAPPED OVER YOUR STOP ZONE - manual decision needed' : '');
+            sendTg(msg);
+            s.alertedStop = true;
+            saveScenarios();
+        }
+
+        // Entry zone
+        if (!s.alertedEntry && price >= s.entryLow && price <= s.entryHigh) {
+            sendTg('ENTRY ZONE - ' + symbol + '\n' +
+                'Scenario: ' + s.name + '\n' +
+                'Price ' + fmt(price) + ' entered entry zone ' + fmt(s.entryLow) + '-' + fmt(s.entryHigh) + '\n' +
+                'Stop: ' + fmt(s.stop) + ' | TP1: ' + fmt(s.tp1));
+            s.alertedEntry = true;
+            saveScenarios();
+        }
+
+        // TP1
+        if (!s.alertedTP1 && s.tp1 && price >= s.tp1) {
+            sendTg('TP1 HIT - ' + symbol + '\n' +
+                'Scenario: ' + s.name + '\n' +
+                'Price ' + fmt(price) + ' reached TP1 ' + fmt(s.tp1) + '\n' +
+                'Consider taking partial profits' +
+                (s.tp2 ? '\nNext target: TP2 ' + fmt(s.tp2) : ''));
+            s.alertedTP1 = true;
+            saveScenarios();
+        }
+
+        // TP2
+        if (!s.alertedTP2 && s.tp2 && price >= s.tp2) {
+            sendTg('TP2 HIT - ' + symbol + '\n' +
+                'Scenario: ' + s.name + '\n' +
+                'Price ' + fmt(price) + ' reached TP2 ' + fmt(s.tp2) +
+                (s.tp3 ? '\nNext target: TP3 ' + fmt(s.tp3) : '\nFull target reached!'));
+            s.alertedTP2 = true;
+            saveScenarios();
+        }
+
+        // TP3
+        if (!s.alertedTP3 && s.tp3 && price >= s.tp3) {
+            sendTg('TP3 HIT - ' + symbol + '\n' +
+                'Scenario: ' + s.name + '\n' +
+                'Price ' + fmt(price) + ' reached final target TP3 ' + fmt(s.tp3) + '\n' +
+                'Full target reached!');
+            s.alertedTP3 = true;
+            saveScenarios();
+        }
+
+        _scenarios[symbol][i] = s;
+    });
+};
+
+// ── Zone badge on card ────────────────────────────────────────
+window.getTSZoneBadge = function(symbol, price) {
+    var scenarios = _scenarios[symbol];
+    if (!scenarios || !scenarios.length || !price) return '';
+
+    var badges = scenarios.map(function(s) {
+        var zone = getZone(s, price);
+        return '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:' +
+            zone.color + '22;color:' + zone.color + ';border:1px solid ' + zone.color + '44;margin-left:4px;">' +
+            s.name + ': ' + zone.label + '</span>';
+    }).join('');
+    return badges;
+};
+
+// ── Hook into price refresh ───────────────────────────────────
+var _origRefresh = window.stockTracker && window.stockTracker.updatePrices;
+setInterval(function() {
+    var tracker = window.stockTracker;
+    if (!tracker) return;
+    var allItems = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[]), ...(tracker.watchlist||[])];
+    allItems.forEach(function(item) {
+        if (item.symbol && item.price) {
+            window.checkTradeScenarioAlerts(item.symbol, item.price);
+        }
+    });
+}, 60000);
+
+console.log('[TradeScenarios] Loaded OK');
 })();
 </script>
