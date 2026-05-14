@@ -3279,6 +3279,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="import-wrapper">
 <button class="add-btn" id="exportBtn">📥 Export Data</button>
 <button class="add-btn" id="telegramBackupBtn" onclick="window.sendSecureBackupToTelegram()">📲 Backup to Telegram</button>
+<button class="add-btn" id="autoBackupSecureBtn" onclick="window.toggleAutoBackupSecure()">⏸️ Pause Auto-Backup</button>
 <label class="add-btn" for="importFile" style="cursor: pointer;">📤 Import Data</label>
 <input accept=".json" id="importFile" style="display: none;" type="file"/>
 <button class="add-btn" onclick="openCSVImportModal()" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;">📊 Import from CSV Tool</button>
@@ -20068,5 +20069,72 @@ setInterval(function() {
 }, 60000);
 
 console.log('[TradeScenarios] Loaded OK');
+})();
+</script>
+
+<script>
+// ── Secure App Auto Backup to Telegram ──────────────────────
+(function() {
+var BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+var BACKUP_KEY         = 'lastSecureBackupTime';
+var DISABLED_KEY       = 'autoBackupSecureDisabled';
+var _backupTimer       = null;
+
+function updateBtn(running) {
+    var btn = document.getElementById('autoBackupSecureBtn');
+    if (btn) btn.textContent = running ? 'Pause Auto-Backup' : 'Resume Auto-Backup';
+}
+
+function doAutoBackup() {
+    if (localStorage.getItem(DISABLED_KEY) === 'true') return;
+    window.sendSecureBackupToTelegram && window.sendSecureBackupToTelegram();
+    localStorage.setItem(BACKUP_KEY, Date.now().toString());
+    console.log('[SecureBackup] Auto backup sent at', new Date().toLocaleTimeString());
+}
+
+function startAutoBackup() {
+    if (localStorage.getItem(DISABLED_KEY) === 'true') {
+        updateBtn(false);
+        return;
+    }
+    if (_backupTimer) clearInterval(_backupTimer);
+
+    // Send catch-up backup if overdue
+    var lastBackup = parseInt(localStorage.getItem(BACKUP_KEY) || '0');
+    var elapsed    = Date.now() - lastBackup;
+    if (elapsed > BACKUP_INTERVAL_MS) {
+        setTimeout(function() {
+            if (localStorage.getItem(DISABLED_KEY) !== 'true') doAutoBackup();
+        }, 15000); // 15s after app loads
+    }
+
+    _backupTimer = setInterval(function() {
+        if (localStorage.getItem(DISABLED_KEY) !== 'true') doAutoBackup();
+    }, BACKUP_INTERVAL_MS);
+
+    updateBtn(true);
+    console.log('[SecureBackup] Auto backup scheduled every 24 hours');
+}
+
+window.toggleAutoBackupSecure = function() {
+    if (_backupTimer) {
+        clearInterval(_backupTimer);
+        _backupTimer = null;
+        localStorage.setItem(DISABLED_KEY, 'true');
+        updateBtn(false);
+        console.log('[SecureBackup] Auto backup paused');
+    } else {
+        localStorage.removeItem(DISABLED_KEY);
+        startAutoBackup();
+        console.log('[SecureBackup] Auto backup resumed');
+    }
+};
+
+// Start when app data loads
+window.addEventListener('load', function() {
+    setTimeout(startAutoBackup, 5000);
+});
+
+console.log('[SecureBackup] Auto backup system loaded');
 })();
 </script>
