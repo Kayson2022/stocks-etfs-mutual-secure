@@ -3280,6 +3280,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <button class="add-btn" id="exportBtn">📥 Export Data</button>
 <button class="add-btn" id="telegramBackupBtn" onclick="window.sendSecureBackupToTelegram()">📲 Backup to Telegram</button>
 <button class="add-btn" id="autoBackupSecureBtn" onclick="window.toggleAutoBackupSecure()">⏸️ Pause Auto-Backup</button>
+<button class="add-btn" onclick="window.openReconcile()" style="background:rgba(251,191,36,0.1);border-color:rgba(251,191,36,0.3);color:#fbbf24;">⚖️ Reconcile Shares</button>
 <label class="add-btn" for="importFile" style="cursor: pointer;">📤 Import Data</label>
 <input accept=".json" id="importFile" style="display: none;" type="file"/>
 <button class="add-btn" onclick="openCSVImportModal()" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;">📊 Import from CSV Tool</button>
@@ -20136,5 +20137,171 @@ window.addEventListener('load', function() {
 });
 
 console.log('[SecureBackup] Auto backup system loaded');
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════
+     SHARE RECONCILIATION TOOL
+════════════════════════════════════════════════ -->
+<div id="reconcileModal" style="display:none;position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.8);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#111d2e;border:1px solid rgba(0,212,255,0.2);border-top:2px solid #00d4ff;border-radius:16px;padding:24px;max-width:680px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <h3 style="font-size:15px;font-weight:700;color:#e8f0fc;">⚖️ Share Reconciliation Tool</h3>
+      <button onclick="window.closeReconcile()" style="background:none;border:none;color:#8ba3be;font-size:20px;cursor:pointer;">×</button>
+    </div>
+    <div style="font-size:11px;color:#8ba3be;margin-bottom:16px;">Compare app share counts vs your actual brokerage holdings. Enter actual shares from your broker and click Fix All.</div>
+
+    <!-- Search/Filter -->
+    <input id="reconcileSearch" type="text" placeholder="Filter by symbol..." oninput="window.filterReconcile(this.value)"
+      style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:13px;outline:none;margin-bottom:12px;">
+
+    <!-- Table -->
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+            <th style="text-align:left;padding:6px 8px;color:#8ba3be;font-weight:600;font-size:10px;letter-spacing:1px;text-transform:uppercase;">SYMBOL</th>
+            <th style="text-align:right;padding:6px 8px;color:#8ba3be;font-weight:600;font-size:10px;letter-spacing:1px;text-transform:uppercase;">APP SHARES</th>
+            <th style="text-align:right;padding:6px 8px;color:#fbbf24;font-weight:600;font-size:10px;letter-spacing:1px;text-transform:uppercase;">ACTUAL SHARES</th>
+            <th style="text-align:right;padding:6px 8px;color:#8ba3be;font-weight:600;font-size:10px;letter-spacing:1px;text-transform:uppercase;">DIFF</th>
+            <th style="text-align:center;padding:6px 8px;color:#8ba3be;font-weight:600;font-size:10px;letter-spacing:1px;text-transform:uppercase;">STATUS</th>
+          </tr>
+        </thead>
+        <tbody id="reconcileBody"></tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+      <button onclick="window.fixAllReconcile()" style="flex:1;padding:10px;background:#00d4ff;color:#000;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">⚖️ Fix All Discrepancies</button>
+      <button onclick="window.closeReconcile()" style="padding:10px 20px;background:transparent;border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:#8ba3be;font-size:13px;cursor:pointer;">Cancel</button>
+    </div>
+    <div id="reconcileStatus" style="margin-top:10px;font-size:12px;min-height:16px;"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+
+window.openReconcile = function() {
+    var modal = document.getElementById('reconcileModal');
+    modal.style.display = 'flex';
+    renderReconcileTable('');
+};
+
+window.closeReconcile = function() {
+    document.getElementById('reconcileModal').style.display = 'none';
+};
+
+window.filterReconcile = function(val) {
+    renderReconcileTable(val.toUpperCase());
+};
+
+function getNetShares(stock) {
+    return stock.transactions.reduce(function(sum, t) {
+        return t.type === 'buy' ? sum + t.shares : sum - t.shares;
+    }, 0);
+}
+
+function renderReconcileTable(filter) {
+    var tbody = document.getElementById('reconcileBody');
+    var stocks = (window.stockTracker && window.stockTracker.stocks) || [];
+    var rows = '';
+
+    stocks
+        .filter(function(s) { return !filter || s.symbol.includes(filter); })
+        .sort(function(a,b) { return a.symbol.localeCompare(b.symbol); })
+        .forEach(function(s) {
+            var appShares = getNetShares(s);
+            var inputId   = 'rec-' + s.symbol;
+            var stored    = localStorage.getItem('rec_actual_' + s.symbol) || '';
+            var actual    = parseFloat(stored) || 0;
+            var diff      = actual > 0 ? actual - appShares : 0;
+            var diffStr   = actual > 0 ? (diff >= 0 ? '+' : '') + diff.toFixed(3) : '—';
+            var diffColor = actual > 0 ? (Math.abs(diff) < 0.01 ? '#34d399' : diff > 0 ? '#fbbf24' : '#f87171') : '#8ba3be';
+            var status    = actual > 0 ? (Math.abs(diff) < 0.01 ? '✅ Match' : '⚠️ Mismatch') : '—';
+            var statusColor = actual > 0 ? (Math.abs(diff) < 0.01 ? '#34d399' : '#fbbf24') : '#8ba3be';
+
+            rows += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">' +
+                '<td style="padding:6px 8px;font-weight:700;color:#00d4ff;">' + s.symbol + '</td>' +
+                '<td style="padding:6px 8px;text-align:right;font-family:monospace;color:#e8f0fc;">' + appShares.toFixed(3) + '</td>' +
+                '<td style="padding:6px 8px;text-align:right;">' +
+                    '<input type="number" id="' + inputId + '" value="' + (stored||'') + '" step="0.001" placeholder="Enter actual" ' +
+                    'onchange="window.saveRecActual(\'' + s.symbol + '\',this.value)" ' +
+                    'oninput="window.saveRecActual(\'' + s.symbol + '\',this.value)" ' +
+                    'style="width:110px;padding:4px 8px;border-radius:6px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.05);color:#fbbf24;font-size:12px;text-align:right;outline:none;">' +
+                '</td>' +
+                '<td style="padding:6px 8px;text-align:right;font-family:monospace;color:' + diffColor + ';font-weight:600;">' + diffStr + '</td>' +
+                '<td style="padding:6px 8px;text-align:center;color:' + statusColor + ';font-size:11px;">' + status + '</td>' +
+            '</tr>';
+        });
+
+    tbody.innerHTML = rows;
+}
+
+window.saveRecActual = function(symbol, val) {
+    localStorage.setItem('rec_actual_' + symbol, val);
+    renderReconcileTable(document.getElementById('reconcileSearch').value.toUpperCase());
+};
+
+window.fixAllReconcile = async function() {
+    var stocks  = (window.stockTracker && window.stockTracker.stocks) || [];
+    var fixed   = [];
+    var deleted = [];
+    var today   = new Date().toISOString().split('T')[0];
+
+    stocks.forEach(function(s) {
+        var stored = localStorage.getItem('rec_actual_' + s.symbol);
+        if (!stored) return;
+        var actual    = parseFloat(stored);
+        var appShares = getNetShares(s);
+        var diff      = actual - appShares;
+
+        if (actual === 0) {
+            // Mark for deletion
+            deleted.push(s.symbol);
+            return;
+        }
+
+        if (Math.abs(diff) < 0.001) return; // already correct
+
+        s.transactions.push({
+            type:     diff > 0 ? 'buy' : 'sell',
+            shares:   Math.abs(parseFloat(diff.toFixed(3))),
+            price:    0,
+            date:     today,
+            platform: 'Reconciliation',
+            note:     'Share reconciliation ' + new Date().toLocaleDateString()
+        });
+        fixed.push(s.symbol + ' (' + (diff > 0 ? '+' : '') + diff.toFixed(3) + ')');
+    });
+
+    // Delete zero-share stocks
+    if (deleted.length) {
+        window.stockTracker.stocks = stocks.filter(function(s) {
+            return !deleted.includes(s.symbol);
+        });
+    }
+
+    if (!fixed.length && !deleted.length) {
+        document.getElementById('reconcileStatus').innerHTML = '<span style="color:#34d399;">✅ All shares already match!</span>';
+        return;
+    }
+
+    await window.stockTracker.saveData();
+    window.stockTracker.renderContent();
+
+    var msg = '';
+    if (fixed.length)   msg += 'Fixed: ' + fixed.join(', ') + '. ';
+    if (deleted.length) msg += 'Deleted: ' + deleted.join(', ') + '.';
+    document.getElementById('reconcileStatus').innerHTML = '<span style="color:#34d399;">✅ ' + msg + '</span>';
+    renderReconcileTable(document.getElementById('reconcileSearch').value.toUpperCase());
+};
+
+// Close on backdrop click
+document.getElementById('reconcileModal').addEventListener('click', function(e) {
+    if (e.target === this) window.closeReconcile();
+});
+
+console.log('[Reconcile] Share reconciliation tool loaded');
 })();
 </script>
