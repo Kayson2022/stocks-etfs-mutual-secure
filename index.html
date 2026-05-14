@@ -20322,22 +20322,24 @@ function renderReconcileTable() {
                 }
             }
 
-            rows += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);' + rowBg + '">' +
-                '<td style="padding:8px 12px;font-weight:700;color:#00d4ff;white-space:nowrap;">' + s.symbol +
+            rows += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04);' + rowBg + 'vertical-align:middle;">' +
+                '<td style="padding:10px 12px;font-weight:700;color:#00d4ff;white-space:nowrap;vertical-align:middle;">' + s.symbol +
                     '<br><span style="font-size:10px;color:#8ba3be;font-weight:400;">' + (s.name||'') + '</span></td>' +
-                '<td style="padding:8px 12px;text-align:right;font-family:monospace;">' +
-                    '<span style="color:#e8f0fc;">' + appShares.toFixed(3) + '</span>' +
+                '<td style="padding:10px 12px;text-align:right;font-family:monospace;vertical-align:middle;white-space:nowrap;">' +
+                    '<span style="color:#e8f0fc;font-size:13px;">' + appShares.toFixed(3) + '</span>' +
                     '<br><span style="color:#8ba3be;font-size:11px;">' + fmt(appCost) + '</span></td>' +
-                '<td style="padding:6px 12px;text-align:right;">' +
+                '<td style="padding:8px 12px;vertical-align:middle;">' +
+                    '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;">' +
                     '<input type="number" value="' + (storedShares||'') + '" step="0.001" placeholder="Shares" ' +
                     'onchange="window.saveRecActual(\'' + s.symbol + '\',this.value)" ' +
-                    'style="width:110px;padding:5px 8px;border-radius:6px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.05);color:#fbbf24;font-size:12px;text-align:right;outline:none;display:block;margin-bottom:4px;">' +
+                    'style="width:120px;padding:5px 8px;border-radius:6px;border:1px solid rgba(251,191,36,0.3);background:rgba(251,191,36,0.05);color:#fbbf24;font-size:12px;text-align:right;outline:none;">' +
                     '<input type="number" value="' + (storedCost||'') + '" step="0.01" placeholder="Cost basis $" ' +
                     'onchange="window.saveRecCost(\'' + s.symbol + '\',this.value)" ' +
-                    'style="width:110px;padding:5px 8px;border-radius:6px;border:1px solid rgba(96,165,250,0.3);background:rgba(96,165,250,0.05);color:#60a5fa;font-size:12px;text-align:right;outline:none;"></td>' +
-                '<td style="padding:8px 12px;text-align:right;font-size:12px;">' + diffHtml + '</td>' +
-                '<td style="padding:8px 12px;text-align:center;font-size:11px;">' + statusHtml + '</td>' +
-                '<td style="padding:8px 12px;text-align:center;">' +
+                    'style="width:120px;padding:5px 8px;border-radius:6px;border:1px solid rgba(96,165,250,0.3);background:rgba(96,165,250,0.05);color:#60a5fa;font-size:12px;text-align:right;outline:none;">' +
+                    '</div></td>' +
+                '<td style="padding:10px 12px;text-align:right;font-size:12px;vertical-align:middle;white-space:nowrap;">' + diffHtml + '</td>' +
+                '<td style="padding:10px 12px;text-align:center;font-size:11px;vertical-align:middle;white-space:nowrap;">' + statusHtml + '</td>' +
+                '<td style="padding:10px 12px;text-align:center;vertical-align:middle;">' +
                     '<input type="checkbox" ' + (isVerified ? 'checked' : '') + ' ' +
                     'onchange="window.toggleVerified(\'' + s.symbol + '\',this.checked)" ' +
                     'style="width:16px;height:16px;cursor:pointer;accent-color:#34d399;"></td>' +
