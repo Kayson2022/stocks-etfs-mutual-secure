@@ -20757,25 +20757,45 @@ console.log('[PlatformAudit] Loaded');
 
 <script>
 // ── SCANNER INTEGRATION ───────────────────────────────────────────────────────
-// Try Tailscale IP first (works anywhere), fall back to local IP
 const PI_SCANNER_URL = 'http://100.113.77.34:5000/scanner/latest_scan.json';
 let _scannerData = null;
 
 window.loadScannerData = async function() {
-    document.getElementById('scannerMeta').textContent = 'Loading from Pi...';
+    const metaEl = document.getElementById('scannerMeta');
+    const portEl = document.getElementById('scannerPortfolio');
+    metaEl.textContent = 'Loading scanner data...';
+
+    function showData(source) {
+        const d = new Date(_scannerData.scanned_at);
+        metaEl.textContent = `Last scan: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})} · ${_scannerData.total_scanned} stocks scanned · ${source}`;
+        window.renderScannerTab();
+        window.applyBadgesToCards();
+    }
+
+    // PRIMARY: Read from Firestore (works anywhere, no Pi needed)
+    try {
+        const db = window.stockTracker?.db;
+        if (!db) throw new Error('DB not ready');
+        const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        const uid = 'XGQxzQI781bzEc2aGnGj3361s5c2';
+        const snap = await getDoc(doc(db, 'users', uid, 'scanner', 'latest'));
+        if (!snap.exists()) throw new Error('No data in Firestore');
+        _scannerData = snap.data();
+        showData('via Firebase ☁️');
+        return;
+    } catch(e) {
+        console.log('[Scanner] Firestore failed:', e.message, '— trying Pi...');
+    }
+
+    // FALLBACK: Read from Pi via Tailscale
     try {
         const res = await fetch(PI_SCANNER_URL + '?t=' + Date.now());
         if (!res.ok) throw new Error('Pi unreachable');
         _scannerData = await res.json();
-        const d = new Date(_scannerData.scanned_at);
-        document.getElementById('scannerMeta').textContent =
-            `Last scan: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})} · ${_scannerData.total_scanned} stocks scanned`;
-        window.renderScannerTab();
-        window.applyBadgesToCards();
+        showData('via Pi 🖥️');
     } catch(e) {
-        document.getElementById('scannerMeta').textContent = '⚠️ Pi offline or Tailscale not connected (100.113.77.34:5000)';
-        document.getElementById('scannerPortfolio').innerHTML =
-            '<div style="padding:20px;color:#8ba3be;font-size:13px;">Make sure you\'re on your home network and Pi is running at 192.168.1.25:5000</div>';
+        metaEl.textContent = '⚠️ Scanner unavailable — Pi pushes data at 6 AM daily';
+        portEl.innerHTML = '<div style="padding:20px;color:#8ba3be;font-size:13px;">No scanner data yet. Run the scanner on your Pi or wait for 6 AM.</div>';
     }
 };
 
