@@ -5365,10 +5365,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 if(tabContent) tabContent.classList.add('active');
                 if (tab === 'scanner') {
                     window.loadScannerData();
-                    document.querySelectorAll('.search-section, .portfolio-controls, .funds-controls, .watchlist-controls, #stocksGrid, #fundsGrid, #watchlistGrid, .portfolio-summary, .summary-grid, #summarySection, #portfolioSummarySection').forEach(el => el.style.display = 'none');
-                } else {
-                    document.querySelectorAll('.search-section, .portfolio-controls, .funds-controls, .watchlist-controls, #stocksGrid, #fundsGrid, #watchlistGrid, .portfolio-summary, .summary-grid, #summarySection, #portfolioSummarySection').forEach(el => el.style.display = '');
-                }
+                } 
 
                 // FIX: Explicitly control visibility of non-news content containers
                 if (tab === 'news') {
@@ -5449,10 +5446,13 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     return; 
                 }
                 
+                // Don't render portfolio when scanner tab is active
+                if (this.currentTab === 'scanner') return;
+
                 this.renderPortfolioSummary(); // Always render the combined summary
 
                 const sortBy = this.elements.portfolioSort ? this.elements.portfolioSort.value : 'performance';
-                let filteredItems = items;
+                let filteredItems = items || [];
 
                 if (this.currentTab === 'stocks' || this.currentTab === 'funds') {
                     if (sortBy === 'platform') {
@@ -20772,30 +20772,22 @@ window.loadScannerData = async function() {
         window.applyBadgesToCards();
     }
 
-    // PRIMARY: Read from Firestore (works anywhere, no Pi needed)
+    // PRIMARY: Read from Firestore using already-imported db
     try {
-        const db = window._db || window.stockTracker?.db;
+        const db = window._db;
         if (!db) throw new Error('DB not ready');
-        const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-        const uid = 'XGQxzQI781bzEc2aGnGj3361s5c2';
-        const snap = await getDoc(doc(db, 'users', uid, 'scanner', 'latest'));
-        if (!snap.exists()) throw new Error('No data in Firestore');
+        // Use existing firebase imports already loaded by the app
+        const firestoreMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        const docRef = firestoreMod.doc(db, 'users', 'XGQxzQI781bzEc2aGnGj3361s5c2', 'scanner', 'latest');
+        const snap = await firestoreMod.getDoc(docRef);
+        if (!snap.exists()) throw new Error('No data in Firestore yet');
         _scannerData = snap.data();
         showData('via Firebase ☁️');
         return;
     } catch(e) {
-        console.log('[Scanner] Firestore failed:', e.message, '— trying Pi...');
-    }
-
-    // FALLBACK: Read from Pi via Tailscale
-    try {
-        const res = await fetch(PI_SCANNER_URL + '?t=' + Date.now());
-        if (!res.ok) throw new Error('Pi unreachable');
-        _scannerData = await res.json();
-        showData('via Pi 🖥️');
-    } catch(e) {
-        metaEl.textContent = '⚠️ Scanner unavailable — Pi pushes data at 6 AM daily';
-        portEl.innerHTML = '<div style="padding:20px;color:#8ba3be;font-size:13px;">No scanner data yet. Run the scanner on your Pi or wait for 6 AM.</div>';
+        console.log('[Scanner] Firestore failed:', e.message);
+        metaEl.textContent = '⚠️ Scanner unavailable — Pi pushes to Firebase at 6 AM daily';
+        portEl.innerHTML = '<div style="padding:20px;color:#8ba3be;font-size:13px;">Scanner data is pushed to Firebase every morning at 6 AM. Check back tomorrow!</div>';
     }
 };
 
