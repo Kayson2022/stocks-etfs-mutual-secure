@@ -944,6 +944,7 @@
             backdrop-filter: blur(5px);
             display: none; align-items: center; justify-content: center;
         }
+        #confirmModal { z-index: 999999 !important; }
         .modal-content {
             background-color: var(--bg-secondary);
             padding: 32px;
@@ -2939,6 +2940,7 @@ body.dark-mode .modal-content {
 <button class="tab active" onclick="window.stockTracker.switchTab('stocks')">📊 Stocks &amp; Portfolio</button>
 <button class="tab" onclick="window.stockTracker.switchTab('funds')">🏛️ Mutual Funds</button>
 <button class="tab" onclick="window.stockTracker.switchTab('watchlist')">👀 Watchlist</button>
+<button class="tab" onclick="window.stockTracker.switchTab('scanner')">🔥 Scanner</button>
 
 </div>
 
@@ -3487,6 +3489,41 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div id="fundsGrid"></div>
 
 </div>
+<div class="tab-content" id="scanner-tab" style="display:none;">
+  <div style="padding:16px 0;">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:#00d4ff;">🔥 Stock Scanner — Pi Dashboard</div>
+        <div style="font-size:11px;color:#8ba3be;" id="scannerMeta">Connecting to Pi...</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select id="scannerFilter" onchange="window.renderScannerTab()" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:11px;outline:none;">
+          <option value="all">All Signals</option>
+          <option value="STRONG BUY">🔥 Strong Buy</option>
+          <option value="BUY">📈 Buy</option>
+          <option value="WATCH">👁 Watch</option>
+        </select>
+        <button onclick="window.loadScannerData()" style="padding:7px 16px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);border-radius:6px;color:#00d4ff;font-size:12px;cursor:pointer;">⟳ Refresh</button>
+        <a href="http://192.168.1.25:5000/scanner" target="_blank" style="padding:7px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#8ba3be;font-size:12px;cursor:pointer;text-decoration:none;">↗ Full Scanner</a>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:16px;" id="scannerStats"></div>
+
+    <!-- Portfolio matches section -->
+    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">📊 Your Portfolio Signals</div>
+    <div id="scannerPortfolio" style="margin-bottom:20px;"></div>
+
+    <!-- Top picks not in portfolio -->
+    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">🎯 Top Picks (Not in Portfolio)</div>
+    <div id="scannerTopPicks"></div>
+
+  </div>
+</div>
+
 <div class="tab-content" id="watchlist-tab">
 
 <!-- ── Search & Controls ── -->
@@ -5326,6 +5363,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 if(tabButton) tabButton.classList.add('active');
                 const tabContent = document.getElementById(`${tab}-tab`);
                 if(tabContent) tabContent.classList.add('active');
+                if (tab === 'scanner') window.loadScannerData();
 
                 // FIX: Explicitly control visibility of non-news content containers
                 if (tab === 'news') {
@@ -20084,7 +20122,7 @@ var _backupTimer       = null;
 
 function updateBtn(running) {
     var btn = document.getElementById('autoBackupSecureBtn');
-    if (btn) btn.textContent = running ? 'Pause Auto-Backup' : 'Resume Auto-Backup';
+    if (btn) btn.textContent = running ? '⏸️ Pause Auto-Backup' : '▶️ Resume Auto-Backup';
 }
 
 function doAutoBackup() {
@@ -20710,4 +20748,153 @@ window.renderPlatformAudit = function() {
 
 console.log('[PlatformAudit] Loaded');
 })();
+</script>
+
+<script>
+// ── SCANNER INTEGRATION ───────────────────────────────────────────────────────
+const PI_SCANNER_URL = 'http://192.168.1.25:5000/scanner/latest_scan.json';
+let _scannerData = null;
+
+window.loadScannerData = async function() {
+    document.getElementById('scannerMeta').textContent = 'Loading from Pi...';
+    try {
+        const res = await fetch(PI_SCANNER_URL + '?t=' + Date.now());
+        if (!res.ok) throw new Error('Pi unreachable');
+        _scannerData = await res.json();
+        const d = new Date(_scannerData.scanned_at);
+        document.getElementById('scannerMeta').textContent =
+            `Last scan: ${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})} at ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})} · ${_scannerData.total_scanned} stocks scanned`;
+        window.renderScannerTab();
+        window.applyBadgesToCards();
+    } catch(e) {
+        document.getElementById('scannerMeta').textContent = '⚠️ Pi offline or not reachable on home network';
+        document.getElementById('scannerPortfolio').innerHTML =
+            '<div style="padding:20px;color:#8ba3be;font-size:13px;">Make sure you\'re on your home network and Pi is running at 192.168.1.25:5000</div>';
+    }
+};
+
+window.renderScannerTab = function() {
+    if (!_scannerData) return;
+    const filter = document.getElementById('scannerFilter').value;
+    const results = _scannerData.results || [];
+    const mySymbols = new Set((window.stockTracker?.stocks || []).map(s => s.symbol));
+
+    // Stats
+    const statsEl = document.getElementById('scannerStats');
+    const statItems = [
+        { label:'🔥 Strong Buys', val: _scannerData.strong_buys, color:'#ff6b6b' },
+        { label:'📈 Buys',        val: _scannerData.buys,        color:'#00e676' },
+        { label:'👁 Watches',     val: _scannerData.watches,      color:'#ffd600' },
+        { label:'📡 Scanned',     val: _scannerData.total_scanned,color:'#00d4ff' },
+    ];
+    statsEl.innerHTML = statItems.map(s =>
+        `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 14px;">
+            <div style="font-size:18px;font-weight:700;color:${s.color};">${s.val}</div>
+            <div style="font-size:10px;color:#8ba3be;letter-spacing:1px;">${s.label}</div>
+        </div>`
+    ).join('');
+
+    // Filter results
+    const filtered = filter === 'all' ? results : results.filter(r => r.action === filter);
+
+    // Portfolio matches
+    const inPortfolio = filtered.filter(r => mySymbols.has(r.symbol));
+    const portfolioEl = document.getElementById('scannerPortfolio');
+    if (!inPortfolio.length) {
+        portfolioEl.innerHTML = '<div style="padding:12px;color:#8ba3be;font-size:12px;">No signals for your current holdings.</div>';
+    } else {
+        portfolioEl.innerHTML = inPortfolio.map(r => buildScannerCard(r, true)).join('');
+    }
+
+    // Top picks not in portfolio
+    const notOwned = filtered.filter(r => !mySymbols.has(r.symbol) && r.action !== 'WATCH').slice(0, 10);
+    const topPicksEl = document.getElementById('scannerTopPicks');
+    if (!notOwned.length) {
+        topPicksEl.innerHTML = '<div style="padding:12px;color:#8ba3be;font-size:12px;">No strong picks outside your portfolio right now.</div>';
+    } else {
+        topPicksEl.innerHTML = notOwned.map(r => buildScannerCard(r, false)).join('');
+    }
+};
+
+function buildScannerCard(r, inPortfolio) {
+    const actionColor = r.action === 'STRONG BUY' ? '#00e676' : r.action === 'BUY' ? '#69f0ae' : '#ffd600';
+    const actionEmoji = r.action === 'STRONG BUY' ? '🔥' : r.action === 'BUY' ? '📈' : '👁';
+    const changeCls   = r.change_pct >= 0 ? '#00e676' : '#ff5252';
+    const changeStr   = (r.change_pct >= 0 ? '+' : '') + r.change_pct.toFixed(2) + '%';
+    const tradeBadges = (r.trade_types||[]).map(t =>
+        `<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:rgba(0,212,255,0.08);color:#00d4ff;border:1px solid rgba(0,212,255,0.2);">${t}</span>`
+    ).join('');
+    const signals = (r.signals||[]).slice(0,3).map(s =>
+        `<div style="font-size:11px;color:#8ba3be;padding:2px 0;">▸ ${s}</div>`
+    ).join('');
+
+    const ownedBadge = inPortfolio
+        ? `<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:rgba(0,230,118,0.1);color:#00e676;border:1px solid rgba(0,230,118,0.2);">✓ In Portfolio</span>`
+        : `<span style="font-size:10px;padding:2px 7px;border-radius:3px;background:rgba(255,255,255,0.05);color:#8ba3be;border:1px solid rgba(255,255,255,0.1);">Not owned</span>`;
+
+    return `<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-left:3px solid ${actionColor};border-radius:8px;padding:14px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+            <div>
+                <span style="font-size:16px;font-weight:700;color:#00d4ff;">${r.symbol}</span>
+                <span style="font-size:12px;color:#8ba3be;margin-left:8px;">${r.name||''}</span>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:15px;font-weight:600;color:#e8f0fc;">$${r.price}</div>
+                <div style="font-size:12px;color:${changeCls};">${changeStr}</div>
+            </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;">
+            <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;background:${actionColor}22;color:${actionColor};border:1px solid ${actionColor}44;">${actionEmoji} ${r.action}</span>
+            ${ownedBadge}
+            ${tradeBadges}
+        </div>
+        <div style="margin-bottom:8px;">${signals}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px;font-family:monospace;">
+            <span style="background:rgba(0,212,255,0.06);padding:3px 8px;border-radius:4px;color:#00d4ff;">Entry $${r.entry_low}-${r.entry_high}</span>
+            <span style="background:rgba(255,82,82,0.06);padding:3px 8px;border-radius:4px;color:#ff5252;">Stop $${r.stop_loss}</span>
+            <span style="background:rgba(0,230,118,0.06);padding:3px 8px;border-radius:4px;color:#00e676;">TP1 $${r.tp1}</span>
+            <span style="background:rgba(255,255,255,0.04);padding:3px 8px;border-radius:4px;color:#8ba3be;">RSI ${r.rsi} · Vol ${r.vol_ratio}x · Score ${r.score}</span>
+        </div>
+    </div>`;
+}
+
+// ── Apply scanner badges to stock cards ───────────────────────────────────────
+window.applyBadgesToCards = function() {
+    if (!_scannerData) return;
+    const signalMap = {};
+    (_scannerData.results || []).forEach(r => { signalMap[r.symbol] = r; });
+
+    document.querySelectorAll('.stock-card, .fund-card').forEach(card => {
+        const symEl = card.querySelector('.stock-symbol, .symbol');
+        if (!symEl) return;
+        const sym = symEl.textContent.trim();
+        const signal = signalMap[sym];
+        if (!signal) return;
+
+        // Remove existing badge
+        card.querySelectorAll('.scanner-badge').forEach(b => b.remove());
+
+        const color  = signal.action === 'STRONG BUY' ? '#00e676' : signal.action === 'BUY' ? '#69f0ae' : '#ffd600';
+        const emoji  = signal.action === 'STRONG BUY' ? '🔥' : signal.action === 'BUY' ? '📈' : '👁';
+        const badge  = document.createElement('span');
+        badge.className = 'scanner-badge';
+        badge.style.cssText = `font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;background:${color}22;color:${color};border:1px solid ${color}44;margin-left:6px;cursor:pointer;`;
+        badge.textContent = `${emoji} ${signal.action}`;
+        badge.title = `Score: ${signal.score} · RSI: ${signal.rsi} · ${(signal.signals||[]).slice(0,2).join(' · ')}`;
+        badge.onclick = (e) => { e.stopPropagation(); window.stockTracker.switchTab('scanner'); };
+        symEl.appendChild(badge);
+    });
+};
+
+// Auto-load scanner badges when stocks render
+const _origRender = window.stockTracker?.renderContent;
+if (_origRender) {
+    window.stockTracker.renderContent = function(...args) {
+        const result = _origRender.apply(this, args);
+        if (_scannerData) window.applyBadgesToCards();
+        return result;
+    };
+}
+
+console.log('[Scanner Integration] Loaded');
 </script>
