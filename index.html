@@ -20772,22 +20772,22 @@ window.loadScannerData = async function() {
         window.applyBadgesToCards();
     }
 
-    // PRIMARY: Read from Firestore using already-imported db
+    // Use window._db which is already initialized with correct version
     try {
         const db = window._db;
         if (!db) throw new Error('DB not ready');
-        // Use existing firebase imports already loaded by the app
-        const firestoreMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-        const docRef = firestoreMod.doc(db, 'users', 'XGQxzQI781bzEc2aGnGj3361s5c2', 'scanner', 'latest');
-        const snap = await firestoreMod.getDoc(docRef);
-        if (!snap.exists()) throw new Error('No data in Firestore yet');
+        // Use same firebase version (10.13.1) as the app
+        const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js');
+        const uid = 'XGQxzQI781bzEc2aGnGj3361s5c2';
+        const docRef = doc(db, 'users', uid, 'scanner', 'latest');
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) throw new Error('No scanner data in Firestore yet');
         _scannerData = snap.data();
         showData('via Firebase ☁️');
-        return;
     } catch(e) {
         console.log('[Scanner] Firestore failed:', e.message);
-        metaEl.textContent = '⚠️ Scanner unavailable — Pi pushes to Firebase at 6 AM daily';
-        portEl.innerHTML = '<div style="padding:20px;color:#8ba3be;font-size:13px;">Scanner data is pushed to Firebase every morning at 6 AM. Check back tomorrow!</div>';
+        metaEl.textContent = '⚠️ Scanner data not available yet — Pi pushes at 6 AM daily';
+        if (portEl) portEl.innerHTML = '<div style="padding:20px;color:#8ba3be;font-size:13px;">Scanner runs at 6 AM daily and pushes results here automatically.</div>';
     }
 };
 
