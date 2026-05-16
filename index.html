@@ -3496,6 +3496,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     <div style="margin-bottom:12px;">
       <div style="font-size:15px;font-weight:700;color:#00d4ff;">🔥 Stock Scanner — Pi Dashboard</div>
       <div style="font-size:11px;color:#8ba3be;margin-bottom:10px;" id="scannerMeta">Connecting to Pi...</div>
+      <div id="scannerStats" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;"></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative;z-index:10;">
         <select id="scannerFilter" onchange="window.renderScannerTab()" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:11px;outline:none;cursor:pointer;">
           <option value="all">All Signals</option>
@@ -3511,9 +3512,6 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     <!-- Portfolio matches section -->
     <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">📊 Your Portfolio Signals</div>
     <div id="scannerPortfolio" style="margin-bottom:20px;"></div>
-
-    <!-- Stats summary -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:16px;" id="scannerStats"></div>
 
     <!-- Top picks not in portfolio -->
     <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">🎯 Top Picks (Not in Portfolio)</div>
@@ -20804,9 +20802,9 @@ window.renderScannerTab = function() {
         { label:'📡 Scanned',     val: _scannerData.total_scanned,color:'#00d4ff' },
     ];
     statsEl.innerHTML = statItems.map(s =>
-        `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 14px;">
-            <div style="font-size:18px;font-weight:700;color:${s.color};">${s.val}</div>
-            <div style="font-size:10px;color:#8ba3be;letter-spacing:1px;">${s.label}</div>
+        `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:5px 12px;display:flex;align-items:center;gap:6px;">
+            <span style="font-size:15px;font-weight:700;color:${s.color};">${s.val}</span>
+            <span style="font-size:10px;color:#8ba3be;">${s.label}</span>
         </div>`
     ).join('');
 
