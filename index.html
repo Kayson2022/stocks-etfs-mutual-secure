@@ -10,6 +10,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -2941,6 +2942,7 @@ body.dark-mode .modal-content {
 <button class="tab" onclick="window.stockTracker.switchTab('funds')">🏛️ Mutual Funds</button>
 <button class="tab" onclick="window.stockTracker.switchTab('watchlist')">👀 Watchlist</button>
 <button class="tab" onclick="window.stockTracker.switchTab('scanner')">🔥 Scanner</button>
+<button class="tab" onclick="window.stockTracker.switchTab('paper')">📝 Paper Trading</button>
 
 </div>
 
@@ -3516,6 +3518,37 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     <!-- Top picks not in portfolio -->
     <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">🎯 Top Picks (Not in Portfolio)</div>
     <div id="scannerTopPicks"></div>
+
+  </div>
+</div>
+
+<div class="tab-content" id="paper-tab">
+  <div style="padding:16px 0;">
+
+    <!-- Header -->
+    <div style="margin-bottom:12px;">
+      <div style="font-size:15px;font-weight:700;color:#00e676;">📝 Paper Trading — $100k Simulation</div>
+      <div style="font-size:11px;color:#8ba3be;margin-bottom:10px;" id="paperMeta">Connecting...</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button onclick="window.loadPaperData()" style="padding:7px 16px;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);border-radius:6px;color:#00e676;font-size:12px;cursor:pointer;">⟳ Refresh</button>
+        <a href="http://192.168.1.25:5000/paper" target="_blank" style="padding:7px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#8ba3be;font-size:12px;cursor:pointer;text-decoration:none;">↗ Full Dashboard</a>
+      </div>
+    </div>
+
+    <!-- Portfolio Summary Cards -->
+    <div id="paperSummary" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;"></div>
+
+    <!-- Open Positions -->
+    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">📈 Open Positions</div>
+    <div id="paperPositions" style="margin-bottom:24px;"></div>
+
+    <!-- Performance Stats -->
+    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">📊 Performance Stats</div>
+    <div id="paperStats" style="margin-bottom:24px;"></div>
+
+    <!-- Closed Trades -->
+    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">🏁 Recent Closed Trades</div>
+    <div id="paperClosed"></div>
 
   </div>
 </div>
@@ -20973,4 +21006,156 @@ if (_origRender) {
 }
 
 console.log('[Scanner Integration] Loaded');
+</script>
+
+<script>
+// ── Paper Trading Integration ─────────────────────────────────────────────
+let _paperData = null;
+
+window.loadPaperData = async function() {
+    const metaEl = document.getElementById('paperMeta');
+    if (metaEl) metaEl.textContent = 'Loading paper trading data...';
+    try {
+        const db = window._db;
+        if (!db) throw new Error('DB not ready');
+        const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js');
+        const uid = 'XGQxzQI781bzEc2aGnGj3361s5c2';
+        const docRef = doc(db, 'users', uid, 'paper_trading', 'portfolio');
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) throw new Error('No paper trading data yet');
+        _paperData = snap.data();
+        const updated = new Date(_paperData.updated_at);
+        if (metaEl) metaEl.textContent = `Last updated: ${updated.toLocaleDateString('en-US',{month:'short',day:'numeric'})} at ${updated.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})} · Paper trades at 6:05 AM daily`;
+        window.renderPaperTab();
+    } catch(e) {
+        console.log('[Paper] Firestore failed:', e.message);
+        if (metaEl) metaEl.textContent = '⚠️ No paper trading data yet — runs at 6:05 AM daily';
+        const posEl = document.getElementById('paperPositions');
+        if (posEl) posEl.innerHTML = '<div style="padding:20px;color:#8ba3be;font-size:13px;">Paper trader runs at 6:05 AM on weekdays and pushes results here automatically.</div>';
+    }
+};
+
+window.renderPaperTab = function() {
+    if (!_paperData) return;
+    const d = _paperData;
+
+    // ── Summary Cards ──
+    const gain = d.total_gain || 0;
+    const gainPct = d.total_gain_pct || 0;
+    const gainColor = gain >= 0 ? '#00e676' : '#ff5252';
+    const summaryEl = document.getElementById('paperSummary');
+    if (summaryEl) {
+        const items = [
+            { label: '💰 Portfolio Value', val: '$' + (d.total_value||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}), color: '#00d4ff' },
+            { label: '💵 Cash Available',  val: '$' + (d.cash||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}), color: '#8ba3be' },
+            { label: '📈 Total Gain/Loss', val: (gain>=0?'+':'') + '$' + Math.abs(gain).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' (' + (gainPct>=0?'+':'') + gainPct.toFixed(2) + '%)', color: gainColor },
+            { label: '📂 Open Positions',  val: (d.open_positions||0) + ' / 10', color: '#ffd600' },
+        ];
+        summaryEl.innerHTML = items.map(s =>
+            `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 16px;min-width:140px;">
+                <div style="font-size:16px;font-weight:700;color:${s.color};">${s.val}</div>
+                <div style="font-size:10px;color:#8ba3be;margin-top:2px;">${s.label}</div>
+            </div>`
+        ).join('');
+    }
+
+    // ── Open Positions ──
+    const posEl = document.getElementById('paperPositions');
+    if (posEl) {
+        const positions = d.positions || [];
+        if (!positions.length) {
+            posEl.innerHTML = '<div style="padding:12px;color:#8ba3be;font-size:12px;">No open positions.</div>';
+        } else {
+            posEl.innerHTML = positions.map(p => {
+                const currentVal = (p.current_price || p.entry_price) * p.shares;
+                const cost = p.entry_price * p.shares;
+                const pnl = currentVal - cost;
+                const pnlPct = (pnl / cost * 100);
+                const pnlColor = pnl >= 0 ? '#00e676' : '#ff5252';
+                const daysHeld = Math.floor((Date.now() - new Date(p.entry_date)) / 86400000);
+                return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <div>
+                        <span style="font-size:15px;font-weight:700;color:#e8f0fc;">${p.symbol}</span>
+                        <span style="font-size:11px;color:#8ba3be;margin-left:8px;">${p.shares} shares @ $${p.entry_price?.toFixed(2)}</span>
+                        <div style="font-size:10px;color:#8ba3be;margin-top:2px;">Held ${daysHeld}d · Stop $${p.stop_loss?.toFixed(2)} · TP1 $${p.tp1?.toFixed(2)} · TP2 $${p.tp2?.toFixed(2)}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:14px;font-weight:700;color:${pnlColor};">${pnl>=0?'+':''}$${Math.abs(pnl).toFixed(2)}</div>
+                        <div style="font-size:11px;color:${pnlColor};">${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+    }
+
+    // ── Performance Stats ──
+    const statsEl = document.getElementById('paperStats');
+    if (statsEl) {
+        const s = d.stats || {};
+        const winRate = s.trades_won && s.total_trades ? (s.trades_won / s.total_trades * 100).toFixed(1) : '—';
+        const items = [
+            { label: 'Total Trades',   val: s.total_trades || 0,    color: '#00d4ff' },
+            { label: 'Won',            val: s.trades_won || 0,       color: '#00e676' },
+            { label: 'Lost',           val: s.trades_lost || 0,      color: '#ff5252' },
+            { label: 'Win Rate',       val: winRate + '%',            color: winRate >= 55 ? '#00e676' : '#ffd600' },
+            { label: 'Avg Win',        val: s.avg_win ? '+$'+s.avg_win.toFixed(0) : '—', color: '#00e676' },
+            { label: 'Avg Loss',       val: s.avg_loss ? '-$'+Math.abs(s.avg_loss).toFixed(0) : '—', color: '#ff5252' },
+        ];
+        statsEl.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;">` + items.map(s =>
+            `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:8px 14px;min-width:90px;">
+                <div style="font-size:16px;font-weight:700;color:${s.color};">${s.val}</div>
+                <div style="font-size:10px;color:#8ba3be;margin-top:2px;">${s.label}</div>
+            </div>`
+        ).join('') + `</div>`;
+    }
+
+    // ── Closed Trades ──
+    const closedEl = document.getElementById('paperClosed');
+    if (closedEl) {
+        const closed = (d.closed_trades || []).slice().reverse(); // most recent first
+        if (!closed.length) {
+            closedEl.innerHTML = '<div style="padding:12px;color:#8ba3be;font-size:12px;">No closed trades yet.</div>';
+        } else {
+            closedEl.innerHTML = `<div style="overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                    <thead>
+                        <tr style="color:#8ba3be;border-bottom:1px solid rgba(255,255,255,0.08);">
+                            <th style="text-align:left;padding:6px 8px;">Symbol</th>
+                            <th style="text-align:right;padding:6px 8px;">Entry</th>
+                            <th style="text-align:right;padding:6px 8px;">Exit</th>
+                            <th style="text-align:right;padding:6px 8px;">P&L</th>
+                            <th style="text-align:right;padding:6px 8px;">Result</th>
+                            <th style="text-align:left;padding:6px 8px;">Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>` +
+                closed.map(t => {
+                    const pnl = t.pnl || 0;
+                    const pnlColor = pnl >= 0 ? '#00e676' : '#ff5252';
+                    const result = pnl >= 0 ? '✅ WIN' : '❌ LOSS';
+                    return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                        <td style="padding:7px 8px;font-weight:700;color:#e8f0fc;">${t.symbol}</td>
+                        <td style="padding:7px 8px;text-align:right;color:#8ba3be;">$${t.entry_price?.toFixed(2)}</td>
+                        <td style="padding:7px 8px;text-align:right;color:#8ba3be;">$${t.exit_price?.toFixed(2)}</td>
+                        <td style="padding:7px 8px;text-align:right;color:${pnlColor};font-weight:600;">${pnl>=0?'+':''}$${Math.abs(pnl).toFixed(2)}</td>
+                        <td style="padding:7px 8px;text-align:right;">${result}</td>
+                        <td style="padding:7px 8px;color:#8ba3be;">${t.exit_reason || '—'}</td>
+                    </tr>`;
+                }).join('') +
+                    `</tbody></table></div>`;
+        }
+    }
+};
+
+// Auto-load when tab is switched to paper
+const _origSwitchTab = window.stockTracker?.switchTab;
+if (_origSwitchTab) {
+    window.stockTracker.switchTab = function(tab, ...args) {
+        const result = _origSwitchTab.apply(this, [tab, ...args]);
+        if (tab === 'paper' && !_paperData) window.loadPaperData();
+        return result;
+    };
+}
+
+console.log('[Paper Trading Integration] Loaded');
 </script>
