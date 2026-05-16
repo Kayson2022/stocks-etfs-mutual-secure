@@ -3493,25 +3493,23 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
   <div style="padding:16px 0;">
 
     <!-- Header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-      <div>
-        <div style="font-size:15px;font-weight:700;color:#00d4ff;">🔥 Stock Scanner — Pi Dashboard</div>
-        <div style="font-size:11px;color:#8ba3be;" id="scannerMeta">Connecting to Pi...</div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <select id="scannerFilter" onchange="window.renderScannerTab()" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:11px;outline:none;">
+    <div style="margin-bottom:12px;">
+      <div style="font-size:15px;font-weight:700;color:#00d4ff;">🔥 Stock Scanner — Pi Dashboard</div>
+      <div style="font-size:11px;color:#8ba3be;margin-bottom:10px;" id="scannerMeta">Connecting to Pi...</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:relative;z-index:10;">
+        <select id="scannerFilter" onchange="window.renderScannerTab()" style="padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#e8f0fc;font-size:11px;outline:none;cursor:pointer;">
           <option value="all">All Signals</option>
           <option value="STRONG BUY">🔥 Strong Buy</option>
           <option value="BUY">📈 Buy</option>
           <option value="WATCH">👁 Watch</option>
         </select>
-        <button onclick="window.loadScannerData()" style="padding:7px 16px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);border-radius:6px;color:#00d4ff;font-size:12px;cursor:pointer;">⟳ Refresh</button>
-        <a href="http://192.168.1.25:5000/scanner" target="_blank" style="padding:7px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#8ba3be;font-size:12px;cursor:pointer;text-decoration:none;">↗ Full Scanner</a>
+        <button onclick="window.loadScannerData()" style="padding:7px 16px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);border-radius:6px;color:#00d4ff;font-size:12px;cursor:pointer;position:relative;z-index:10;">⟳ Refresh</button>
+        <a href="http://192.168.1.25:5000/scanner" target="_blank" style="padding:7px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#8ba3be;font-size:12px;cursor:pointer;text-decoration:none;position:relative;z-index:10;">↗ Full Scanner</a>
       </div>
     </div>
 
     <!-- Stats -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:16px;" id="scannerStats"></div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px;clear:both;" id="scannerStats"></div>
 
     <!-- Portfolio matches section -->
     <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8ba3be;margin-bottom:8px;">📊 Your Portfolio Signals</div>
