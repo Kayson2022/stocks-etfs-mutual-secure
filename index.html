@@ -2942,7 +2942,7 @@ body.dark-mode .modal-content {
 <button class="tab" onclick="window.stockTracker.switchTab('funds')">🏛️ Mutual Funds</button>
 <button class="tab" onclick="window.stockTracker.switchTab('watchlist')">👀 Watchlist</button>
 <button class="tab" onclick="window.stockTracker.switchTab('scanner')">🔥 Scanner</button>
-<button class="tab" onclick="window.stockTracker.switchTab('paper')">📝 Paper Trading</button>
+<button class="tab" onclick="window.stockTracker.switchTab('paper'); if(!window._paperData) window.loadPaperData();">📝 Paper Trading</button>
 
 </div>
 
@@ -21011,6 +21011,7 @@ console.log('[Scanner Integration] Loaded');
 <script>
 // ── Paper Trading Integration ─────────────────────────────────────────────
 let _paperData = null;
+window._paperData = null;
 
 window.loadPaperData = async function() {
     const metaEl = document.getElementById('paperMeta');
@@ -21024,6 +21025,7 @@ window.loadPaperData = async function() {
         const snap = await getDoc(docRef);
         if (!snap.exists()) throw new Error('No paper trading data yet');
         _paperData = snap.data();
+        window._paperData = _paperData;
         const updated = new Date(_paperData.updated_at);
         if (metaEl) metaEl.textContent = `Last updated: ${updated.toLocaleDateString('en-US',{month:'short',day:'numeric'})} at ${updated.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})} · Paper trades at 6:05 AM daily`;
         window.renderPaperTab();
@@ -21146,16 +21148,6 @@ window.renderPaperTab = function() {
         }
     }
 };
-
-// Auto-load when tab is switched to paper
-const _origSwitchTab = window.stockTracker?.switchTab;
-if (_origSwitchTab) {
-    window.stockTracker.switchTab = function(tab, ...args) {
-        const result = _origSwitchTab.apply(this, [tab, ...args]);
-        if (tab === 'paper' && !_paperData) window.loadPaperData();
-        return result;
-    };
-}
 
 console.log('[Paper Trading Integration] Loaded');
 </script>
