@@ -3532,6 +3532,29 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button onclick="window.loadPaperData()" style="padding:7px 16px;background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);border-radius:6px;color:#00e676;font-size:12px;cursor:pointer;">⟳ Refresh</button>
         <a href="http://192.168.1.25:5000/paper" target="_blank" style="padding:7px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#8ba3be;font-size:12px;cursor:pointer;text-decoration:none;">↗ Full Dashboard</a>
+        <button onclick="window.showPaperResetModal()" style="padding:7px 16px;background:rgba(255,82,82,0.1);border:1px solid rgba(255,82,82,0.3);border-radius:6px;color:#ff5252;font-size:12px;cursor:pointer;">🔄 Reset Portfolio</button>
+      </div>
+
+      <!-- Reset Modal -->
+      <div id="paperResetModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:#1a2332;border:1px solid rgba(255,82,82,0.4);border-radius:12px;padding:24px;max-width:340px;width:90%;">
+          <div style="font-size:15px;font-weight:700;color:#ff5252;margin-bottom:6px;">🔄 Reset Paper Portfolio</div>
+          <div style="font-size:12px;color:#8ba3be;margin-bottom:16px;">Current portfolio will be backed up. Enter new starting amount:</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+            <button onclick="document.getElementById('paperResetAmount').value='1000'" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8f0fc;font-size:12px;cursor:pointer;">$1k</button>
+            <button onclick="document.getElementById('paperResetAmount').value='5000'" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8f0fc;font-size:12px;cursor:pointer;">$5k</button>
+            <button onclick="document.getElementById('paperResetAmount').value='10000'" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8f0fc;font-size:12px;cursor:pointer;">$10k</button>
+            <button onclick="document.getElementById('paperResetAmount').value='25000'" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8f0fc;font-size:12px;cursor:pointer;">$25k</button>
+            <button onclick="document.getElementById('paperResetAmount').value='100000'" style="padding:5px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8f0fc;font-size:12px;cursor:pointer;">$100k</button>
+          </div>
+          <input id="paperResetAmount" type="number" placeholder="Enter amount e.g. 10000" style="width:100%;padding:8px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8f0fc;font-size:13px;margin-bottom:16px;box-sizing:border-box;"/>
+          <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button onclick="window.hidePaperResetModal()" style="padding:7px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#8ba3be;font-size:12px;cursor:pointer;">Cancel</button>
+            <button onclick="window.confirmPaperReset()" style="padding:7px 16px;background:rgba(255,82,82,0.2);border:1px solid rgba(255,82,82,0.4);border-radius:6px;color:#ff5252;font-size:12px;cursor:pointer;font-weight:700;">✅ Confirm Reset</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:none">
       </div>
     </div>
 
@@ -21150,4 +21173,37 @@ window.renderPaperTab = function() {
 };
 
 console.log('[Paper Trading Integration] Loaded');
+
+window.showPaperResetModal = function() {
+    const modal = document.getElementById('paperResetModal');
+    modal.style.display = 'flex';
+};
+window.hidePaperResetModal = function() {
+    document.getElementById('paperResetModal').style.display = 'none';
+};
+window.confirmPaperReset = async function() {
+    const amount = parseFloat(document.getElementById('paperResetAmount').value);
+    if (!amount || amount < 1000) {
+        alert('Please enter a valid amount (minimum $1,000)');
+        return;
+    }
+    try {
+        const res = await fetch('http://192.168.1.25:5000/api/paper/reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount })
+        });
+        const data = await res.json();
+        if (data.success) {
+            window.hidePaperResetModal();
+            window._paperData = null;
+            alert(`✅ ${data.message}\n\nPortfolio will update at next scan (6:05 AM weekdays).\nRefreshing display...`);
+            window.loadPaperData();
+        } else {
+            alert('❌ Reset failed: ' + data.error);
+        }
+    } catch(e) {
+        alert('❌ Could not reach Pi. Make sure you are on the same network or Tailscale.\n\nError: ' + e.message);
+    }
+};
 </script>
