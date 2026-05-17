@@ -11,6 +11,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -7365,7 +7366,8 @@ getOldestTransactionDate(item) {
                 const blob = new Blob([dataStr], {type: 'application/json'});
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = 'portfolio-data.json';
+                const today = new Date().toISOString().split('T')[0];
+                a.download = `secure-app-portfolio-${today}.json`;
                 a.click();
                 URL.revokeObjectURL(a.href);
             }
