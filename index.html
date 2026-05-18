@@ -3714,14 +3714,15 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <label for="edit-stock-platform">Platform:</label>
 <select class="search-input" id="edit-stock-platform">
 <option value="">Select Platform</option>
-<option value="Fidelity">Fidelity</option>
-<option value="Vanguard">Vanguard</option>
+<option value="Fidelity Regular Brokerage">Fidelity Regular Brokerage</option>
+<option value="Fidelity Roth IRA">Fidelity Roth IRA</option>
+<option value="Fidelity 401k">Fidelity 401k</option>
+<option value="Fidelity 529">Fidelity 529</option>
 <option value="Charles Schwab">Charles Schwab</option>
+<option value="Vanguard">Vanguard</option>
+<option value="Merrill Edge">Merrill Edge</option>
 <option value="Robinhood">Robinhood</option>
 <option value="E*TRADE">E*TRADE</option>
-<option value="TD Ameritrade">TD Ameritrade</option>
-<option value="Merrill Edge">Merrill Edge</option>
-<option value="Webull">Webull</option>
 <option value="Interactive Brokers">Interactive Brokers</option>
 <option value="add_new">++ Add Custom Platform...</option>
 </select>
@@ -6338,7 +6339,7 @@ renderPortfolioSummary() {
                 }
                 
                 const allItems = [...this.stocks, ...this.mutualFunds];
-                const predefinedPlatforms = ['Fidelity', 'Robinhood', 'Vanguard', 'Charles Schwab', 'E*TRADE', 'Merrill Edge', 'TD Ameritrade', 'Webull', 'Interactive Brokers', 'Uncategorized'];
+                const predefinedPlatforms = ['Fidelity Regular Brokerage', 'Fidelity Roth IRA', 'Fidelity 401k', 'Fidelity 529', 'Charles Schwab', 'Vanguard', 'Merrill Edge', 'Robinhood', 'E*TRADE', 'Interactive Brokers', 'Uncategorized'];
                 const platformSelect = this.elements.modalPlatform;
                 if(platformSelect) {
                     platformSelect.innerHTML = `<option value="">Select...</option>`;
