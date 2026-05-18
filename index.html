@@ -9110,7 +9110,10 @@ getOldestTransactionDate(item) {
                 const coreChanged = Math.abs(shares - currentTotalShares) > 0.0001 || 
                     Math.abs(cost - currentAvgCost) > 0.0001 || 
                     (firstTxnDate && date !== firstTxnDate);
-                if (hasCoreInputs && date && !isNaN(shares) && shares >= 0 && !isNaN(cost) && cost >= 0 && coreChanged) {
+                // Never replace transactions if stock has multiple platforms
+                const uniquePlatforms = new Set((item.transactions || []).map(t => t.platform));
+                const hasMultiplePlatforms = uniquePlatforms.size > 1;
+                if (hasCoreInputs && date && !isNaN(shares) && shares >= 0 && !isNaN(cost) && cost >= 0 && coreChanged && !hasMultiplePlatforms) {
                     const isoDate = `${date}T00:00:00.000Z`;
                     const platformForTxn = (newPlatform && newPlatform !== 'Multiple Platforms')
                         ? newPlatform
