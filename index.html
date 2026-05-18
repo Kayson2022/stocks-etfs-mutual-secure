@@ -9099,13 +9099,16 @@ getOldestTransactionDate(item) {
 
                 const hasCoreInputs = !!(this.elements.editStockShares && this.elements.editStockCost && this.elements.editStockDate);
                 // Get original values to detect if shares/cost actually changed
-                const origShares = item.transactions && item.transactions.length === 1 ? item.transactions[0].shares : null;
-                const origCost   = item.transactions && item.transactions.length === 1 ? item.transactions[0].price : null;
-                const origDate   = item.transactions && item.transactions.length === 1 ? item.transactions[0].date?.substring(0,10) : null;
-                const coreChanged = origShares === null || 
-                    Math.abs(shares - origShares) > 0.0001 || 
-                    Math.abs(cost - origCost) > 0.0001 || 
-                    date !== origDate;
+                // Calculate current total shares and weighted avg cost from all transactions
+                const allBuys = (item.transactions || []).filter(t => t.type === 'buy');
+                const allSells = (item.transactions || []).filter(t => t.type === 'sell');
+                const currentTotalShares = allBuys.reduce((s,t) => s + t.shares, 0) - allSells.reduce((s,t) => s + t.shares, 0);
+                const currentTotalCost = allBuys.reduce((s,t) => s + t.shares * t.price, 0);
+                const currentAvgCost = currentTotalShares > 0 ? currentTotalCost / currentTotalShares : 0;
+                const firstTxnDate = allBuys.length > 0 ? allBuys[0].date?.substring(0,10) : null;
+                const coreChanged = Math.abs(shares - currentTotalShares) > 0.0001 || 
+                    Math.abs(cost - currentAvgCost) > 0.0001 || 
+                    (firstTxnDate && date !== firstTxnDate);
                 if (hasCoreInputs && date && !isNaN(shares) && shares >= 0 && !isNaN(cost) && cost >= 0 && coreChanged) {
                     const isoDate = `${date}T00:00:00.000Z`;
                     const platformForTxn = (newPlatform && newPlatform !== 'Multiple Platforms')
