@@ -632,6 +632,11 @@
                     existingData = { transactions: txns };
                     _firestoreLoaded = true;
                     console.log('Loaded', txns.length, 'existing transactions from Firestore');
+                    // Debug: show sample of existing transactions
+                    if (txns.length > 0) {
+                        console.log('Sample existing txn:', JSON.stringify(txns[0]));
+                        console.log('Sample existing txn 2:', JSON.stringify(txns[1]));
+                    }
                     showFirestoreStatus('✅ Connected — ' + txns.length + ' existing transactions loaded for duplicate checking', 'green');
                 }
             } catch(e) {
@@ -1286,6 +1291,13 @@
                 if (ttype === 'buy') sharesMap[sym] += (t.shares || 0);
                 else if (ttype === 'sell') sharesMap[sym] -= (t.shares || 0);
             });
+
+            // Debug: show sample comparison
+            if (newTransactions.length > 0 && existing.length > 0) {
+                console.log('Sample NEW txn:', JSON.stringify({symbol: newTransactions[0].symbol, date: newTransactions[0].date, type: newTransactions[0].type, shares: newTransactions[0].shares, price: newTransactions[0].price}));
+                const match = existing.find(t => t.symbol === newTransactions[0].symbol);
+                if (match) console.log('Matching EXISTING txn for same symbol:', JSON.stringify({symbol: match.symbol, date: match.date, type: match.type, shares: match.shares, price: match.price}));
+            }
 
             for (const transaction of newTransactions) {
                 // Strict duplicate: same symbol + date + type + shares (exact date match required)
