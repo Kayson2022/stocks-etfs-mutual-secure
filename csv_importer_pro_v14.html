@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -586,6 +587,7 @@
                     <button class="secondary" onclick="goToSection(4)">← Back</button>
                     <button class="secondary" id="resetBtn" onclick="resetAll()">🔄 Start Over</button>
                     <button id="downloadBtn" style="display: none;" onclick="downloadJSON()">💾 Download JSON</button>
+                    <button id="importFirestoreBtn" style="display:none;background:#22c55e;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px;" onclick="importToFirestore()">🚀 Import to Secure App</button>
 
                 </div>
 
@@ -1501,6 +1503,10 @@
                     const clean = { ...t };
                     delete clean.status;
                     delete clean.sourceFile;
+                    delete clean.source;
+                    delete clean.warnings;
+                    delete clean._txKey;
+                    delete clean.rejectReason;
                     return clean;
                 });
 
@@ -1593,6 +1599,59 @@
         window.smartMerge = smartMerge;
         window.displayPreview = displayPreview;
         window.downloadJSON = downloadJSON;
+
+        async function importToFirestore() {
+            if (!_firestoreLoaded) { alert('Please sign in first.'); return; }
+            const checkedKeys = new Set(
+                Array.from(document.querySelectorAll('.txn-select:checked')).map(cb => cb.dataset.txnKey)
+            );
+            const toImport = allTransactions.filter(t => t.status === 'new' && checkedKeys.has(t._txKey)).map(t => {
+                const clean = { ...t };
+                delete clean.status; delete clean.sourceFile; delete clean.source;
+                delete clean.warnings; delete clean._txKey; delete clean.rejectReason;
+                return clean;
+            });
+            if (toImport.length === 0) { alert('No transactions selected.'); return; }
+            if (!confirm(`Import ${toImport.length} transactions to Secure App?\n\nMake sure you have a backup first!`)) return;
+
+            try {
+                const { doc, getDoc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js');
+                const snap = await getDoc(doc(_db, 'users', UID));
+                if (!snap.exists()) { alert('Could not load Secure App data.'); return; }
+                const data = snap.data();
+                const stocks = data.stocks || [];
+
+                // Group by symbol
+                const bySymbol = {};
+                toImport.forEach(t => {
+                    if (!bySymbol[t.symbol]) bySymbol[t.symbol] = [];
+                    bySymbol[t.symbol].push(t);
+                });
+
+                let imported = 0;
+                let skipped = [];
+                Object.entries(bySymbol).forEach(([symbol, txns]) => {
+                    const stock = stocks.find(s => s.symbol === symbol);
+                    if (!stock) { skipped.push(symbol); return; } // NEVER create new stocks
+                    txns.forEach(t => stock.transactions.push(t));
+                    stock.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+                    imported += txns.length;
+                });
+
+                await setDoc(doc(_db, 'users', UID), { ...data, stocks }, { merge: false });
+
+                let msg = `✅ Imported ${imported} transactions successfully!`;
+                if (skipped.length > 0) msg += `\n\nSkipped symbols (not in Secure App): ${skipped.join(', ')}`;
+                alert(msg);
+
+                document.getElementById('successAlert').style.display = 'block';
+                document.getElementById('successAlert').innerHTML = `✅ <strong>Done!</strong> ${imported} transactions imported. Refresh Secure App to see changes.`;
+                setTimeout(() => document.getElementById('successAlert').style.display = 'none', 8000);
+            } catch(e) {
+                alert('Import failed: ' + e.message);
+            }
+        }
+        window.importToFirestore = importToFirestore;
 
         window.toggleAllNew = function(checked) {
             document.querySelectorAll('.txn-select').forEach(cb => cb.checked = checked);
