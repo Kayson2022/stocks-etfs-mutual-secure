@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1281,15 +1282,19 @@
             existing.forEach(t => {
                 const sym = t.symbol;
                 if (!sharesMap[sym]) sharesMap[sym] = 0;
-                if (t.type === 'buy') sharesMap[sym] += (t.shares || 0);
-                else if (t.type === 'sell') sharesMap[sym] -= (t.shares || 0);
+                const ttype = (t.type || '').toLowerCase();
+                if (ttype === 'buy') sharesMap[sym] += (t.shares || 0);
+                else if (ttype === 'sell') sharesMap[sym] -= (t.shares || 0);
             });
 
             for (const transaction of newTransactions) {
                 // Strict duplicate: same symbol + date + type + shares (exact date match required)
                 const isDuplicate = existing.some(t => {
                     const sameSymbol = t.symbol === transaction.symbol;
-                    const sameType   = (t.transactionType || t.type) === (transaction.transactionType || transaction.type);
+                    // Normalize type to lowercase for comparison (buy/sell)
+                    const existType = (t.type || t.transactionType || '').toLowerCase();
+                    const newType   = (transaction.type || transaction.transactionType || '').toLowerCase();
+                    const sameType  = existType === newType;
                     const sameShares = Math.abs((t.shares || 0) - (transaction.shares || 0)) < 0.0001;
                     const samePrice  = Math.abs((t.price || 0) - (transaction.price || 0)) < 0.01;
                     // Normalize dates to YYYY-MM-DD for comparison
