@@ -1657,65 +1657,7 @@
             document.querySelectorAll('.txn-select').forEach(cb => cb.checked = checked);
         };
 
-        async function importToFirestore() {
-            if (!_firestoreLoaded) {
-                alert('Please sign in first to import directly to Firestore.');
-                return;
-            }
-            // Only import checked transactions
-            const checkedKeys = new Set(
-                Array.from(document.querySelectorAll('.txn-select:checked')).map(cb => cb.dataset.txnKey)
-            );
-            const newTxns = allTransactions.filter(t => t.status === 'new' && checkedKeys.has(t._txKey)).map(t => {
-                const clean = { ...t };
-                delete clean.status; delete clean.sourceFile; delete clean.warnings;
-                return clean;
-            });
-            if (newTxns.length === 0) { alert('No new transactions to import.'); return; }
-            if (!confirm(`Import ${newTxns.length} new transactions to your Secure App? This cannot be undone (make sure you have a backup).`)) return;
-
-            try {
-                const { getFirestore, doc, getDoc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js');
-                const snap = await getDoc(doc(_db, 'users', UID));
-                const data = snap.exists() ? snap.data() : { stocks: [] };
-                const stocks = data.stocks || [];
-
-                // Group by symbol
-                const bySymbol = {};
-                newTxns.forEach(t => {
-                    if (!bySymbol[t.symbol]) bySymbol[t.symbol] = [];
-                    bySymbol[t.symbol].push(t);
-                });
-
-                let skippedSymbols = [];
-                Object.entries(bySymbol).forEach(([symbol, txns]) => {
-                    let stock = stocks.find(s => s.symbol === symbol);
-                    if (!stock) {
-                        // Only add to EXISTING stocks — never create new ones from CSV
-                        skippedSymbols.push(symbol);
-                        return;
-                    }
-                    txns.forEach(t => {
-                        const clean = { ...t };
-                        delete clean.status; delete clean.reason; delete clean.source; delete clean.sourceFile;
-                        stock.transactions.push(clean);
-                    });
-                    stock.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-                });
-                if (skippedSymbols.length > 0) {
-                    console.log('Skipped (not in Secure App):', skippedSymbols.join(', '));
-                }
-
-                await setDoc(doc(_db, 'users', UID), { ...data, stocks }, { merge: false });
-                document.getElementById('successAlert').style.display = 'block';
-                document.getElementById('successAlert').innerHTML = '✅ <strong>Success!</strong> ' + newTxns.length + ' transactions imported directly to your Secure App. Refresh the Secure App to see changes.';
-                setTimeout(() => document.getElementById('successAlert').style.display = 'none', 8000);
-            } catch(e) {
-                alert('Import failed: ' + e.message);
-            }
-        }
-        window.importToFirestore = importToFirestore;
-        window.goToSection = goToSection;
+                window.goToSection = goToSection;
         window.resetAll = resetAll;
     </script>
 </body>
