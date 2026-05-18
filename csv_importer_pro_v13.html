@@ -1337,8 +1337,8 @@
                 // Check if symbol exists in Firestore
                 const symbolExists = existingStocksSet.has(transaction.symbol);
                 if (!symbolExists) {
-                    transaction.status = 'unknown';
-                    transaction.rejectReason = 'Symbol not in Secure App';
+                    transaction.status = 'new'; // Allow import but flag it
+                    transaction.rejectReason = 'Symbol not yet in Secure App';
                 } else if (isDuplicate) {
                     transaction.status = 'duplicate';
                     duplicateCount++;
@@ -1467,8 +1467,9 @@
 
                 const txId = `txn_${t.symbol}_${t.date}_${t.shares}`.replace(/[^a-zA-Z0-9_]/g,'_');
                 const checkbox = t.status === 'new' 
-                    ? `<input type="checkbox" class="txn-select" id="${txId}" data-txn-id="${t.id}" checked>`
+                    ? `<input type="checkbox" class="txn-select" data-txn-key="${txId}" checked>`
                     : `<input type="checkbox" disabled>`;
+                t._txKey = txId; // Store key on transaction for matching
                 row.innerHTML = `
                     <td>${checkbox}</td>
                     <td>${statusBadge}</td>
@@ -1493,11 +1494,11 @@
 
         function downloadJSON() {
             // Only export NEW transactions
-            const checkedIds2 = new Set(
-                Array.from(document.querySelectorAll('.txn-select:checked')).map(cb => cb.dataset.txnId)
+            const checkedKeys2 = new Set(
+                Array.from(document.querySelectorAll('.txn-select:checked')).map(cb => cb.dataset.txnKey)
             );
             const newTransactions = allTransactions
-                .filter(t => t.status === 'new' && checkedIds2.has(String(t.id)))
+                .filter(t => t.status === 'new' && checkedKeys2.has(t._txKey))
                 .map(t => {
                     const clean = { ...t };
                     delete clean.status;
@@ -1605,10 +1606,10 @@
                 return;
             }
             // Only import checked transactions
-            const checkedIds = new Set(
-                Array.from(document.querySelectorAll('.txn-select:checked')).map(cb => cb.dataset.txnId)
+            const checkedKeys = new Set(
+                Array.from(document.querySelectorAll('.txn-select:checked')).map(cb => cb.dataset.txnKey)
             );
-            const newTxns = allTransactions.filter(t => t.status === 'new' && checkedIds.has(String(t.id))).map(t => {
+            const newTxns = allTransactions.filter(t => t.status === 'new' && checkedKeys.has(t._txKey)).map(t => {
                 const clean = { ...t };
                 delete clean.status; delete clean.sourceFile; delete clean.warnings;
                 return clean;
