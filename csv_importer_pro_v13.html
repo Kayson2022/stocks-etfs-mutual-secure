@@ -1199,9 +1199,10 @@
                     const acct = row[acctIdx].trim().toUpperCase();
                     if (broker === 'fidelity') {
                         // For Fidelity, platform = account type (e.g. Fidelity Regular Brokerage)
-                        if (acct.includes('ROTH'))            { txPlatform = 'Fidelity Roth IRA';          txAccountType = 'Fidelity Roth IRA'; }
-                        else if (acct.includes('401'))        { txPlatform = 'Fidelity 401k';              txAccountType = 'Fidelity 401k'; }
-                        else if (acct.includes('529'))        { txPlatform = 'Fidelity 529';               txAccountType = 'Fidelity 529'; }
+                        if (acct.includes('401') || acct.includes('529')) {
+                            txPlatform = 'SKIP_ACCOUNT'; // Skip 401k and 529 accounts
+                            txAccountType = 'SKIP_ACCOUNT';
+                        } else if (acct.includes('ROTH'))            { txPlatform = 'Fidelity Roth IRA';          txAccountType = 'Fidelity Roth IRA'; }
                         else if (acct.includes('INDIVIDUAL')) { txPlatform = 'Fidelity Regular Brokerage'; txAccountType = 'Fidelity Regular Brokerage'; }
                         else                                  { txPlatform = 'Fidelity Regular Brokerage'; txAccountType = 'Fidelity Regular Brokerage'; }
                     } else if (broker === 'schwab') {
@@ -1221,6 +1222,9 @@
                     else if (broker === 'vanguard') { txPlatform = 'Vanguard'; txAccountType = 'Regular Brokerage'; }
                     else if (broker === 'merrill')  { txPlatform = 'Merrill Edge'; txAccountType = 'Regular Brokerage'; }
                 }
+
+                // Skip 401k and 529 accounts
+                if (txPlatform === 'SKIP_ACCOUNT') continue;
 
                 transactions.push({
                     id: Date.now() + Math.random(),
