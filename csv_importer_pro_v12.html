@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -483,6 +484,7 @@ async function parseFile(file) {
         if (quantity === 0) continue;
 
         const txType = mapAction(action);
+        if (i <= 5) console.log(`Row ${i}: symbol=${symbol} action=${action} txType=${txType} qty=${quantity} date=${date}`);
         if (!txType) continue; // Skip dividends, reinvestments, etc.
 
         // Platform and account type
