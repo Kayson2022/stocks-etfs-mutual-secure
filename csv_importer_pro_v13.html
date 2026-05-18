@@ -1308,6 +1308,9 @@
                 if (match) console.log('Matching EXISTING txn for same symbol:', JSON.stringify({symbol: match.symbol, date: match.date, type: match.type, shares: match.shares, price: match.price}));
             }
 
+            // Build set of known symbols from existing Firestore stocks
+            const existingStocksSet = new Set(existing.map(t => t.symbol));
+
             for (const transaction of newTransactions) {
                 // Strict duplicate: same symbol + date + type + shares (exact date match required)
                 const isDuplicate = existing.some(t => {
@@ -1325,7 +1328,12 @@
                     return sameSymbol && sameDate && sameType && sameShares && samePrice;
                 });
 
-                if (isDuplicate) {
+                // Check if symbol exists in Firestore
+                const symbolExists = existingStocksSet.has(transaction.symbol);
+                if (!symbolExists) {
+                    transaction.status = 'unknown';
+                    transaction.rejectReason = 'Symbol not in Secure App';
+                } else if (isDuplicate) {
                     transaction.status = 'duplicate';
                     duplicateCount++;
                 } else if (transaction.type === 'sell') {
@@ -1598,11 +1606,13 @@
                     bySymbol[t.symbol].push(t);
                 });
 
+                let skippedSymbols = [];
                 Object.entries(bySymbol).forEach(([symbol, txns]) => {
                     let stock = stocks.find(s => s.symbol === symbol);
                     if (!stock) {
-                        stock = { id: 'stock_' + Date.now() + '_' + symbol, symbol, name: symbol, price: 0, change: 0, changePercent: 0, transactions: [], dividends: [], industry: 'Unknown' };
-                        stocks.push(stock);
+                        // Only add to EXISTING stocks — never create new ones from CSV
+                        skippedSymbols.push(symbol);
+                        return;
                     }
                     txns.forEach(t => {
                         const clean = { ...t };
@@ -1611,6 +1621,9 @@
                     });
                     stock.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
                 });
+                if (skippedSymbols.length > 0) {
+                    console.log('Skipped (not in Secure App):', skippedSymbols.join(', '));
+                }
 
                 await setDoc(doc(_db, 'users', UID), { ...data, stocks }, { merge: false });
                 document.getElementById('successAlert').style.display = 'block';
