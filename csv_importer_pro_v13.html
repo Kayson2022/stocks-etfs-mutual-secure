@@ -585,6 +585,7 @@
                     <button class="secondary" onclick="goToSection(4)">← Back</button>
                     <button class="secondary" id="resetBtn" onclick="resetAll()">🔄 Start Over</button>
                     <button id="downloadBtn" style="display: none;" onclick="downloadJSON()">💾 Download JSON</button>
+                    <button id="importFirestoreBtn" style="display: none;background:#22c55e;color:white;border:none;padding:10px 20px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px;" onclick="importToFirestore()">🚀 Import to Secure App</button>
                 </div>
 
                 <div class="alert alert-success" id="successAlert">
@@ -1192,27 +1193,33 @@
                 }
 
                 // Map account column to platform + accountType
-                let txPlatform = broker === 'fidelity' ? 'Fidelity' :
-                              broker === 'schwab' ? 'Charles Schwab' :
-                              broker === 'vanguard' ? 'Vanguard' :
-                              broker === 'merrill' ? 'Merrill Edge' : 'Unknown';
+                let txPlatform = 'Unknown';
                 let txAccountType = 'Regular Brokerage';
                 if (acctIdx !== -1 && row[acctIdx]) {
                     const acct = row[acctIdx].trim().toUpperCase();
                     if (broker === 'fidelity') {
-                        txPlatform = 'Fidelity';
-                        if (acct.includes('ROTH'))            txAccountType = 'Fidelity Roth IRA';
-                        else if (acct.includes('401'))        txAccountType = 'Fidelity 401k';
-                        else if (acct.includes('529'))        txAccountType = 'Fidelity 529';
-                        else if (acct.includes('INDIVIDUAL')) txAccountType = 'Fidelity Regular Brokerage';
-                        else                                  txAccountType = 'Fidelity Regular Brokerage';
+                        // For Fidelity, platform = account type (e.g. Fidelity Regular Brokerage)
+                        if (acct.includes('ROTH'))            { txPlatform = 'Fidelity Roth IRA';          txAccountType = 'Fidelity Roth IRA'; }
+                        else if (acct.includes('401'))        { txPlatform = 'Fidelity 401k';              txAccountType = 'Fidelity 401k'; }
+                        else if (acct.includes('529'))        { txPlatform = 'Fidelity 529';               txAccountType = 'Fidelity 529'; }
+                        else if (acct.includes('INDIVIDUAL')) { txPlatform = 'Fidelity Regular Brokerage'; txAccountType = 'Fidelity Regular Brokerage'; }
+                        else                                  { txPlatform = 'Fidelity Regular Brokerage'; txAccountType = 'Fidelity Regular Brokerage'; }
                     } else if (broker === 'schwab') {
                         txPlatform = 'Charles Schwab';
-                        txAccountType = 'Regular Brokerage';
+                        txAccountType = acct.includes('ROTH') ? 'Roth IRA' : 'Regular Brokerage';
                     } else if (broker === 'vanguard') {
                         txPlatform = 'Vanguard';
                         txAccountType = acct.includes('ROTH') ? 'Roth IRA' : 'Regular Brokerage';
+                    } else if (broker === 'merrill') {
+                        txPlatform = 'Merrill Edge';
+                        txAccountType = 'Regular Brokerage';
                     }
+                } else {
+                    // No account column — use broker name directly
+                    if (broker === 'fidelity')      { txPlatform = 'Fidelity Regular Brokerage'; txAccountType = 'Fidelity Regular Brokerage'; }
+                    else if (broker === 'schwab')   { txPlatform = 'Charles Schwab'; txAccountType = 'Regular Brokerage'; }
+                    else if (broker === 'vanguard') { txPlatform = 'Vanguard'; txAccountType = 'Regular Brokerage'; }
+                    else if (broker === 'merrill')  { txPlatform = 'Merrill Edge'; txAccountType = 'Regular Brokerage'; }
                 }
 
                 transactions.push({
@@ -1459,6 +1466,9 @@
 
             document.getElementById('previewSection').style.display = 'block';
             document.getElementById('downloadBtn').style.display = 'inline-block';
+            if (document.getElementById('importFirestoreBtn')) {
+                document.getElementById('importFirestoreBtn').style.display = _firestoreLoaded ? 'inline-block' : 'none';
+            }
         }
 
         function downloadJSON() {
@@ -1561,6 +1571,56 @@
         window.smartMerge = smartMerge;
         window.displayPreview = displayPreview;
         window.downloadJSON = downloadJSON;
+
+        async function importToFirestore() {
+            if (!_firestoreLoaded) {
+                alert('Please sign in first to import directly to Firestore.');
+                return;
+            }
+            const newTxns = allTransactions.filter(t => t.status === 'new').map(t => {
+                const clean = { ...t };
+                delete clean.status; delete clean.sourceFile; delete clean.warnings;
+                return clean;
+            });
+            if (newTxns.length === 0) { alert('No new transactions to import.'); return; }
+            if (!confirm(`Import ${newTxns.length} new transactions to your Secure App? This cannot be undone (make sure you have a backup).`)) return;
+
+            try {
+                const { getFirestore, doc, getDoc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js');
+                const snap = await getDoc(doc(_db, 'users', UID));
+                const data = snap.exists() ? snap.data() : { stocks: [] };
+                const stocks = data.stocks || [];
+
+                // Group by symbol
+                const bySymbol = {};
+                newTxns.forEach(t => {
+                    if (!bySymbol[t.symbol]) bySymbol[t.symbol] = [];
+                    bySymbol[t.symbol].push(t);
+                });
+
+                Object.entries(bySymbol).forEach(([symbol, txns]) => {
+                    let stock = stocks.find(s => s.symbol === symbol);
+                    if (!stock) {
+                        stock = { id: 'stock_' + Date.now() + '_' + symbol, symbol, name: symbol, price: 0, change: 0, changePercent: 0, transactions: [], dividends: [], industry: 'Unknown' };
+                        stocks.push(stock);
+                    }
+                    txns.forEach(t => {
+                        const clean = { ...t };
+                        delete clean.status; delete clean.reason; delete clean.source; delete clean.sourceFile;
+                        stock.transactions.push(clean);
+                    });
+                    stock.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+                });
+
+                await setDoc(doc(_db, 'users', UID), { ...data, stocks }, { merge: false });
+                document.getElementById('successAlert').style.display = 'block';
+                document.getElementById('successAlert').innerHTML = '✅ <strong>Success!</strong> ' + newTxns.length + ' transactions imported directly to your Secure App. Refresh the Secure App to see changes.';
+                setTimeout(() => document.getElementById('successAlert').style.display = 'none', 8000);
+            } catch(e) {
+                alert('Import failed: ' + e.message);
+            }
+        }
+        window.importToFirestore = importToFirestore;
         window.goToSection = goToSection;
         window.resetAll = resetAll;
     </script>
