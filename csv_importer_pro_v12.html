@@ -570,10 +570,14 @@ window.processAndPreview = async function() {
   try {
     // Parse all files
     const all = [];
+    console.log('Files to parse:', uploadedFiles.length, uploadedFiles.map(f => f.name));
     for (const file of uploadedFiles) {
+      console.log('Parsing file:', file.name, 'size:', file.size);
       const txns = await parseFile(file);
+      console.log('Parsed', txns.length, 'transactions from', file.name);
       all.push(...txns);
     }
+    console.log('Total parsed:', all.length);
 
     // Validate
     parsedTransactions = checkTransactions(all);
