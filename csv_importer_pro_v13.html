@@ -566,6 +566,7 @@
                         <table>
                             <thead>
                                 <tr>
+                                    <th><input type="checkbox" id="selectAll" checked onchange="toggleAllNew(this.checked)" title="Select/deselect all new"></th>
                                     <th>Status</th>
                                     <th>Date</th>
                                     <th>Type</th>
@@ -573,6 +574,7 @@
                                     <th>Shares</th>
                                     <th>Price</th>
                                     <th>Total</th>
+                                    <th>Platform</th>
                                     <th>Source</th>
                                 </tr>
                             </thead>
@@ -1463,7 +1465,12 @@
                 const displayPrice  = t.transactionType === 'CONTRIBUTION' ? '-' : (t.price === 0 ? '<span style="color:#d97706;font-weight:700;">$0.00 ⚠️</span>' : `$${t.price.toFixed(2)}`);
                 const displayTotal  = t.transactionType === 'CONTRIBUTION' ? `$${t.amount.toFixed(2)}` : `$${(t.shares * t.price).toFixed(2)}`;
 
+                const txId = `txn_${t.symbol}_${t.date}_${t.shares}`.replace(/[^a-zA-Z0-9_]/g,'_');
+                const checkbox = t.status === 'new' 
+                    ? `<input type="checkbox" class="txn-select" id="${txId}" data-txn-id="${t.id}" checked>`
+                    : `<input type="checkbox" disabled>`;
                 row.innerHTML = `
+                    <td>${checkbox}</td>
                     <td>${statusBadge}</td>
                     <td>${t.date}</td>
                     <td><strong>${t.transactionType}</strong></td>
@@ -1471,6 +1478,7 @@
                     <td>${displayShares}</td>
                     <td>${displayPrice}</td>
                     <td>${displayTotal}</td>
+                    <td style="font-size:11px;color:#666;">${t.platform || ''}</td>
                     <td style="font-size:12px;color:#666;">${t.sourceFile}</td>
                 `;
                 tbody.appendChild(row);
@@ -1485,8 +1493,11 @@
 
         function downloadJSON() {
             // Only export NEW transactions
+            const checkedIds2 = new Set(
+                Array.from(document.querySelectorAll('.txn-select:checked')).map(cb => cb.dataset.txnId)
+            );
             const newTransactions = allTransactions
-                .filter(t => t.status === 'new')
+                .filter(t => t.status === 'new' && checkedIds2.has(String(t.id)))
                 .map(t => {
                     const clean = { ...t };
                     delete clean.status;
@@ -1584,12 +1595,20 @@
         window.displayPreview = displayPreview;
         window.downloadJSON = downloadJSON;
 
+        window.toggleAllNew = function(checked) {
+            document.querySelectorAll('.txn-select').forEach(cb => cb.checked = checked);
+        };
+
         async function importToFirestore() {
             if (!_firestoreLoaded) {
                 alert('Please sign in first to import directly to Firestore.');
                 return;
             }
-            const newTxns = allTransactions.filter(t => t.status === 'new').map(t => {
+            // Only import checked transactions
+            const checkedIds = new Set(
+                Array.from(document.querySelectorAll('.txn-select:checked')).map(cb => cb.dataset.txnId)
+            );
+            const newTxns = allTransactions.filter(t => t.status === 'new' && checkedIds.has(String(t.id))).map(t => {
                 const clean = { ...t };
                 delete clean.status; delete clean.sourceFile; delete clean.warnings;
                 return clean;
