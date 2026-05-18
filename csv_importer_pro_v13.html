@@ -608,7 +608,7 @@
     });
     const _db   = getFirestore(_fbApp);
     const _auth = getAuth(_fbApp);
-    const UID   = 'XGQxzQI781bzEc2aGnGj3361s5c2';
+    let UID = 'XGQxzQI781bzEc2aGnGj3361s5c2'; // fallback, overridden on sign-in
         // State
         let selectedApp = null;
         let uploadedFiles = [];
@@ -655,6 +655,8 @@
             const btn = document.getElementById('signInBtn');
             const status = document.getElementById('authStatusMsg');
             if (user) {
+                UID = user.uid; // Use actual signed-in user's UID
+                console.log('Using UID:', UID);
                 if (btn) btn.style.display = 'none';
                 if (status) { status.textContent = '✅ Signed in as ' + (user.displayName || user.email); status.style.color = 'var(--success)'; }
                 await loadFirestoreData();
