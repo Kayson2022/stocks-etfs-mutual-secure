@@ -12,6 +12,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -9097,7 +9098,15 @@ getOldestTransactionDate(item) {
                 const date = this.elements.editStockDate ? this.elements.editStockDate.value : '';
 
                 const hasCoreInputs = !!(this.elements.editStockShares && this.elements.editStockCost && this.elements.editStockDate);
-                if (hasCoreInputs && date && !isNaN(shares) && shares >= 0 && !isNaN(cost) && cost >= 0) {
+                // Get original values to detect if shares/cost actually changed
+                const origShares = item.transactions && item.transactions.length === 1 ? item.transactions[0].shares : null;
+                const origCost   = item.transactions && item.transactions.length === 1 ? item.transactions[0].price : null;
+                const origDate   = item.transactions && item.transactions.length === 1 ? item.transactions[0].date?.substring(0,10) : null;
+                const coreChanged = origShares === null || 
+                    Math.abs(shares - origShares) > 0.0001 || 
+                    Math.abs(cost - origCost) > 0.0001 || 
+                    date !== origDate;
+                if (hasCoreInputs && date && !isNaN(shares) && shares >= 0 && !isNaN(cost) && cost >= 0 && coreChanged) {
                     const isoDate = `${date}T00:00:00.000Z`;
                     const platformForTxn = (newPlatform && newPlatform !== 'Multiple Platforms')
                         ? newPlatform
@@ -9121,7 +9130,8 @@ getOldestTransactionDate(item) {
                             shares: shares,
                             price: cost,
                             date: isoDate,
-                            platform: platformForTxn
+                            platform: platformForTxn,
+                            accountType: newAccountType || ''
                         }];
                     }
                 }
