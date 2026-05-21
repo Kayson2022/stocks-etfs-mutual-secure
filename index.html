@@ -2951,6 +2951,16 @@ body.dark-mode .modal-content {
 </div>
 
 <!-- ── Enhancement Toolbar — always visible, no JS timing dependency ── -->
+<div style="margin-bottom:4px;">
+  <button id="toggleToolbarBtn" onclick="(function(){
+    var grid = document.getElementById('stToolbarRow');
+    var btn = document.getElementById('toggleToolbarBtn');
+    var collapsed = grid.style.display === 'none';
+    grid.style.display = collapsed ? '' : 'none';
+    btn.textContent = collapsed ? '📊 Features & Tools ▲' : '📊 Features & Tools ▼';
+    try { localStorage.setItem('toolbarRowCollapsed', collapsed ? 'false' : 'true'); } catch(e){}
+  })()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);font-size:0.78rem;padding:6px 16px;border-radius:6px;cursor:pointer;width:100%;">📊 Features & Tools ▼</button>
+</div>
 <div id="stToolbarRow" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;padding:8px 16px 4px;">
   <button class="st-toolbar-btn" data-st-panel="snapshot">📊 Snapshot</button>
   <button class="st-toolbar-btn" data-st-panel="tax">🧾 Tax Summary</button>
@@ -21277,6 +21287,18 @@ window.confirmPaperReset = async function() {
   if(grid && btn) {
     grid.style.display = collapsed === 'true' ? 'none' : '';
     btn.textContent    = collapsed === 'true' ? '\uD83D\uDD27 Tools & Actions \u25BC' : '\uD83D\uDD27 Tools & Actions \u25B2';
+  }
+})();
+</script>
+<script>
+(function(){
+  var c='true';
+  try{c=localStorage.getItem('toolbarRowCollapsed')||'true';}catch(e){}
+  var g=document.getElementById('stToolbarRow');
+  var b=document.getElementById('toggleToolbarBtn');
+  if(g&&b){
+    g.style.display=c==='true'?'none':'';
+    b.textContent=c==='true'?'📊 Features & Tools ▼':'📊 Features & Tools ▲';
   }
 })();
 </script>
