@@ -20340,9 +20340,27 @@ function startAutoBackup() {
     var lastBackup = parseInt(localStorage.getItem(BACKUP_KEY) || '0');
     var elapsed    = Date.now() - lastBackup;
     if (elapsed > BACKUP_INTERVAL_MS) {
-        setTimeout(function() {
-            if (localStorage.getItem(DISABLED_KEY) !== 'true') doAutoBackup();
-        }, 15000); // 15s after app loads
+        // Wait for portfolio data to load before backing up
+        // Poll every 10s up to 5 minutes until stocks are loaded
+        var catchUpAttempts = 0;
+        var catchUpTimer = setInterval(function() {
+            catchUpAttempts++;
+            if (localStorage.getItem(DISABLED_KEY) === 'true') {
+                clearInterval(catchUpTimer);
+                return;
+            }
+            // Check if portfolio has data loaded
+            var tracker = window.stockTracker;
+            var hasData = tracker && tracker.stocks && Object.keys(tracker.stocks).length > 0;
+            if (hasData) {
+                clearInterval(catchUpTimer);
+                doAutoBackup();
+            } else if (catchUpAttempts >= 30) {
+                // Give up after 5 minutes
+                clearInterval(catchUpTimer);
+                console.log('[SecureBackup] Catch-up backup skipped — portfolio not loaded after 5 min');
+            }
+        }, 10000); // check every 10 seconds
     }
 
     _backupTimer = setInterval(function() {
