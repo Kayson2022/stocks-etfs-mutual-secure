@@ -2035,6 +2035,19 @@ body:not(.dark-mode) #portfolio-summary #total-contributions{
   background: rgba(15,23,42,0.06) !important;
   border: 1px solid rgba(15,23,42,0.12) !important;
 }
+
+/* Light mode fix for collapse/expand toggle buttons */
+body:not(.dark-mode) #toggleToolbarBtn,
+body:not(.dark-mode) #toggleUtilityBtn {
+  background: rgba(0,0,0,0.04) !important;
+  border: 1px solid rgba(0,0,0,0.15) !important;
+  color: #444 !important;
+}
+body:not(.dark-mode) #toggleToolbarBtn:hover,
+body:not(.dark-mode) #toggleUtilityBtn:hover {
+  background: rgba(0,0,0,0.08) !important;
+  color: #222 !important;
+}
 </style>
 <script>
   // Make Neon (dark) the default theme on first load (user can still toggle).
@@ -2959,7 +2972,7 @@ body.dark-mode .modal-content {
     grid.style.display = collapsed ? '' : 'none';
     btn.textContent = collapsed ? '📊 Features & Tools ▲' : '📊 Features & Tools ▼';
     try { localStorage.setItem('toolbarRowCollapsed', collapsed ? 'false' : 'true'); } catch(e){}
-  })()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);font-size:0.78rem;padding:6px 16px;border-radius:6px;cursor:pointer;width:100%;">📊 Features & Tools ▼</button>
+  })()" id="toggleToolbarBtnInner" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);font-size:0.78rem;padding:6px 16px;border-radius:6px;cursor:pointer;width:100%;">📊 Features & Tools ▼</button>
 </div>
 <div id="stToolbarRow" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;padding:8px 16px 4px;">
   <button class="st-toolbar-btn" data-st-panel="snapshot">📊 Snapshot</button>
@@ -3299,7 +3312,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     grid.style.display = collapsed ? '' : 'none';
     btn.textContent = collapsed ? '🔧 Tools & Actions ▲' : '🔧 Tools & Actions ▼';
     try { localStorage.setItem('utilityGridCollapsed', collapsed ? 'false' : 'true'); } catch(e){}
-  })()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);font-size:0.78rem;padding:6px 16px;border-radius:6px;cursor:pointer;width:100%;">🔧 Tools &amp; Actions ▼</button>
+  })()" id="toggleUtilityBtnInner" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);font-size:0.78rem;padding:6px 16px;border-radius:6px;cursor:pointer;width:100%;">🔧 Tools &amp; Actions ▼</button>
 </div>
 <div class="utility-buttons-grid" id="utilityButtonsGrid" style="display:none;">
 <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
