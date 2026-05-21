@@ -2048,6 +2048,50 @@ body:not(.dark-mode) #toggleUtilityBtn:hover {
   background: rgba(0,0,0,0.08) !important;
   color: #222 !important;
 }
+
+/* ── Light mode visibility fixes ── */
+
+/* Unrealized/Realized P/L badges */
+body:not(.dark-mode) #portfolio-summary .summary-badge {
+  background: rgba(0,0,0,0.06) !important;
+  border-color: rgba(0,0,0,0.15) !important;
+  color: #334155 !important;
+}
+
+/* Sleep-at-Night + Coast FIRE card backgrounds */
+body:not(.dark-mode) #san-coast-grid > div {
+  background: rgba(0,0,0,0.04) !important;
+  border-color: rgba(0,0,0,0.12) !important;
+}
+
+/* Section labels (SLEEP-AT-NIGHT INDEX, COAST FIRE PROGRESS) */
+body:not(.dark-mode) #san-coast-grid [style*="rgba(255,255,255,0.6)"] {
+  color: #475569 !important;
+}
+
+/* "How it works" buttons */
+body:not(.dark-mode) #san-coast-grid button {
+  background: rgba(0,0,0,0.05) !important;
+  border-color: rgba(0,0,0,0.2) !important;
+  color: #475569 !important;
+}
+
+/* san-detail text (Vol: 40.7%/yr · Div: 0.0%) */
+body:not(.dark-mode) #san-detail {
+  color: #64748b !important;
+}
+
+/* Coast FIRE formula text */
+body:not(.dark-mode) #coast-info,
+body:not(.dark-mode) #san-info {
+  background: rgba(0,0,0,0.04) !important;
+  color: #334155 !important;
+}
+
+/* Coast FIRE progress bar area text */
+body:not(.dark-mode) #san-coast-grid [style*="rgba(255,255,255,0.5)"] {
+  color: #64748b !important;
+}
 </style>
 <script>
   // Make Neon (dark) the default theme on first load (user can still toggle).
