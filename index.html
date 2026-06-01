@@ -7211,9 +7211,11 @@ renderPortfolioSummary() {
                     }
 
                     // 2. Updated HTML with sessionLabel
+                    const _hasSells = (item.transactions||[]).some(t => t.type === 'sell');
+                    const _sellBadge = _hasSells ? '<span style="font-size:0.62rem;font-weight:700;background:rgba(231,76,60,0.15);color:var(--color-negative);border:1px solid rgba(231,76,60,0.3);border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle;">Partial Sell</span>' : '';
                     card.innerHTML = `
                         <div class="stock-header">
-                            <span class="${type}-symbol stock-symbol">${item.symbol}</span>
+                            <span class="${type}-symbol stock-symbol">${item.symbol}${_sellBadge}</span>
                             <button class="remove-btn" onclick="event.stopPropagation();window.stockTracker.removeItem('${item.id}', '${type}')">×</button>
                         </div>
                         <div class="stock-price">${(() => {
