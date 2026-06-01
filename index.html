@@ -7087,50 +7087,42 @@ renderPortfolioSummary() {
                                 <div class="info-row"> <span class="info-label">Total P/L:</span> <span class="info-value ${positiveClass(totalPL)}">${this.formatCurrency(totalPL)}</span> </div>
                                 <div class="info-row"> <span class="info-label">Total P/L %:</span> <span class="info-value ${positiveClass(totalPLPercent)}">${this.formatNumber(totalPLPercent, 2)}%</span> </div>
                                 <div class="info-row"> <span class="info-label">Total Cost Basis:</span> <span class="info-value">${this.formatCurrency(stats.costOfRemainingShares)}</span> </div>
-                                ${stats.sharesSold > 0 ? (() => {
-                                  const ocbId = item.id;
-                                  const tColor = stats.trueTotal >= 0 ? 'var(--color-positive)' : 'var(--color-negative)';
-                                  return `
-                                  <div style="margin-top:8px;border-top:1px solid var(--border-color);padding-top:6px;">
-                                    <button onclick="event.stopPropagation();(function(){
-                                      var c=document.getElementById('ocb-content-${ocbId}');
-                                      var ic=document.getElementById('ocb-icon-${ocbId}');
-                                      var open=c.style.display!=='none';
-                                      c.style.display=open?'none':'block';
-                                      ic.textContent=open?'▶':'▼';
-                                    })()" style="background:none;border:none;cursor:pointer;width:100%;text-align:left;padding:2px 0;display:flex;justify-content:space-between;align-items:center;font-family:inherit;">
-                                      <span style="font-size:0.72rem;font-weight:700;color:var(--accent-primary);text-transform:uppercase;letter-spacing:0.5px;">📊 Original Cost Basis</span>
-                                      <span id="ocb-icon-${ocbId}" style="font-size:0.65rem;color:var(--text-secondary);">▶</span>
-                                    </button>
-                                    <div id="ocb-content-${ocbId}" style="display:none;margin-top:6px;">
-                                      <div class="info-row">
-                                        <span class="info-label" style="font-size:0.75rem;">Orig. Shares Bought:</span>
-                                        <span class="info-value" style="font-size:0.78rem;">${this.formatNumber(stats.originalTotalShares, 3)}</span>
-                                      </div>
-                                      <div class="info-row">
-                                        <span class="info-label" style="font-size:0.75rem;">Orig. Total Cost:</span>
-                                        <span class="info-value" style="font-size:0.78rem;">${this.formatCurrency(stats.originalTotalCost)}</span>
-                                      </div>
-                                      <div class="info-row">
-                                        <span class="info-label" style="font-size:0.75rem;">Orig. Avg. Cost:</span>
-                                        <span class="info-value" style="font-size:0.78rem;">${this.formatCurrency(stats.originalAvgCost)}</span>
-                                      </div>
-                                      <div class="info-row">
-                                        <span class="info-label" style="font-size:0.75rem;">Shares Sold:</span>
-                                        <span class="info-value" style="font-size:0.78rem;color:var(--color-negative);">${this.formatNumber(stats.sharesSold, 3)} (${stats.pctSold.toFixed(1)}%)</span>
-                                      </div>
-                                      <div class="info-row">
-                                        <span class="info-label" style="font-size:0.75rem;">Remaining:</span>
-                                        <span class="info-value" style="font-size:0.78rem;">${this.formatNumber(stats.totalSharesOwned, 3)} (${stats.pctRemaining.toFixed(1)}%)</span>
-                                      </div>
-                                      <div class="info-row" style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border-color);">
-                                        <span class="info-label" style="font-size:0.75rem;font-weight:700;">True Total P/L:</span>
-                                        <span class="info-value" style="font-size:0.78rem;font-weight:700;color:${tColor}">${this.formatCurrency(stats.trueTotal)} (${stats.trueTotalPct.toFixed(2)}%)</span>
-                                      </div>
-                                      <div style="font-size:0.65rem;color:var(--text-secondary);margin-top:4px;font-style:italic;">Realized + Unrealized on full original position</div>
-                                    </div>
-                                  </div>`;
-                                })() : ''}
+                                ${stats.sharesSold > 0 ? (function(){
+                                  var _id = item.id;
+                                  var _tc = stats.trueTotal >= 0 ? 'var(--color-positive)' : 'var(--color-negative)';
+                                  var _os = this.formatNumber(stats.originalTotalShares, 3);
+                                  var _oc = this.formatCurrency(stats.originalTotalCost);
+                                  var _oa = this.formatCurrency(stats.originalAvgCost);
+                                  var _ss = this.formatNumber(stats.sharesSold, 3);
+                                  var _sp = stats.pctSold.toFixed(1);
+                                  var _rs = this.formatNumber(stats.totalSharesOwned, 3);
+                                  var _rp = stats.pctRemaining.toFixed(1);
+                                  var _tt = this.formatCurrency(stats.trueTotal);
+                                  var _tp = stats.trueTotalPct.toFixed(2);
+                                  return '<div style="margin-top:8px;border-top:1px solid var(--border-color);padding-top:6px;">'
+                                    + '<button onclick="event.stopPropagation();(function(){'
+                                    + 'var c=document.getElementById(\'ocb-' + _id + '\');'
+                                    + 'var ic=document.getElementById(\'ocbi-' + _id + '\');'
+                                    + 'var o=c.style.display!==\'none\';'
+                                    + 'c.style.display=o?\'none\':\'block\';'
+                                    + 'ic.textContent=o?\'▶\':\'▼\';'
+                                    + '})()" style="background:none;border:none;cursor:pointer;width:100%;text-align:left;padding:2px 0;display:flex;justify-content:space-between;align-items:center;font-family:inherit;">'
+                                    + '<span style="font-size:0.72rem;font-weight:700;color:var(--accent-primary);text-transform:uppercase;letter-spacing:0.5px;">📊 Original Cost Basis</span>'
+                                    + '<span id="ocbi-' + _id + '" style="font-size:0.65rem;color:var(--text-secondary);">▶</span>'
+                                    + '</button>'
+                                    + '<div id="ocb-' + _id + '" style="display:none;margin-top:6px;">'
+                                    + '<div class="info-row"><span class="info-label" style="font-size:0.75rem;">Orig. Shares Bought:</span><span class="info-value" style="font-size:0.78rem;">' + _os + '</span></div>'
+                                    + '<div class="info-row"><span class="info-label" style="font-size:0.75rem;">Orig. Total Cost:</span><span class="info-value" style="font-size:0.78rem;">' + _oc + '</span></div>'
+                                    + '<div class="info-row"><span class="info-label" style="font-size:0.75rem;">Orig. Avg. Cost:</span><span class="info-value" style="font-size:0.78rem;">' + _oa + '</span></div>'
+                                    + '<div class="info-row"><span class="info-label" style="font-size:0.75rem;">Shares Sold:</span><span class="info-value" style="font-size:0.78rem;color:var(--color-negative);">' + _ss + ' (' + _sp + '%)</span></div>'
+                                    + '<div class="info-row"><span class="info-label" style="font-size:0.75rem;">Remaining:</span><span class="info-value" style="font-size:0.78rem;">' + _rs + ' (' + _rp + '%)</span></div>'
+                                    + '<div class="info-row" style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--border-color);">'
+                                    + '<span class="info-label" style="font-size:0.75rem;font-weight:700;">True Total P/L:</span>'
+                                    + '<span class="info-value" style="font-size:0.78rem;font-weight:700;color:' + _tc + '">' + _tt + ' (' + _tp + '%)</span>'
+                                    + '</div>'
+                                    + '<div style="font-size:0.65rem;color:var(--text-secondary);margin-top:4px;font-style:italic;">Realized + Unrealized on full original position</div>'
+                                    + '</div></div>';
+                                }).call(this) : ''}
                                 ${item.fiftyTwoWeekHigh && item.fiftyTwoWeekLow ? (() => {
                                     const lo  = item.fiftyTwoWeekLow;
                                     const hi  = item.fiftyTwoWeekHigh;
