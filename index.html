@@ -21486,7 +21486,7 @@ window.stToggleTaxCalc = function(id) {
   // Get item data from tracker
   var t = window.stockTracker;
   if (!t) return;
-  var allItems = [...(t.data.stocks||[]), ...(t.data.funds||[])];
+  var allItems = [...(t.stocks||[]), ...(t.mutualFunds||[]), ...(t.watchlist||[])];
   var item = allItems.find(function(x){ return x.id === id; });
   if (!item) return;
 
