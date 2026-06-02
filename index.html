@@ -8754,15 +8754,32 @@ getOldestTransactionDate(item) {
                     const icon = el.querySelector('.toggle-icon');
                     if (icon) icon.style.transform = 'rotate(0deg)';
                 });
-                // Collapse News, Price Targets, Fundamentals, Earnings, Dividend
-                ['news-content','pt-content','fund-content','earn-content','divnext-content'].forEach(prefix => {
+                // Collapse News, Price Targets, Fundamentals, Earnings, Dividend, Tax Calculator, OCB
+                ['news-content','pt-content','fund-content','earn-content','divnext-content','tax-content'].forEach(prefix => {
                     document.querySelectorAll(`[id^="${prefix}-"]`).forEach(el => {
                         el.style.display = 'none';
+                        el.dataset.loaded = '';
                         const id = el.id.replace(prefix + '-', '');
-                        const chevronMap = {'news-content':'news-chevron','pt-content':'pt-chevron','fund-content':'fund-chevron','earn-content':'earn-chevron','divnext-content':'divnext-chevron'};
+                        const chevronMap = {
+                            'news-content':'news-chevron','pt-content':'pt-chevron',
+                            'fund-content':'fund-chevron','earn-content':'earn-chevron',
+                            'divnext-content':'divnext-chevron','tax-content':'tax-chevron'
+                        };
                         const chevron = document.getElementById(chevronMap[prefix] + '-' + id);
                         if (chevron) chevron.style.transform = 'rotate(0deg)';
                     });
+                });
+                // Collapse Original Cost Basis sections
+                document.querySelectorAll('[id^="ocb-"]').forEach(el => {
+                    if (!el.id.startsWith('ocbi-')) el.style.display = 'none';
+                    else el.textContent = '▶';
+                });
+                // Collapse extra-wrap (More Info section)
+                document.querySelectorAll('[id^="extra-wrap-"]').forEach(el => {
+                    el.style.display = 'none';
+                    const id = el.id.replace('extra-wrap-', '');
+                    const chevron = document.getElementById('extra-chevron-' + id);
+                    if (chevron) chevron.textContent = '▼ More Info';
                 });
             }
 
@@ -8775,18 +8792,28 @@ getOldestTransactionDate(item) {
                     const icon = el.querySelector('.toggle-icon');
                     if (icon) icon.style.transform = 'rotate(90deg)';
                 });
-                // Expand News, Price Targets, Fundamentals, Earnings, Dividend
-                // (only expand sections that have already been loaded to avoid API flood)
-                ['earn-content','divnext-content'].forEach(prefix => {
+                // Expand sections already loaded (avoid API flood)
+                ['earn-content','divnext-content','tax-content'].forEach(prefix => {
                     document.querySelectorAll(`[id^="${prefix}-"]`).forEach(el => {
-                        if (el.innerHTML.trim()) { // only if already fetched
+                        if (el.innerHTML.trim()) {
                             el.style.display = 'block';
                             const id = el.id.replace(prefix + '-', '');
-                            const chevronMap = {'earn-content':'earn-chevron','divnext-content':'divnext-chevron'};
+                            const chevronMap = {
+                                'earn-content':'earn-chevron',
+                                'divnext-content':'divnext-chevron',
+                                'tax-content':'tax-chevron'
+                            };
                             const chevron = document.getElementById(chevronMap[prefix] + '-' + id);
                             if (chevron) chevron.style.transform = 'rotate(90deg)';
                         }
                     });
+                });
+                // Expand extra-wrap (More Info section)
+                document.querySelectorAll('[id^="extra-wrap-"]').forEach(el => {
+                    el.style.display = 'block';
+                    const id = el.id.replace('extra-wrap-', '');
+                    const chevron = document.getElementById('extra-chevron-' + id);
+                    if (chevron) chevron.textContent = '▲ Less Info';
                 });
             }
 
