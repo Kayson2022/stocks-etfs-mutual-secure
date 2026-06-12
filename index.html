@@ -17,6 +17,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -16458,7 +16459,7 @@ window.renderAskPortfolio = function() {
       <!-- Suggested questions -->
       <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-secondary);margin-bottom:6px;">💡 Suggested Questions</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
-        ${suggestions.map(q=>`<button onclick="document.getElementById('askPortfolioInput').value=${JSON.stringify(q)};window.submitPortfolioQuestion();"
+        ${suggestions.map(q=>`<button data-q="${q}" onclick="document.getElementById('askPortfolioInput').value=this.dataset.q;window.submitPortfolioQuestion();"
           style="padding:5px 10px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-secondary);font-size:0.7rem;cursor:pointer;text-align:left;line-height:1.4;">
           ${q}
         </button>`).join('')}
