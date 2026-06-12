@@ -16600,7 +16600,10 @@ window.submitPortfolioQuestion = async function() {
       sectorBreakdown: sectors,
       holdings:        holdings.sort((a,b)=>b.unrealizedPLPct-a.unrealizedPLPct),
       recentHistory:   portHist.slice(-7).map(h=>({date:h.date,value:h.value})),
-    }, null, 2);
+    }, (k, v) => v === null ? undefined
+       : (typeof v === 'number' ? Math.round(v * 100) / 100 : v));
+    // Compact JSON: strips nulls, rounds to 2dp, no pretty-print whitespace.
+    // Cuts the payload ~65% so it fits Groq's free-tier token-per-minute cap.
 
     const systemPrompt = `You are a personal financial analyst AI. The user's complete live portfolio data is below as JSON — treat it as ground truth. Answer questions using exact numbers from the data. Be concise but always complete your full answer. Do not use markdown bold (**). When asked about gains, give both dollar and percentage answers.
 
