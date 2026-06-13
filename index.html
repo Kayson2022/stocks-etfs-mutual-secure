@@ -23,6 +23,71 @@
 <html lang="en">
 <head>
 <script>
+/* ════ GLOBAL $ THOUSANDS SEPARATOR ════════════════════════════════
+   Adds commas to dollar amounts in rendered text without disturbing
+   percentages, CSS values, or decimals. Call window.addThousands(str)
+   on any HTML/text fragment before inserting it. Also auto-formats
+   $-numbers already present in the DOM on each render. */
+(function() {
+  // $1234567.89 -> $1,234,567.89 ; leaves $12.50 and 75.0% alone
+  // Live comma formatting for dedicated dollar input boxes (class "st-comma").
+  // Converts type=number->text so commas can display; strips them for math.
+  function _commaFormatInput(el) {
+    var raw = el.value.replace(/,/g, '');
+    if (raw === '' || isNaN(raw)) { el.dataset.raw = ''; return; }
+    // count digits before caret to restore position after formatting
+    var caret = el.selectionStart;
+    var digitsBefore = el.value.slice(0, caret).replace(/[^0-9]/g, '').length;
+    var hasDot = raw.indexOf('.') !== -1;
+    var parts = raw.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    el.value = parts.join('.');
+    el.dataset.raw = raw;
+    // restore caret to the same digit boundary
+    var seen = 0, pos = 0;
+    for (; pos < el.value.length; pos++) {
+      if (/[0-9]/.test(el.value[pos])) { seen++; if (seen >= digitsBefore) { pos++; break; } }
+    }
+    try { el.setSelectionRange(pos, pos); } catch(e) {}
+  }
+  document.addEventListener('input', function(e) {
+    var el = e.target;
+    if (el && el.classList && el.classList.contains('st-comma')) _commaFormatInput(el);
+  }, true);
+  // On focus-in, format any pre-filled value too
+  document.addEventListener('focusin', function(e) {
+    var el = e.target;
+    if (el && el.classList && el.classList.contains('st-comma') && el.value) _commaFormatInput(el);
+  }, true);
+  // Format all st-comma inputs that already have values, after each render
+  // Periodic sweep: format pre-filled comma inputs on any tab, but never the
+  // one you're actively typing in (document.activeElement is skipped).
+  setInterval(function() {
+    document.querySelectorAll('input.st-comma').forEach(function(el){
+      if (el !== document.activeElement && el.value && el.value.indexOf(',') === -1
+          && !isNaN(el.value.replace(/,/g,'')) && Number(el.value.replace(/,/g,'')) >= 1000) {
+        var raw = el.value.replace(/,/g, '');
+        var parts = raw.split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        el.value = parts.join('.');
+        el.dataset.raw = raw;
+      }
+    });
+  }, 600);
+
+  window.stFormatCommaInputs = function() {
+    document.querySelectorAll('input.st-comma').forEach(function(el){ if (el.value) _commaFormatInput(el); });
+  };
+
+  window.addThousands = function(str) {
+    if (str == null) return str;
+    return String(str).replace(/\$(\d{4,})(\.\d+)?/g, function(_, intPart, dec) {
+      var withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      return '$' + withCommas + (dec || '');
+    });
+  };
+})();
+
 /* ════ MOBILE BATTERY SAVER ════════════════════════════════════════
    Phones/tablets only — desktops and laptops are completely unaffected.
    While the tab is hidden on mobile, interval work (price refreshes,
@@ -5771,6 +5836,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 } catch (e) {}
 
                 this.renderDiversificationChart();
+                try { if (window.stFormatCommaInputs) setTimeout(window.stFormatCommaInputs, 30); } catch(e){}
                 // Bottom chart auto-refresh logic: only re-render if current selection is Today
                 if (this.activeBottomRange === 'BAR_TODAY' || this.currentRange === 'BAR_TODAY') {
                     this.renderPortfolioPerformanceChart('BAR_TODAY');
@@ -12927,7 +12993,7 @@ window.renderRecurring = function renderRecurring() {
       <div><label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:3px;">Symbol</label>
         <input id="rcSymbol" placeholder="e.g. VOO" style="width:90px;padding:6px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;text-transform:uppercase;"></div>
       <div><label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:3px;">Amount ($)</label>
-        <input id="rcAmount" type="number" min="0" step="50" placeholder="500" style="width:90px;padding:6px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;"></div>
+        <input id="rcAmount" type="text" inputmode="numeric" class="st-comma" min="0" step="50" placeholder="500" style="width:90px;padding:6px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;"></div>
       <div><label style="font-size:0.75rem;color:var(--text-secondary);display:block;margin-bottom:3px;">Frequency</label>
         <select id="rcFreq" style="padding:6px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;">
           <option value="weekly">Weekly</option>
@@ -12951,7 +13017,7 @@ window.renderRecurring = function renderRecurring() {
 
 window._stAddRecur = function() {
   const sym  = document.getElementById('rcSymbol')?.value.trim().toUpperCase();
-  const amt  = parseFloat(document.getElementById('rcAmount')?.value);
+  const amt  = parseFloat((document.getElementById('rcAmount')?.value||'').replace(/,/g,''));
   const freq = document.getElementById('rcFreq')?.value;
   const date = document.getElementById('rcDate')?.value;
   const plat = document.getElementById('rcPlatform')?.value.trim();
@@ -13201,9 +13267,9 @@ function _stBuildGoal(el) {
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:0.82rem;margin-bottom:${t?'10px':'0'};">
         <span style="color:var(--text-secondary);">Target ($)</span>
-        <input type="number" class="st-goal-input" min="0" step="1000"
+        <input type="text" inputmode="numeric" class="st-goal-input st-comma" min="0" step="1000"
           value="${t||''}" placeholder="e.g. 500000"
-          onchange="window.stSaveGoal('${key}','target',this.value);window.renderGoal();"
+          onchange="window.stSaveGoal('${key}','target',(this.dataset.raw||this.value).replace(/,/g,''));window.renderGoal();"
           style="width:130px;padding:5px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;">
         <span style="color:var(--text-secondary);">in</span>
         <input type="number" class="st-goal-input" min="1" max="50" step="1"
@@ -13269,8 +13335,8 @@ function _stBuildGoal(el) {
     <div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:10px;">Total portfolio value: <strong style="color:var(--text-primary);">${fc(totalVal)}</strong></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:0.82rem;margin-bottom:${gTarget?'10px':'0'};">
       <span style="color:var(--text-secondary);">Target ($)</span>
-      <input type="number" min="0" step="10000" value="${gTarget||''}" placeholder="e.g. 2000000"
-        onchange="window.stSaveGrand('target',this.value);window.renderGoal();"
+      <input type="text" inputmode="numeric" class="st-comma" min="0" step="10000" value="${gTarget||''}" placeholder="e.g. 2000000"
+        onchange="window.stSaveGrand('target',(this.dataset.raw||this.value).replace(/,/g,''));window.renderGoal();"
         style="width:140px;padding:5px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;">
       <span style="color:var(--text-secondary);">in</span>
       <input type="number" min="1" max="50" step="1" value="${gYears}" placeholder="20"
@@ -13455,8 +13521,8 @@ function _stBuildRebal(el) {
         <span style="width:10px;height:10px;border-radius:2px;background:${color};display:inline-block;flex-shrink:0;"></span>
         <span style="font-size:0.85rem;min-width:140px;">${plat}</span>
         <span style="font-size:0.82rem;color:var(--text-secondary);">$</span>
-        <input type="number" min="0" step="50" value="${saved||''}" placeholder="0"
-          onchange="window.stSaveRebalContrib('${plat}',this.value)"
+        <input type="text" inputmode="numeric" class="st-comma" min="0" step="50" value="${saved||''}" placeholder="0"
+          onchange="window.stSaveRebalContrib('${plat}',(this.dataset.raw||this.value).replace(/,/g,''))"
           style="width:100px;padding:5px 8px;border-radius:6px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-size:0.82rem;text-align:center;">
         <span style="font-size:0.8rem;color:var(--text-secondary);">/week</span>
         ${hint}
@@ -15436,7 +15502,7 @@ window.runVarAI = async function() {
 
     const holdingsSummary = topHoldings.map(h=>`${h.symbol} (${h.pct}%)`).join(', ');
 
-    const prompt = `You are a concise financial risk analyst. Analyze this portfolio's Value at Risk data and explain it in plain English in 3-4 short paragraphs. Be specific with the numbers. End with 1-2 actionable risk management tips.
+    const prompt = `You are a concise financial risk analyst. IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares. Analyze this portfolio's Value at Risk data and explain it in plain English in 3-4 short paragraphs. Be specific with the numbers. End with 1-2 actionable risk management tips.
 
 Portfolio Data:
 - Current Value: $${Math.round(currentVal).toLocaleString()}
@@ -15463,7 +15529,7 @@ Write in English. Be direct and educational. No bullet lists — flowing paragra
 
     const data = await response.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    let text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(''); text = (window.addThousands ? window.addThousands(text) : text);
 
     if (!text) throw new Error('No response from AI');
 
@@ -15728,7 +15794,7 @@ window.runWaterfallAI = async function() {
       return s+avg*ppy;
     },0) : 0;
 
-    const prompt = `You are a concise dividend income analyst. Analyze this portfolio's dividend income stream in 2-3 short paragraphs. Comment on income consistency, diversification of payers, and whether the income stream is growing. End with one specific suggestion.
+    const prompt = `You are a concise dividend income analyst. IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares. Analyze this portfolio's dividend income stream in 2-3 short paragraphs. Comment on income consistency, diversification of payers, and whether the income stream is growing. End with one specific suggestion.
 
 Dividend Portfolio Summary:
 - Total Projected Annual Income: $${Math.round(totalAnnual).toLocaleString()}
@@ -15745,7 +15811,7 @@ Write in English. Be specific and encouraging but honest. Always complete your s
     });
     const data = await response.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    let text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(''); text = (window.addThousands ? window.addThousands(text) : text);
     if (!text) throw new Error('No response');
 
     result.innerHTML=`<div style="padding:16px;background:linear-gradient(135deg,rgba(102,126,234,0.08),rgba(118,75,162,0.08));border:1px solid rgba(102,126,234,0.25);border-radius:10px;margin-bottom:8px;">
@@ -16486,7 +16552,7 @@ window.runAnomalyAI = async function() {
       `${s.sym}: moved ${s.todayReturn>=0?'+':''}${s.todayReturn.toFixed(2)}% today vs expected ${s.expectedMove>=0?'+':''}${s.expectedMove.toFixed(2)}% (${s.deviationZ.toFixed(1)}σ deviation, beta=${s.beta.toFixed(2)}, hist avg=${s.mean.toFixed(2)}%/day)`
     ).join('\n');
 
-    const prompt = `You are a financial analyst AI. Analyze these statistically anomalous stock moves and explain in plain English what may be driving each one. Be specific — mention likely catalysts (earnings, sector rotation, macro events, company news). Write 2-3 sentences per anomaly, then a one-line portfolio impact summary at the end.
+    const prompt = `You are a financial analyst AI. IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares. Analyze these statistically anomalous stock moves and explain in plain English what may be driving each one. Be specific — mention likely catalysts (earnings, sector rotation, macro events, company news). Write 2-3 sentences per anomaly, then a one-line portfolio impact summary at the end.
 
 Portfolio return today: ${portToday>=0?'+':''}${portToday.toFixed(2)}%
 Date: ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}
@@ -16503,7 +16569,7 @@ Be direct and educational. Always complete every stock's analysis fully. No bull
     });
     const data = await response.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    let text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(''); text = (window.addThousands ? window.addThousands(text) : text);
     if (!text) throw new Error('No response');
 
     result.innerHTML=`<div style="padding:16px;background:linear-gradient(135deg,rgba(102,126,234,0.08),rgba(118,75,162,0.08));border:1px solid rgba(102,126,234,0.25);border-radius:10px;">
@@ -16703,7 +16769,7 @@ window.submitPortfolioQuestion = async function() {
     // Compact JSON: strips nulls, rounds to 2dp, no pretty-print whitespace.
     // Cuts the payload ~65% so it fits Groq's free-tier token-per-minute cap.
 
-    const systemPrompt = `You are a personal financial analyst AI. The user's complete live portfolio data is below as JSON — treat it as ground truth. Answer questions using exact numbers from the data. Be concise but always complete your full answer. Do not use markdown bold (**). When asked about gains, give both dollar and percentage answers.
+    const systemPrompt = `You are a personal financial analyst AI. The user's complete live portfolio data is below as JSON — treat it as ground truth. Answer questions using exact numbers from the data. Be concise but always complete your full answer. Do not use markdown bold (**). IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares. When asked about gains, give both dollar and percentage answers.
 
 PORTFOLIO DATA:
 ${portfolioJSON}`;
@@ -16720,7 +16786,7 @@ ${portfolioJSON}`;
     });
     const data = await response.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    let text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(''); text = (window.addThousands ? window.addThousands(text) : text);
     if (!text) throw new Error('Empty response — data: '+JSON.stringify(data).slice(0,200));
 
     typing.style.cssText = 'align-self:flex-start;max-width:85%;padding:12px 14px;background:var(--bg-secondary);border:1px solid rgba(102,126,234,0.3);border-radius:14px 14px 14px 4px;font-size:0.82rem;color:var(--text-primary);line-height:1.65;';
@@ -17136,7 +17202,7 @@ Goal: $3,000,000 retirement
 All positions (top 20): ${positionSummary}`;
 
   const prompts = {
-    full: `You are a senior financial advisor conducting a comprehensive portfolio health checkup. Analyze this portfolio thoroughly and provide:
+    full: `You are a senior financial advisor conducting a comprehensive portfolio health checkup. IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares. Analyze this portfolio thoroughly and provide:
 1. Overall portfolio health assessment (grade A-F with explanation)
 2. Top 3 strengths of this portfolio
 3. Top 3 concerns or weaknesses
@@ -17148,7 +17214,7 @@ ${portfolioContext}
 
 Be specific with numbers. Use the actual symbols mentioned. Write in flowing paragraphs. Always complete your full analysis.`,
 
-    risk: `You are a risk management expert. Analyze this portfolio's risk profile:
+    risk: `You are a risk management expert. IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares. Analyze this portfolio's risk profile:
 1. Overall risk level assessment
 2. Concentration risk (single stock, sector)
 3. Correlation risk (holdings that move together)
@@ -17159,7 +17225,7 @@ ${portfolioContext}
 
 Be direct and specific. Always complete your full analysis.`,
 
-    diversification: `You are a portfolio diversification expert. Analyze:
+    diversification: `You are a portfolio diversification expert. IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares. Analyze:
 1. Geographic diversification (US vs international exposure)
 2. Sector diversification (which sectors are over/under represented)
 3. Asset class mix (growth vs value vs income vs defensive)
@@ -17170,7 +17236,7 @@ ${portfolioContext}
 
 Be specific with recommendations. Always complete your full analysis.`,
 
-    retirement: `You are a retirement planning specialist. Evaluate this portfolio's fitness for a $3M retirement goal:
+    retirement: `You are a retirement planning specialist. IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares. Evaluate this portfolio's fitness for a $3M retirement goal:
 1. Is the current allocation appropriate for retirement building?
 2. Growth potential vs income generation balance
 3. Sequence of returns risk assessment
@@ -17181,7 +17247,7 @@ ${portfolioContext}
 
 Be practical and specific. Always complete your full analysis.`,
 
-    action: `You are a portfolio strategist. Create a specific action plan:
+    action: `You are a portfolio strategist. Create a specific action plan: IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares.
 1. IMMEDIATE actions (do this week)
 2. SHORT-TERM actions (next 1-3 months)
 3. LONG-TERM strategy (6-12 months)
@@ -17207,7 +17273,7 @@ Be very specific with symbols and percentages. Always complete your full action 
 
     const data = await response.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    let text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(''); text = (window.addThousands ? window.addThousands(text) : text);
     if (!text) throw new Error('No response from AI');
 
     const modeLabels = {
@@ -17436,7 +17502,7 @@ Shadow overlap: ${shadowHits.join('; ')||'none'}`;
     const prompts = {
 
       cleanup:
-`You are a portfolio efficiency advisor. Portfolio data:
+`You are a portfolio efficiency advisor. IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares. Portfolio data:
 ${baseContext}
 
 Write 4 complete paragraphs:
@@ -17447,7 +17513,7 @@ P4 — The simplified portfolio: recommend a clean 4-6 position structure using 
 Be thorough. Use ticker symbols and dollar amounts throughout. Do not stop before completing all 4 paragraphs.`,
 
       rebalance:
-`You are a portfolio strategist. Portfolio data:
+`You are a portfolio strategist. Portfolio data: IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares.
 ${baseContext}
 
 Write 4 complete paragraphs:
@@ -17458,7 +17524,7 @@ P4 — Timeline and priority: what to do first, second, third to get to the targ
 Use the actual tickers and dollar figures. Be concrete. Do not stop before completing all 4 paragraphs.`,
 
       outlook:
-`You are a market strategist. Portfolio data:
+`You are a market strategist. IMPORTANT: Always format large numbers with thousands separators (commas), e.g. write $1,234,567.89 not $1234567.89, and 12,345 shares not 12345 shares. Portfolio data:
 ${baseContext}
 
 Write 4 complete paragraphs:
@@ -17476,7 +17542,7 @@ Be specific to the actual holdings listed. Reference real macro trends. Do not s
     });
     const data = await response.json();
     if (data.error) throw new Error(data.error.message||JSON.stringify(data.error));
-    const text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    let text = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(''); text = (window.addThousands ? window.addThousands(text) : text);
     if (!text) throw new Error('No response');
 
     const hdr = headerMap[mode];
