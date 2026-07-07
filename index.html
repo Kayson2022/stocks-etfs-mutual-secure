@@ -20253,7 +20253,6 @@ window.sendSecureBackupToTelegram = async function() {
 <script>
 (function() {
 var WORKER = 'https://yahoo-proxy.giolamchieu1975.workers.dev/telegram';
-var TG_SHARED_SECRET = 'khanh-pi-2026-x7f3'; // must match the Worker's expected secret
 var COOLDOWN_MS = 86400000;
 var VIP = { 'AVGO': 3, 'DELL': 3, 'AAPL': 3 };
 var DEFAULT_THRESH = 5;
@@ -20262,7 +20261,7 @@ var IMMEDIATE_THRESH = 10;
 function sendTg(msg) {
     return fetch(WORKER, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-App-Secret': TG_SHARED_SECRET },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg })
     }).catch(function(e) { console.warn('[TG]', e); });
 }
@@ -20506,7 +20505,6 @@ console.log('[TG Alerts] Secure App loaded OK');
 'use strict';
 
 var TG_WORKER   = 'https://yahoo-proxy.giolamchieu1975.workers.dev/telegram';
-var TG_SHARED_SECRET = 'khanh-pi-2026-x7f3'; // must match the Worker's expected secret
 var STORE_KEY   = 'tradeScenarios';
 var _currentSym = null;
 var _scenarios  = {}; // { symbol: [scenario, ...] }
@@ -20662,7 +20660,7 @@ window.deleteTSScenario = function(symbol, index) {
 function sendTg(msg) {
     fetch(TG_WORKER, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-App-Secret': TG_SHARED_SECRET },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg })
     }).catch(function(e) { console.warn('[TS Alert]', e.message); });
 }
@@ -21174,7 +21172,7 @@ window.sendVerificationReport = function() {
         'Verified: ' + verified + ' | Mismatches: ' + mismatches.length + ' | Unchecked: ' + unverified + '\n' +
         (mismatches.length ? '\nMismatches:\n' + mismatches.join('\n') : '\nAll verified stocks match!');
     fetch(TG_WORKER, {
-        method: 'POST', headers: {'Content-Type':'application/json', 'X-App-Secret': TG_SHARED_SECRET},
+        method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({message: msg})
     }).then(function() {
         document.getElementById('reconcileStatus').innerHTML = '<span style="color:#34d399;">Report sent to Telegram!</span>';
@@ -21190,7 +21188,7 @@ window.sendVerificationReport = function() {
     if (elapsed > 30 * 24 * 60 * 60 * 1000 && last > 0) {
         setTimeout(function() {
             fetch(TG_WORKER, {
-                method: 'POST', headers: {'Content-Type':'application/json', 'X-App-Secret': TG_SHARED_SECRET},
+                method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({message: 'Reminder: It has been 30+ days since your last portfolio verification. Open the Secure App and click Reconcile Shares to verify your share counts.'})
             }).catch(function(){});
         }, 20000);
