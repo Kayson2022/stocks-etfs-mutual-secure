@@ -176,6 +176,34 @@
 })();
 /* ===== END FINNHUB PRIMARY + YAHOO OVERFLOW ===== */
 </script>
+<script>
+/* ===== XSS-SAFE ESCAPE HELPER (added 2026-07-06) ===== */
+function escHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function escAttr(str) {
+  // Same escaping is safe for HTML attribute contexts (href, src, alt) too
+  return escHtml(str);
+}
+function safeUrl(str) {
+  // Blocks javascript:/data:/vbscript: URL schemes - escaping alone does NOT
+  // stop these from executing when clicked. Only http(s) and protocol-relative
+  // URLs are allowed; anything else is neutralized to '#'.
+  if (str == null) return '#';
+  const s = String(str).trim();
+  if (/^(https?:)?\/\//i.test(s) || s.startsWith('/') || s.startsWith('#')) {
+    return escAttr(s);
+  }
+  return '#';
+}
+/* ===== END XSS-SAFE ESCAPE HELPER ===== */
+</script>
 
 <script>
 /* ════ GLOBAL $ THOUSANDS SEPARATOR ════════════════════════════════
@@ -9987,13 +10015,13 @@ await this.saveData();
                 if (titleEl) titleEl.innerHTML = '📰 Market News <span style="font-size:0.72rem;font-weight:500;color:var(--text-secondary);margin-left:6px;">(Add Finnhub key in Settings for personalized news)</span>';
 
                 container.innerHTML = articles.map(a => `
-                    <a href="${a.link}" target="_blank" rel="noopener" class="news-article-card">
-                        <img src="${a.img || 'https://placehold.co/80x80/6c757d/ffffff?text=' + encodeURIComponent(a.source.slice(0,2))}"
+                    <a href="${safeUrl(a.link)}" target="_blank" rel="noopener" class="news-article-card">
+                        <img src="${safeUrl(a.img) !== '#' ? safeUrl(a.img) : 'https://placehold.co/80x80/6c757d/ffffff?text=' + encodeURIComponent((a.source||'').slice(0,2))}"
                              alt="" onerror="this.src='https://placehold.co/80x80/6c757d/ffffff?text=News'">
                         <div class="news-article-content">
-                            <h4>${a.title}</h4>
-                            <p>${a.desc}${a.desc ? '...' : ''}</p>
-                            <span style="font-size:0.72rem;color:var(--text-secondary);">${a.source} · ${a.date ? new Date(a.date).toLocaleDateString() : ''}</span>
+                            <h4>${escHtml(a.title)}</h4>
+                            <p>${escHtml(a.desc)}${a.desc ? '...' : ''}</p>
+                            <span style="font-size:0.72rem;color:var(--text-secondary);">${escHtml(a.source)} · ${a.date ? new Date(a.date).toLocaleDateString() : ''}</span>
                         </div>
                     </a>`).join('');
             }
@@ -10054,16 +10082,16 @@ await this.saveData();
                 const titleElement = document.querySelector('#news-tab .watchlist-title');
                 let symbolsText = (this.stocks.length > 0 || this.mutualFunds.length > 0) ? 'Your Portfolio' : 'General Market';
                 if (titleElement) {
-                     titleElement.innerHTML = `📰 Top News for ${symbolsText}`;
+                     titleElement.innerHTML = `📰 Top News for ${escHtml(symbolsText)}`;
                 }
 
                 container.innerHTML = this.newsFeed.map(article => `
-                    <a href="${article.url}" target="_blank" class="news-article-card">
-                        <img src="${article.image}" alt="${article.title}" onerror="this.onerror=null; this.src='https://placehold.co/80x80/6c757d/ffffff?text=News';">
+                    <a href="${safeUrl(article.url)}" target="_blank" class="news-article-card">
+                        <img src="${safeUrl(article.image)}" alt="${escAttr(article.title)}" onerror="this.onerror=null; this.src='https://placehold.co/80x80/6c757d/ffffff?text=News';">
                         <div class="news-article-content">
-                            <h4>${article.title}</h4>
-                            <p>${article.text}</p>
-                            <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">Source: ${article.source} (${new Date(article.publishedDate).toLocaleDateString()}) - Priority: ${article.priority}</span>
+                            <h4>${escHtml(article.title)}</h4>
+                            <p>${escHtml(article.text)}</p>
+                            <span style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px;">Source: ${escHtml(article.source)} (${new Date(article.publishedDate).toLocaleDateString()}) - Priority: ${escHtml(article.priority)}</span>
                         </div>
                     </a>
                 `).join('');
@@ -20225,6 +20253,7 @@ window.sendSecureBackupToTelegram = async function() {
 <script>
 (function() {
 var WORKER = 'https://yahoo-proxy.giolamchieu1975.workers.dev/telegram';
+var TG_SHARED_SECRET = 'khanh-pi-2026-x7f3'; // must match the Worker's expected secret
 var COOLDOWN_MS = 86400000;
 var VIP = { 'AVGO': 3, 'DELL': 3, 'AAPL': 3 };
 var DEFAULT_THRESH = 5;
@@ -20233,7 +20262,7 @@ var IMMEDIATE_THRESH = 10;
 function sendTg(msg) {
     return fetch(WORKER, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-App-Secret': TG_SHARED_SECRET },
         body: JSON.stringify({ message: msg })
     }).catch(function(e) { console.warn('[TG]', e); });
 }
@@ -20477,6 +20506,7 @@ console.log('[TG Alerts] Secure App loaded OK');
 'use strict';
 
 var TG_WORKER   = 'https://yahoo-proxy.giolamchieu1975.workers.dev/telegram';
+var TG_SHARED_SECRET = 'khanh-pi-2026-x7f3'; // must match the Worker's expected secret
 var STORE_KEY   = 'tradeScenarios';
 var _currentSym = null;
 var _scenarios  = {}; // { symbol: [scenario, ...] }
@@ -20632,7 +20662,7 @@ window.deleteTSScenario = function(symbol, index) {
 function sendTg(msg) {
     fetch(TG_WORKER, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-App-Secret': TG_SHARED_SECRET },
         body: JSON.stringify({ message: msg })
     }).catch(function(e) { console.warn('[TS Alert]', e.message); });
 }
@@ -21144,7 +21174,7 @@ window.sendVerificationReport = function() {
         'Verified: ' + verified + ' | Mismatches: ' + mismatches.length + ' | Unchecked: ' + unverified + '\n' +
         (mismatches.length ? '\nMismatches:\n' + mismatches.join('\n') : '\nAll verified stocks match!');
     fetch(TG_WORKER, {
-        method: 'POST', headers: {'Content-Type':'application/json'},
+        method: 'POST', headers: {'Content-Type':'application/json', 'X-App-Secret': TG_SHARED_SECRET},
         body: JSON.stringify({message: msg})
     }).then(function() {
         document.getElementById('reconcileStatus').innerHTML = '<span style="color:#34d399;">Report sent to Telegram!</span>';
@@ -21160,7 +21190,7 @@ window.sendVerificationReport = function() {
     if (elapsed > 30 * 24 * 60 * 60 * 1000 && last > 0) {
         setTimeout(function() {
             fetch(TG_WORKER, {
-                method: 'POST', headers: {'Content-Type':'application/json'},
+                method: 'POST', headers: {'Content-Type':'application/json', 'X-App-Secret': TG_SHARED_SECRET},
                 body: JSON.stringify({message: 'Reminder: It has been 30+ days since your last portfolio verification. Open the Secure App and click Reconcile Shares to verify your share counts.'})
             }).catch(function(){});
         }, 20000);
