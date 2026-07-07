@@ -18,6 +18,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -21676,16 +21677,17 @@ window.renderPaperTab = function() {
             posEl.innerHTML = '<div style="padding:12px;color:#8ba3be;font-size:12px;">No open positions.</div>';
         } else {
             posEl.innerHTML = positions.map(p => {
-                const currentVal = (p.current_price || p.entry_price) * p.shares;
-                const cost = p.entry_price * p.shares;
-                const pnl = currentVal - cost;
-                const pnlPct = (pnl / cost * 100);
+                const shares = (p.shares != null) ? p.shares : (p.shares_remaining != null ? p.shares_remaining : 0);
+                const currentVal = (p.current_price || p.entry_price) * shares;
+                const cost = p.entry_price * shares;
+                let pnl = (p.unrealized_pnl != null) ? p.unrealized_pnl : (currentVal - cost);
+                let pnlPct = (p.unrealized_pct != null) ? p.unrealized_pct : (cost > 0 ? (pnl / cost * 100) : 0);
                 const pnlColor = pnl >= 0 ? '#00e676' : '#ff5252';
-                const daysHeld = Math.floor((Date.now() - new Date(p.entry_date)) / 86400000);
+                const daysHeld = (p.days_held != null) ? p.days_held : Math.floor((Date.now() - new Date(p.entry_date)) / 86400000);
                 return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                     <div>
                         <span style="font-size:15px;font-weight:700;color:#e8f0fc;">${p.symbol}</span>
-                        <span style="font-size:11px;color:#8ba3be;margin-left:8px;">${p.shares} shares @ $${p.entry_price?.toFixed(2)}</span>
+                        <span style="font-size:11px;color:#8ba3be;margin-left:8px;">${(+shares).toFixed(2)} shares @ $${p.entry_price?.toFixed(2)}${p.current_price ? ' &rarr; $' + p.current_price.toFixed(2) : ''}</span>
                         <div style="font-size:10px;color:#8ba3be;margin-top:2px;">Held ${daysHeld}d · Stop $${p.stop_loss?.toFixed(2)} · TP1 $${p.tp1?.toFixed(2)} · TP2 $${p.tp2?.toFixed(2)}</div>
                     </div>
                     <div style="text-align:right;">
@@ -21701,14 +21703,17 @@ window.renderPaperTab = function() {
     const statsEl = document.getElementById('paperStats');
     if (statsEl) {
         const s = d.stats || {};
-        const winRate = s.trades_won && s.total_trades ? (s.trades_won / s.total_trades * 100).toFixed(1) : '—';
+        const won  = (s.trades_won  != null) ? s.trades_won  : (s.winning_trades || 0);
+        const lost = (s.trades_lost != null) ? s.trades_lost : (s.losing_trades  || 0);
+        const closed = won + lost;
+        const winRate = closed ? (won / closed * 100).toFixed(1) : '—';
         const items = [
             { label: 'Total Trades',   val: s.total_trades || 0,    color: '#00d4ff' },
-            { label: 'Won',            val: s.trades_won || 0,       color: '#00e676' },
-            { label: 'Lost',           val: s.trades_lost || 0,      color: '#ff5252' },
-            { label: 'Win Rate',       val: winRate + '%',            color: winRate >= 55 ? '#00e676' : '#ffd600' },
-            { label: 'Avg Win',        val: s.avg_win ? '+$'+s.avg_win.toFixed(0) : '—', color: '#00e676' },
-            { label: 'Avg Loss',       val: s.avg_loss ? '-$'+Math.abs(s.avg_loss).toFixed(0) : '—', color: '#ff5252' },
+            { label: 'Won',            val: won,                     color: '#00e676' },
+            { label: 'Lost',           val: lost,                    color: '#ff5252' },
+            { label: 'Win Rate',       val: winRate + '%',            color: parseFloat(winRate) >= 55 ? '#00e676' : '#ffd600' },
+            { label: 'Avg Win',        val: s.avg_win ? '+$'+s.avg_win.toFixed(0) : (s.best_trade_pct != null ? '+'+s.best_trade_pct.toFixed(1)+'% best' : '—'), color: '#00e676' },
+            { label: 'Avg Loss',       val: s.avg_loss ? '-$'+Math.abs(s.avg_loss).toFixed(0) : (s.worst_trade_pct != null ? s.worst_trade_pct.toFixed(1)+'% worst' : '—'), color: '#ff5252' },
         ];
         statsEl.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;">` + items.map(s =>
             `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:8px 14px;min-width:90px;">
