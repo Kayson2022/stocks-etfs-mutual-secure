@@ -23,6 +23,7 @@
 
 <html lang="en">
 <head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com https://*.googleapis.com https://*.firebaseio.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://placehold.co https://*.googleapis.com https://*.gstatic.com; connect-src 'self' https://finnhub.io https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://financialmodelingprep.com https://www.alphavantage.co https://api.frankfurter.app https://api.rss2json.com https://api.telegram.org https://corsproxy.io https://api.allorigins.win https://yahoo-proxy.giolamchieu1975.workers.dev https://ai-proxy.giolamchieu1975.workers.dev https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com wss://*.firebaseio.com; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <script>
 /* ===== FINNHUB PRIMARY + YAHOO OVERFLOW + CACHE (added 2026-07-06) =====
    Option 1+3 hybrid:
@@ -190,6 +191,16 @@ function escHtml(str) {
 function escAttr(str) {
   // Same escaping is safe for HTML attribute contexts (href, src, alt) too
   return escHtml(str);
+}
+function stripProtoKeys(obj) {
+  // Prevent prototype pollution: drop dangerous keys from API/parsed data
+  // before merging into app objects.
+  if (obj && typeof obj === 'object') {
+    delete obj['__proto__'];
+    delete obj['constructor'];
+    delete obj['prototype'];
+  }
+  return obj;
 }
 function safeUrl(str) {
   // Blocks javascript:/data:/vbscript: URL schemes - escaping alone does NOT
@@ -6396,7 +6407,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     
                     if (result.success) {
                         const prevChangePercent = Number(item.changePercent) || 0;
-                        Object.assign(item, result.data);
+                        Object.assign(item, stripProtoKeys(result.data));
                         const newChangePercent = Number(item.changePercent) || 0;
 
                         // ── Record daily price snapshot for Correlation Matrix ──
