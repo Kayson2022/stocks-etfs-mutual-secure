@@ -7428,7 +7428,7 @@ renderPortfolioSummary() {
                                 <div class="info-row"><span class="info-label">High / Low:</span><span class="info-value">${this.formatCurrency(item.high||0)} / ${this.formatCurrency(item.low||0)}</span></div>
                                 <div class="info-row"><span class="info-label">Prev Close:</span><span class="info-value">${this.formatCurrency(item.previousClose||0)}</span></div>
                                 ${_wl52}${_alertHtml}
-                                ${_note?`<div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,0.04);border-radius:8px;font-size:11px;color:#8ba3be;border-left:2px solid rgba(0,212,255,0.4);">📝 ${_note}</div>`:''}
+                                ${_note?`<div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,0.04);border-radius:8px;font-size:11px;color:#8ba3be;border-left:2px solid rgba(0,212,255,0.4);">📝 ${escHtml(_note)}</div>`:''}
                             `;
                         } else { 
                             stockInfoHTML = `
@@ -19629,7 +19629,7 @@ document.addEventListener('click', function(e) {
             <div class="wl-modal">
                 <h3>📝 Note for ${symbol}</h3>
                 <label>Why are you watching this?</label>
-                <textarea id="wlNoteText" placeholder="e.g. Watching for breakout above $200. Strong earnings growth. Wait for dip to $180...">${existing}</textarea>
+                <textarea id="wlNoteText" placeholder="e.g. Watching for breakout above $200. Strong earnings growth. Wait for dip to $180...">${escHtml(existing)}</textarea>
                 <div class="wl-modal-actions">
                     <button class="wl-btn-cancel" onclick="this.closest('.wl-modal-overlay').remove()">Cancel</button>
                     ${existing?`<button class="wl-btn-cancel" onclick="window._wlNotes['${symbol}']='';window.saveWlNotes();this.closest('.wl-modal-overlay').remove();window.stockTracker?.renderContent();">Clear</button>`:''}
