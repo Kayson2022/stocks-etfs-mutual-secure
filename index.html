@@ -6034,8 +6034,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 if (this.activeBottomRange === 'BAR_TODAY' || this.currentRange === 'BAR_TODAY') {
                     this.renderPortfolioPerformanceChart('BAR_TODAY');
                 } 
-                if (sortedItems.length === 0 && type !== 'stock' && type !== 'fund' && grid) {
-                     grid.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your ${type} list is empty.</div>`;
+                if (sortedItems.length === 0 && type === 'watchlist' && grid) {
+                     grid.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your watchlist is empty.</div>`;
                 }
                 this.restoreScrollPosition();
             }
