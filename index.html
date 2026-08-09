@@ -23051,11 +23051,29 @@ window.__taxPlannerBalances = function() {
         const tSSe=ssTax(ss,from401,st), ordSoFar=from401+tSSe;
         let room=Math.max(0,cap+std-ordSoFar);
         const avoid401 = penaltyAware && penaltyApplies(age);
-        if(!avoid401){const fill=Math.min(room,need,b401);if(fill>0){b401-=fill;from401+=fill;need-=fill;room-=fill;}}
+        // SPENDING SOURCE
+        //   '401k'      : 401k funds spending first (original behaviour)
+        //   'brk-light' : brokerage funds spending; conversion held back by
+        //                 the room that spending would have used, so ordinary
+        //                 income is genuinely lower (not just relocated)
+        //   'brk-fill'  : brokerage funds spending; conversion still fills
+        //                 the full bracket
+        const srcMode = inp.spendSource || '401k';
+        const brkFirst = (srcMode==='brk-light'||srcMode==='brk-fill') && age<RMD && bBrk>0;
+        let convReserve = 0;
+        if (brkFirst) {
+          // Amount of bracket room the spending WOULD have consumed from the
+          // 401k. Under 'brk-light' this room is deliberately left unused.
+          if (srcMode==='brk-light') convReserve = Math.min(room, need, b401);
+          const take=Math.min(need,bBrk),gf=bBrk>0?Math.max(0,(bBrk-brkBasis)/bBrk):0;
+          gains+=take*gf;brkBasis-=take*(1-gf);bBrk-=take;fromBrk+=take;need-=take;
+        }
+        if(!avoid401 && !brkFirst){const fill=Math.min(room,need,b401);if(fill>0){b401-=fill;from401+=fill;need-=fill;room-=fill;}}
         if(need>0&&bBrk>0){const take=Math.min(need,bBrk),gf=bBrk>0?Math.max(0,(bBrk-brkBasis)/bBrk):0;gains+=take*gf;brkBasis-=take*(1-gf);bBrk-=take;fromBrk+=take;need-=take;}
         if(need>0&&bRoth>0){const take=Math.min(need,bRoth);bRoth-=take;fromRoth+=take;need-=take;}
         if(need>0&&b401>0){const t=Math.min(need,b401);b401-=t;from401+=t;need-=t;}
-        if(!inp._noConvert&&age<RMD&&room>0&&b401>0){conv=Math.min(room,b401);b401-=conv;bRoth+=conv;}
+        const convRoom = Math.max(0, room - convReserve);
+        if(!inp._noConvert&&age<RMD&&convRoom>0&&b401>0){conv=Math.min(convRoom,b401);b401-=conv;bRoth+=conv;}
       }else{
         if(need>0&&bBrk>0){const take=Math.min(need,bBrk),gf=bBrk>0?Math.max(0,(bBrk-brkBasis)/bBrk):0;gains+=take*gf;brkBasis-=take*(1-gf);bBrk-=take;fromBrk+=take;need-=take;}
         if(need>0&&b401>0){const take=Math.min(need,b401);b401-=take;from401+=take;need-=take;}
@@ -23093,6 +23111,7 @@ window.__taxPlannerBalances = function() {
       status:gs('tpStatus','mfj'),stateCode:gs('tpState','CA'),
       bal401k:gv('tpBal401k',0),balRoth:gv('tpBalRoth',0),balBrokerage:brkBal,
       brokerageBasisPct:basisPct/100,
+      spendSource:(document.getElementById('tpSpendSrc')||{}).value||'401k',
       annualSpend:gv('tpSpend',120000),ssAnnual:gv('tpSS',24000),ssClaimAge:gv('tpSSAge',62),
       returnRate:gv('tpReturn',6)/100,inflRate:gv('tpInfl',2.5)/100,birthYear:gv('tpBirthYr',0)||undefined,
     };
@@ -23639,6 +23658,7 @@ window.__taxPlannerBalances = function() {
         ${fld('Expected Return %','tpReturn',6)}
         ${fld('Inflation %','tpInfl',2.5)}
         ${sel('Roth Conversion','tpAggr',[['none','None — no conversions'],['conservative','Conservative — fill 12%'],['moderate','Moderate — fill 22%'],['aggressive','Aggressive — fill 24%']],'moderate',2)}
+        ${sel('Spending Source','tpSpendSrc',[['401k','401k first (bracket-fill)'],['brk-light','Brokerage first \u2014 lighter conversion'],['brk-fill','Brokerage first \u2014 keep full bracket-fill']],'401k')}
       </div>
       <button onclick="window.runTaxPlanner()" style="padding:9px 20px;background:#3498db;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer;margin-bottom:8px;">▶ Run Tax Analysis</button>
       <div id="tpResults" style="margin-top:16px;"></div>`;
