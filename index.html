@@ -19,6 +19,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -22650,11 +22651,38 @@ window.stCalcTax = function(id) {
 
   // ── Wiring: reads inputs, pulls live portfolio value from this app's own
   // in-memory total (no network fetch needed — data's already on the page) ──
+  // ── Read the app's live portfolio total ─────────────────────────────────
+  // NOTE: window.stockTracker.totalPortfolioValue does NOT exist — in this app
+  // that name is only ever a local const inside a render method, never stored
+  // on the instance. The reliable source (used elsewhere in this file) is the
+  // already-rendered #combined-total-value element, with a computed fallback.
+  function t62GetLivePortfolio() {
+    // 1) Preferred: the rendered combined total (stocks + funds), same approach
+    //    the fund-summary code uses.
+    const el = document.getElementById('combined-total-value');
+    if (el) {
+      const v = parseFloat(String(el.textContent).replace(/[^0-9.-]/g, '')) || 0;
+      if (v > 0) return v;
+    }
+    // 2) Fallback: compute from holdings directly.
+    try {
+      const t = window.stockTracker;
+      if (t && typeof t.calculateTransactionStats === 'function') {
+        const items = (t.stocks || []).concat(t.mutualFunds || []);
+        const sum = items.reduce((s, it) => {
+          const st = t.calculateTransactionStats(it.transactions, it.price);
+          return s + ((st && st.currentValue) || 0);
+        }, 0);
+        if (sum > 0) return sum;
+      }
+    } catch (e) {}
+    return 0;
+  }
+
   window.runT62Secure = function() {
     const parseVal = id => parseFloat((document.getElementById(id).value||'0').replace(/,/g,'')) || 0;
     const worth = parseVal('t62Worth');
-    const tracker = window.stockTracker || {};
-    const liveVal = tracker.totalPortfolioValue || tracker.combinedTotal || 0;
+    const liveVal = t62GetLivePortfolio();
 
     if (!worth && !liveVal) {
       document.getElementById('t62Summary').innerHTML =
@@ -22844,27 +22872,35 @@ window.calc401kOptimizerSecure = function() {
    - supply account balances from this app's own holdings model */
 window.__taxPlannerMount = 'taxPlannerMount';
 window.__taxPlannerBalances = function() {
-  // This app groups holdings by accountType on the tracker instance.
+  // Split holdings by account type. Property names verified against this app:
+  // tracker.stocks and tracker.mutualFunds (NOT .funds), and per-item value
+  // comes from calculateTransactionStats(...).currentValue.
   try {
     const t = window.stockTracker;
     if (!t) return null;
-    const items = (t.stocks || []).concat(t.funds || []);
+    const items = (t.stocks || []).concat(t.mutualFunds || []);
     const acc = { k401: 0, roth: 0, brokerage: 0 };
+    let matched = 0;
     items.forEach(function(it) {
-      const type = (it.accountType || '').toLowerCase();
-      const stats = (t.calculateTransactionStats && it.transactions)
-        ? t.calculateTransactionStats(it.transactions, it.price)
-        : null;
-      const val = stats ? (stats.currentValue || 0) : 0;
-      if (type.indexOf('401') !== -1)          acc.k401      += val;
-      else if (type.indexOf('roth') !== -1)    acc.roth      += val;
-      else                                     acc.brokerage += val;
+      const type = String(it.accountType || '').toLowerCase();
+      let val = 0;
+      try {
+        const st = t.calculateTransactionStats(it.transactions, it.price);
+        val = (st && st.currentValue) || 0;
+      } catch (e) { return; }
+      if (!val) return;
+      matched++;
+      if (type.indexOf('401') !== -1)       acc.k401      += val;
+      else if (type.indexOf('roth') !== -1) acc.roth      += val;
+      else                                  acc.brokerage += val;
     });
-    // Fall back to the overall portfolio total as brokerage if nothing matched
-    if (!acc.k401 && !acc.roth && !acc.brokerage) {
-      acc.brokerage = t.totalPortfolioValue || t.combinedTotal || 0;
-    }
-    return acc;
+    if (matched > 0) return acc;
+
+    // Nothing itemized — fall back to the rendered combined total as brokerage
+    // so the user at least gets a starting number instead of empty fields.
+    const el = document.getElementById('combined-total-value');
+    const total = el ? (parseFloat(String(el.textContent).replace(/[^0-9.-]/g,'')) || 0) : 0;
+    return total > 0 ? { k401: 0, roth: 0, brokerage: total } : null;
   } catch (e) { return null; }
 };
 </script>
