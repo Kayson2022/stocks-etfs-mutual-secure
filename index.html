@@ -6835,8 +6835,21 @@ renderPortfolioSummary() {
                         .filter(Boolean);
                 };
 
-                const filteredStocks = applyPlatformFilter(this.stocks);
-                const filteredFunds  = applyPlatformFilter(this.mutualFunds);
+                // Asset-type filter (Stocks/ETFs/Mutual Funds only) cascades into
+                // this summary exactly like the platform filter already does, per
+                // explicit user confirmation that Coast FIRE / Sleep-at-Night should
+                // rescale to match rather than silently stay on the full portfolio.
+                const assetTypeTerm = this.elements.assetTypeFilter ? this.elements.assetTypeFilter.value : 'all';
+                const applyAssetTypeFilter = (items, bucket) => {
+                    if (!assetTypeTerm || assetTypeTerm === 'all') return items;
+                    if (bucket === 'fund') return assetTypeTerm === 'fund' ? items : [];
+                    // bucket === 'stock' array (holds both real stocks and ETFs)
+                    if (assetTypeTerm === 'fund') return [];
+                    return items.filter(it => window.classifyAsset(it, this) === assetTypeTerm);
+                };
+
+                const filteredStocks = applyAssetTypeFilter(applyPlatformFilter(this.stocks), 'stock');
+                const filteredFunds  = applyAssetTypeFilter(applyPlatformFilter(this.mutualFunds), 'fund');
 
                 const stockMetrics = this.calculateSummaryMetrics(filteredStocks);
                 const fundMetrics  = this.calculateSummaryMetrics(filteredFunds);
@@ -6887,12 +6900,32 @@ renderPortfolioSummary() {
                 setElement(document.getElementById('stocks-total-value'), stockMetrics.totalCurrentValue);
                 setElement(document.getElementById('mutual-fund-total-value'), fundMetrics.totalCurrentValue);
 
+                // Keep the tile CAPTIONS honest about what number they're showing --
+                // rescaling the value without relabeling would make "Stocks Total
+                // Value" silently display an ETFs-only figure.
+                (function(){
+                    const stocksLbl = document.querySelector('#stocks-total-value')?.closest('.summary-item')?.querySelector('.summary-item-label');
+                    const stocksCountLbl = document.querySelector('#stock-count-value')?.closest('.summary-item')?.querySelector('.summary-item-label');
+                    if (assetTypeTerm === 'etf') {
+                        if (stocksLbl) stocksLbl.textContent = 'ETFs Total Value';
+                        if (stocksCountLbl) stocksCountLbl.textContent = 'Active ETFs';
+                    } else if (assetTypeTerm === 'stock') {
+                        if (stocksLbl) stocksLbl.textContent = 'Stocks Total Value';
+                        if (stocksCountLbl) stocksCountLbl.textContent = 'Active Stocks';
+                    } else {
+                        if (stocksLbl) stocksLbl.textContent = 'Stocks Total Value';
+                        if (stocksCountLbl) stocksCountLbl.textContent = 'Active Stocks';
+                    }
+                })();
+
                 // Update banner label to reflect current platform filter
                 const bannerLabel = document.getElementById('summary-banner-label');
                 if (bannerLabel) {
-                    bannerLabel.textContent = (!platformFilterTerm || platformFilterTerm === 'All Platforms')
-                        ? 'Combined Total'
-                        : platformFilterTerm;
+                    const atLabel = {stock:'Stocks', etf:'ETFs', fund:'Mutual Funds'}[assetTypeTerm];
+                    bannerLabel.textContent =
+                        (platformFilterTerm && platformFilterTerm !== 'All Platforms') ? platformFilterTerm
+                        : atLabel ? atLabel
+                        : 'Combined Total';
                 }
                 
                 const contributionsEl = document.getElementById('total-contributions');
