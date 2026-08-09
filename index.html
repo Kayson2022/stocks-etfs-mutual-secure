@@ -6176,66 +6176,72 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 }
 
                 if (this.currentTab === 'stocks' || this.currentTab === 'funds') {
-                    if (sortBy === 'platform') {
-                        // Keep the symbol search box visible in platform mode too,
-                        // so you can pick an account AND jump to one symbol within it.
-                        if(this.elements.portfolioFilter) this.elements.portfolioFilter.style.display = 'block';
-                        if(this.elements.platformFilter) this.elements.platformFilter.style.display = 'block';
+                    if(this.elements.portfolioFilter) this.elements.portfolioFilter.style.display = 'block';
+
+                    // ── Account filter (Platform + cross-broker Account Type) ──────
+                    // Always visible and always applied, independent of Sort mode, so
+                    // it composes with Asset Type under every sort. Runs on
+                    // `filteredItems`, which already has Asset Type applied above --
+                    // this is the fix for the previous silent-overwrite bug where
+                    // selecting an account discarded whatever Asset Type filter was
+                    // already active.
+                    if (this.elements.platformFilter) {
+                        this.elements.platformFilter.style.display = 'block';
 
                         const allItems = [...this.stocks, ...this.mutualFunds];
-                        const platforms = ['All Platforms', ...new Set(allItems.flatMap(s => s.transactions.map(t => t.platform)).filter(p => p))].sort();
-                        const currentSelection = this.elements.platformFilter ? this.elements.platformFilter.value : 'All Platforms';
-                        if (this.elements.platformFilter) {
-                            this.elements.platformFilter.innerHTML = platforms.map(p => `<option value="${p}">${p}</option>`).join('');
-                            if (platforms.includes(currentSelection)) {
-                                this.elements.platformFilter.value = currentSelection;
-                            }
-                        }
+                        const allTxns = allItems.flatMap(s => s.transactions || []);
+                        const platforms = [...new Set(allTxns.map(t => t.platform).filter(p => p))].sort();
+                        const acctTypes = [...new Set(allTxns.map(t => t.accountType).filter(p => p))].sort();
 
-                        const platformFilterTerm = this.elements.platformFilter ? this.elements.platformFilter.value : 'All Platforms';
-                        if (platformFilterTerm && platformFilterTerm !== 'All Platforms') {
+                        const currentSelection = this.elements.platformFilter.value || 'All Platforms';
+                        let optsHTML = '<option value="All Platforms">All Accounts</option>';
+                        if (acctTypes.length) {
+                            optsHTML += '<optgroup label="By Account Type (all brokers)">'
+                                + acctTypes.map(a => `<option value="AT::${a}">${a} (All Brokers)</option>`).join('')
+                                + '</optgroup>';
+                        }
+                        if (platforms.length) {
+                            optsHTML += '<optgroup label="By Broker">'
+                                + platforms.map(p => `<option value="${p}">${p}</option>`).join('')
+                                + '</optgroup>';
+                        }
+                        this.elements.platformFilter.innerHTML = optsHTML;
+                        // Re-select the previous choice if it still exists (options
+                        // rebuild every render), else fall back to "All Accounts".
+                        const stillValid = [...this.elements.platformFilter.options].some(o => o.value === currentSelection);
+                        this.elements.platformFilter.value = stillValid ? currentSelection : 'All Platforms';
+
+                        const acctTerm = this.elements.platformFilter.value;
+                        if (acctTerm && acctTerm !== 'All Platforms') {
+                            const isAcctType = acctTerm.startsWith('AT::');
+                            const wantAcctType = isAcctType ? acctTerm.slice(4) : null;
                             const virtualItems = [];
-                            items.forEach(stock => {
+                            filteredItems.forEach(stock => {
                                 // Preserve original index so Edit Transaction opens the correct transaction
                                 const txnsWithIndex = (stock.transactions || []).map((t, i) => ({ ...t, _originalIndex: i }));
-                                const filteredTransactions = txnsWithIndex.filter(t => t.platform === platformFilterTerm);
-                                if (filteredTransactions.length > 0) {
-                                    virtualItems.push({ ...stock, transactions: filteredTransactions });
+                                const matchFn = isAcctType
+                                    ? (t => t.accountType === wantAcctType)
+                                    : (t => t.platform === acctTerm);
+                                const matchedTxns = txnsWithIndex.filter(matchFn);
+                                if (matchedTxns.length > 0) {
+                                    virtualItems.push({ ...stock, transactions: matchedTxns });
                                 }
                             });
                             filteredItems = virtualItems;
                         }
-                        // Now narrow by the symbol/name search box (within the
-                        // selected account only). Same behavior as Performance sort.
-                        const platSearch = this.elements.portfolioFilter ? this.elements.portfolioFilter.value.toLowerCase().trim() : '';
-                        if (platSearch) {
-                            const terms = platSearch.split(',').map(t => t.trim()).filter(t => t);
-                            filteredItems = filteredItems.filter(item =>
-                                terms.some(term =>
-                                    item.symbol.toLowerCase().includes(term) ||
-                                    (item.name && item.name.toLowerCase().includes(term))
-                                )
-                            );
-                        }
-                    } else {
-                        if(this.elements.portfolioFilter) this.elements.portfolioFilter.style.display = 'block';
-                        if(this.elements.platformFilter) {
-                            this.elements.platformFilter.style.display = 'none';
-                            // FIX: reset platform filter value when switching away from platform sort
-                            // so banner label correctly shows "Combined Total" again!!
-                            this.elements.platformFilter.value = 'All Platforms';
-                        }
-                        const filterTerm = this.elements.portfolioFilter ? this.elements.portfolioFilter.value.toLowerCase() : '';
-                        if (filterTerm) {
-                            // Support comma-separated symbols (e.g., "vgt, avgo, mrvl")
-                            const searchTerms = filterTerm.split(',').map(t => t.trim()).filter(t => t);
-                            filteredItems = items.filter(item => {
-                                return searchTerms.some(term =>
-                                    item.symbol.toLowerCase().includes(term) ||
-                                    (item.name && item.name.toLowerCase().includes(term))
-                                );
-                            });
-                        }
+                    }
+
+                    // ── Symbol/name search (within whatever the filters above left) ──
+                    const filterTerm = this.elements.portfolioFilter ? this.elements.portfolioFilter.value.toLowerCase().trim() : '';
+                    if (filterTerm) {
+                        // Support comma-separated symbols (e.g., "vgt, avgo, mrvl")
+                        const searchTerms = filterTerm.split(',').map(t => t.trim()).filter(t => t);
+                        filteredItems = filteredItems.filter(item =>
+                            searchTerms.some(term =>
+                                item.symbol.toLowerCase().includes(term) ||
+                                (item.name && item.name.toLowerCase().includes(term))
+                            )
+                        );
                     }
                 }
 
@@ -6247,7 +6253,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 this.todaysLossesTotal = 0;
 
                 if (type === 'stock' || type === 'fund') {
-                    const isGrouping = sortBy === 'platform' && (this.elements.platformFilter ? this.elements.platformFilter.value : 'All Platforms') === 'All Platforms';
+                    const isGrouping = sortBy === 'platform' && (this.elements.platformFilter ? this.elements.platformFilter.value : 'All Platforms') === 'All Platforms'; // unchanged: visual grouping only, independent of the filter fix above
                     if (isGrouping) {
                         this.renderGroupedByPlatform(sortedItems, grid, type);
                     } else if (sortBy === 'performance') {
