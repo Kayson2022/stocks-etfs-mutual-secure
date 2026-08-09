@@ -23309,6 +23309,17 @@ window.__taxPlannerBalances = function() {
   setTimeout(injectBtn,2800);
   window.addEventListener('load',()=>setTimeout(injectBtn,2000));
 
+  // ── Auto-open on hosts that provide a mount point ────────────────────────
+  // The 401k app opens this widget via its own toolbar button or the 'T' key
+  // shortcut — neither exists on other hosts, so the widget was built but
+  // never actually appeared there. If a host set window.__taxPlannerMount,
+  // open (render) the widget automatically instead of leaving it dormant.
+  if (window.__taxPlannerMount) {
+    setTimeout(function(){
+      if (document.getElementById(window.__taxPlannerMount)) window.openTaxPlannerWidget();
+    }, 600);
+  }
+
   // keyboard shortcut: T
   window.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA')return;if((e.key==='t'||e.key==='T')&&!e.metaKey&&!e.ctrlKey&&!e.altKey)window.openTaxPlannerWidget();});
 })();
