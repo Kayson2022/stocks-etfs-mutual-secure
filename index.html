@@ -4141,6 +4141,14 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
           <option value="both">Both (split)</option>
         </select>
       </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">MAX EMPLOYER MATCH $/YR <span style="opacity:0.6;">(optional — for plans with a flat dollar cap)</span></div>
+        <input id="optMatchCap" type="text" inputmode="numeric" oninput="t62FmtInput(this)" placeholder="e.g. 7,500 — leave blank if no cap"
+          style="width:100%;padding:8px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);font-family:monospace;font-size:13px;box-sizing:border-box;">
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text-secondary);margin:-8px 0 12px;">
+      💡 If your plan says "matches X% up to Y% of salary, <strong>up to $Z max</strong>," enter X and Y as usual, then put Z here — it overrides whichever number the percentages would otherwise produce.
     </div>
     <button onclick="calc401kOptimizerSecure()"
       style="background:var(--color-positive);color:#fff;border:none;padding:8px 20px;
@@ -22744,6 +22752,8 @@ window.calc401kOptimizerSecure = function() {
   const currContrib  = parseFloat(document.getElementById('optCurrentContrib').value.replace(/,/g,'')) || 0;
   const matchPct     = parseFloat(document.getElementById('optMatchPct').value) || 0;
   const matchUpTo    = parseFloat(document.getElementById('optMatchUpTo').value) || 0;
+  const matchCapRaw  = document.getElementById('optMatchCap').value.replace(/,/g,'');
+  const matchCap     = matchCapRaw ? (parseFloat(matchCapRaw) || 0) : null;  // null = no flat cap, use % only
   const acctType     = document.getElementById('optAccountType').value;
   const el           = document.getElementById('optResult');
 
@@ -22762,15 +22772,27 @@ window.calc401kOptimizerSecure = function() {
   const catchUp        = limit2025 - T62_LIMITS.base;
   const isSuperCatchup = age >= 60 && age <= 63;
 
-  // Employer match calculation
+  // Employer match calculation. Many real plans say "X% match up to Y% of
+  // salary, capped at $Z" (e.g. 100% up to 6%, max $7,500) — the percentage
+  // formula alone can't express that flat ceiling, so an optional dollar cap
+  // (optMatchCap) overrides the computed match when it's the binding
+  // constraint, and the contribution needed to earn the FULL match shrinks
+  // to match (you don't need to contribute enough for the uncapped amount).
   const minForMatch    = salary * (matchUpTo / 100);
-  const maxMatch       = minForMatch * (matchPct / 100);
-  const currMatch      = Math.min(currContrib, minForMatch) * (matchPct / 100);
-  const missedMatch    = maxMatch - currMatch;
-  const isGettingMatch = currContrib >= minForMatch;
+  const uncappedMatch  = minForMatch * (matchPct / 100);
+  const maxMatch       = (matchCap !== null) ? Math.min(uncappedMatch, matchCap) : uncappedMatch;
+  const capIsBinding   = (matchCap !== null) && (matchCap < uncappedMatch);
+  // If the cap binds, less salary-based contribution is actually needed to
+  // reach it (e.g. dollar-for-dollar to $7,500 needs $7,500 in, not $9,000).
+  const contribForFullMatch = capIsBinding && matchPct > 0
+    ? Math.min(minForMatch, maxMatch / (matchPct / 100))
+    : minForMatch;
+  const currMatch      = Math.min(currContrib, contribForFullMatch) * (matchPct / 100);
+  const missedMatch     = maxMatch - Math.min(currMatch, maxMatch);
+  const isGettingMatch = currContrib >= contribForFullMatch;
 
   // Optimal contribution
-  const optimalContrib = Math.min(limit2025, Math.max(minForMatch, currContrib));
+  const optimalContrib = Math.min(limit2025, Math.max(contribForFullMatch, currContrib));
   const monthlyOptimal = optimalContrib / 12;
   const monthlyGap     = (optimalContrib - currContrib) / 12;
 
@@ -22798,7 +22820,7 @@ window.calc401kOptimizerSecure = function() {
         <div style="background:var(--bg-secondary);border-radius:4px;height:8px;">
           <div style="background:${pctOfLimit >= 100 ? 'var(--color-positive)' : 'var(--accent-primary)'};width:${pctOfLimit}%;height:8px;border-radius:4px;transition:width 0.5s;"></div>
         </div>
-        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">${pctOfLimit.toFixed(1)}% of limit used${catchUp > 0 ? ` (includes $${catchUp.toLocaleString()} ${isSuperCatchup ? 'SECURE 2.0 super ' : ''}catch-up)` : ''}</div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">${pctOfLimit.toFixed(1)}% of limit used${catchUp > 0 ? ` (includes $${catchUp.toLocaleString('en-US')} ${isSuperCatchup ? 'SECURE 2.0 super ' : ''}catch-up)` : ''}</div>
       </div>
 
       <!-- Key Metrics Grid -->
@@ -22822,8 +22844,9 @@ window.calc401kOptimizerSecure = function() {
         <div style="padding:10px;background:rgba(231,76,60,0.15);border-left:3px solid var(--color-negative);border-radius:6px;margin-bottom:10px;">
           <strong style="color:var(--color-negative);">⚠️ You're leaving $${missedMatch.toLocaleString('en-US',{maximumFractionDigits:0})}/year in FREE money on the table!</strong>
           <div style="font-size:12px;color:var(--text-primary);margin-top:4px;">
-            Contribute at least $${minForMatch.toLocaleString('en-US',{maximumFractionDigits:0})}/yr 
-            ($${(minForMatch/12).toLocaleString('en-US',{maximumFractionDigits:0})}/mo) to get the full employer match.
+            Contribute at least $${contribForFullMatch.toLocaleString('en-US',{maximumFractionDigits:0})}/yr 
+            ($${(contribForFullMatch/12).toLocaleString('en-US',{maximumFractionDigits:0})}/mo) to get the full employer match.
+            ${capIsBinding ? `<br><span style="opacity:0.75;">Your plan's $${matchCap.toLocaleString('en-US')} cap kicks in before the ${matchUpTo}% formula would (that alone would need $${minForMatch.toLocaleString('en-US',{maximumFractionDigits:0})}/yr) — so less is actually required to get 100% of the match.</span>` : ''}
           </div>
         </div>` : ''}
 
@@ -22845,8 +22868,8 @@ window.calc401kOptimizerSecure = function() {
           <strong style="color:#f39c12;">🎯 ${isSuperCatchup ? 'SECURE 2.0 super catch-up available!' : 'Catch-up contribution available!'}</strong>
           <div style="font-size:12px;color:var(--text-primary);margin-top:4px;">
             ${isSuperCatchup
-              ? `Ages 60–63 get the enhanced SECURE 2.0 limit — you can contribute an extra $${catchUp.toLocaleString()} this year ($${(catchUp/12).toLocaleString('en-US',{maximumFractionDigits:0})}/mo extra).`
-              : `Since you're 50+, you can contribute an extra $${catchUp.toLocaleString()} this year ($${(catchUp/12).toLocaleString('en-US',{maximumFractionDigits:0})}/mo extra).`}
+              ? `Ages 60–63 get the enhanced SECURE 2.0 limit — you can contribute an extra $${catchUp.toLocaleString('en-US')} this year ($${(catchUp/12).toLocaleString('en-US',{maximumFractionDigits:0})}/mo extra).`
+              : `Since you're 50+, you can contribute an extra $${catchUp.toLocaleString('en-US')} this year ($${(catchUp/12).toLocaleString('en-US',{maximumFractionDigits:0})}/mo extra).`}
           </div>
         </div>` : ''}
     </div>
@@ -22855,7 +22878,7 @@ window.calc401kOptimizerSecure = function() {
     <div style="padding:14px;background:var(--bg-tertiary);border-radius:8px;border-left:3px solid #f39c12;">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px;">📋 Monthly Action Plan</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-        <div><span style="color:var(--text-secondary);">Minimum (get full match):</span> <strong>$${(minForMatch/12).toLocaleString('en-US',{maximumFractionDigits:0})}/mo</strong></div>
+        <div><span style="color:var(--text-secondary);">Minimum (get full match):</span> <strong>$${(contribForFullMatch/12).toLocaleString('en-US',{maximumFractionDigits:0})}/mo</strong></div>
         <div><span style="color:var(--text-secondary);">Recommended (max out):</span> <strong style="color:var(--color-positive);">$${monthlyOptimal.toLocaleString('en-US',{maximumFractionDigits:0})}/mo</strong></div>
         <div><span style="color:var(--text-secondary);">Current contribution:</span> <strong>$${(currContrib/12).toLocaleString('en-US',{maximumFractionDigits:0})}/mo</strong></div>
         <div><span style="color:var(--text-secondary);">Gap to max out:</span> <strong style="color:${monthlyGap > 0 ? '#f39c12' : 'var(--color-positive)'};">${monthlyGap > 0 ? '$' + monthlyGap.toLocaleString('en-US',{maximumFractionDigits:0}) + '/mo more' : 'Already maxed!'}</strong></div>
@@ -23068,7 +23091,81 @@ window.__taxPlannerBalances = function() {
       return{dep,survives:!dep};
     })();
 
+    // ── Your Accounts summary (what you told the planner you have) ──────────
+    const accounts = [
+      { label:'401(k) / Traditional', bal:inp.bal401k, color:'#e0a458', note:'Taxed as ordinary income when withdrawn' },
+      { label:'Roth IRA',             bal:inp.balRoth, color:'#3fb950', note:'Tax-free withdrawals, no RMDs' },
+      { label:'Brokerage',            bal:inp.balBrokerage, color:'#58a6ff', note:`~${basisPct.toFixed(0)}% cost basis — only gains are taxed` },
+    ].filter(a => a.bal > 0);
+    const totalBal = accounts.reduce((s,a)=>s+a.bal,0);
+
+    const accountsHTML = accounts.length ? `
+      <div style="margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+          <div style="font-size:.78rem;font-weight:700;color:#e6edf3;">💼 Your Accounts</div>
+          <div style="font-size:.72rem;color:#9aa7b4;">Total: <strong style="color:#e6edf3;">${fF(totalBal)}</strong></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          ${accounts.map(a=>`
+            <div style="flex:1;min-width:160px;background:#0d1117;border:1px solid #30363d;border-left:3px solid ${a.color};border-radius:8px;padding:10px 12px;">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;">
+                <div style="font-size:.68rem;color:#9aa7b4;">${a.label}</div>
+                <div style="font-size:.64rem;color:${a.color};font-weight:700;">${totalBal>0?(a.bal/totalBal*100).toFixed(0):0}%</div>
+              </div>
+              <div style="font-size:1rem;font-weight:800;color:#e6edf3;">${fF(a.bal)}</div>
+              <div style="font-size:.65rem;color:#9aa7b4;margin-top:2px;">${a.note}</div>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
+
+    // ── Recommended Withdrawal Order — derived from what the OPTIMIZED
+    // simulation actually does (see simulate(), strat==='optimized'), not a
+    // generic rule of thumb. Uses year-1 dollar amounts (pre-RMD, typical
+    // year) so the numbers are concrete, not abstract.
+    const y1 = opt.rows.find(r => r.rmd === 0) || opt.rows[0];  // first non-RMD year if one exists
+    const bracketLabel = {B10:'10%',B12:'12%',B22:'22%',B24:'24%'}[inp.convBracketTop] || inp.convBracketTop;
+    const steps = [];
+    if (inp.bal401k > 0) steps.push({
+      n:1, label:'401(k) / Traditional', color:'#e0a458',
+      why:`Draw first — up to the top of the ${bracketLabel} bracket. Filling this bucket while you're in a low bracket (before RMDs force larger, more expensive withdrawals later) is what drives most of the lifetime tax savings.`,
+      amt: y1 ? y1.from401 : 0,
+    });
+    if (inp.balBrokerage > 0) steps.push({
+      n:steps.length+1, label:'Brokerage', color:'#58a6ff',
+      why:'Covers any remaining spending need. Only the gain portion is taxed (at capital-gains rates, usually cheaper than ordinary income), and the rest is a tax-free return of your own basis.',
+      amt: y1 ? y1.fromBrk : 0,
+    });
+    if (inp.balRoth > 0) steps.push({
+      n:steps.length+1, label:'Roth IRA', color:'#3fb950',
+      why:`Tapped last, and only if 401k + Brokerage can't fully cover spending. Every year it's left alone is another year of tax-free growth with no RMDs — the most valuable dollar to preserve.`,
+      amt: y1 ? y1.fromRoth : 0,
+    });
+    const convNote = (!inp._noConvert && y1 && y1.conv > 0)
+      ? `<div style="margin-top:10px;padding:10px;background:rgba(52,152,219,.08);border-left:3px solid #3498db;border-radius:6px;font-size:.74rem;color:#e6edf3;">
+           <strong style="color:#58a6ff;">↻ Plus: Roth conversions</strong> — in low-bracket years before RMDs start, any bracket room left over after covering spending
+           (${fF(y1.conv)} in year 1) gets proactively converted from 401k → Roth. This isn't spending — it's moving money to tax-free
+           status while the tax rate to do so is cheap.
+         </div>` : '';
+
+    const orderHTML = steps.length ? `
+      <div style="margin-bottom:16px;padding:14px;background:#0d1117;border:1px solid #30363d;border-radius:10px;">
+        <div style="font-size:.85rem;font-weight:800;color:#e6edf3;margin-bottom:2px;">🎯 Recommended Withdrawal Order</div>
+        <div style="font-size:.7rem;color:#9aa7b4;margin-bottom:10px;">Based on the ${level} strategy — first year of retirement, spending ${fF(inp.annualSpend)}/yr</div>
+        ${steps.map(s=>`
+          <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:${s.n<steps.length?'10px':'0'};">
+            <div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:${s.color};color:#0d1117;font-weight:800;font-size:.72rem;display:flex;align-items:center;justify-content:center;">${s.n}</div>
+            <div style="flex:1;">
+              <div style="font-size:.8rem;font-weight:700;color:#e6edf3;">${s.label}${s.amt>0?` — ${fF(s.amt)} in year 1`:` <span style="font-weight:400;color:#9aa7b4;font-size:.7rem;">— not tapped in year 1</span>`}</div>
+              <div style="font-size:.72rem;color:#9aa7b4;margin-top:2px;">${s.why}</div>
+            </div>
+          </div>`).join('')}
+        ${convNote}
+        ${level!=='none' ? `<div style="margin-top:10px;font-size:.68rem;color:#9aa7b4;">Order shown is this year's snapshot — RMDs (starting age ${opt.RMD}) eventually force 401k withdrawals regardless of bracket, which is precisely what pre-emptive Roth conversion is designed to soften.</div>` : ''}
+      </div>` : '';
+
     el.innerHTML=`
+      ${accountsHTML}
+      ${orderHTML}
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
         ${pill('Strategy',level.charAt(0).toUpperCase()+level.slice(1),'#e6edf3')}
         ${pill('Lifetime Tax',f0(opt.ltTax),'#e74c3c')}
