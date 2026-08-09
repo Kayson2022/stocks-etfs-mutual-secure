@@ -3754,12 +3754,19 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <span class="clear-input" data-target="portfolioFilter">×</span>
 </div>
 <select class="search-input" id="platformFilter" style="display: none;"></select>
+<select class="search-input" id="assetTypeFilter" title="Filter by asset type">
+<option value="all">All Types</option>
+<option value="stock">Stocks only</option>
+<option value="etf">ETFs only</option>
+<option value="fund">Mutual Funds only</option>
+</select>
 <select id="portfolioSort">
 <option value="performance">Sort by Performance</option>
 <option value="alphabetical">Sort Alphabetical (A-Z)</option>
 <option value="value">Sort by Total Value</option>
 <option value="pl_overall">Sort by Overall P/L ($)</option>
 <option value="platform">Sort by Platform</option>
+<option value="assetType">Sort by Asset Type</option>
 </select>
 </div>
 </div><!-- end stocks-tab -->
@@ -5371,6 +5378,46 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             }
         }
         
+
+        // ── Asset classification (shared) ──────────────────────────────────
+        // The data model stores only `stocks` and `mutualFunds`; ETFs sit
+        // inside `stocks`, so ETF-ness has to be derived. Order of trust:
+        //   1. Yahoo instrumentType  (authoritative, captured on refresh)
+        //   2. explicit item.type
+        //   3. membership of the mutualFunds array
+        //   4. known-ETF ticker list
+        //   5. 5-letter symbol ending in X  (classic mutual fund pattern)
+        window.ASSET_ETF_TICKERS = new Set([
+          'SPY','VOO','IVV','QQQ','QQQM','DIA','IWM','VTI','ITOT','SPTM','SCHX','SCHG','SCHD',
+          'VUG','VTV','IVW','IVE','MGK','VGT','XLK','FTEC','IYW','SOXX','SMH','PSI','VYM','DVY',
+          'HDV','VXUS','IXUS','VEA','EFA','VWO','EEM','IEMG','SPEM','BND','AGG','TLT','IEF',
+          'VGSH','SHY','BIL','SGOV','VNQ','IYR','SCHH','FREL','GLD','IAU','SLV','PDBC',
+          'TSLL','NVDL','TQQQ','SOXL','UPRO','SSO','SPXL','JEPQ','JEPI','SCHB','SCHA','SCHF',
+          'SCHE','SCHI','ARKK','ARKG','ARKW','XLF','XLE','XLV','XLY','XLP','XLI','XLB','XLU',
+          'XLRE','XLC','VOOG','VOOV','RSP','MOAT','COWZ','AVUV','VBR','IJR','IJH','MDY',
+          'EWJ','EWZ','FXI','MCHI','INDA','EWY','EWT','ACWI','VT','BNDX','VCIT','VCSH','LQD',
+          'HYG','JNK','MUB','VTEB','TIP','VTIP','SCHP','USFR','TFLO','IBIT','FBTC','ETHA'
+        ]);
+        window.classifyAsset = function(item, tracker){
+          if (!item) return 'stock';
+          const it = String(item.instrumentType || '').toUpperCase();
+          if (it === 'ETF') return 'etf';
+          if (it === 'MUTUALFUND') return 'fund';
+          if (it === 'EQUITY') return 'stock';
+          const t = String(item.type || '').toLowerCase();
+          if (t === 'etf') return 'etf';
+          if (t === 'mutualfund' || t === 'fund') return 'fund';
+          const tr = tracker || window.stockTracker;
+          if (tr && Array.isArray(tr.mutualFunds) && item.id != null &&
+              tr.mutualFunds.some(f => f.id === item.id)) return 'fund';
+          const s = String(item.symbol || '').toUpperCase();
+          if (window.ASSET_ETF_TICKERS.has(s)) return 'etf';
+          if (s.length === 5 && s.endsWith('X')) return 'fund';
+          return 'stock';
+        };
+        window.assetTypeLabel = function(k){
+          return k === 'etf' ? 'ETF' : k === 'fund' ? 'Mutual Fund' : 'Stock';
+        };
         class StockTracker {
             constructor() {
                 this.activeBottomRange = "BAR_TODAY"; this.currentRange = "BAR_TODAY";
@@ -5582,6 +5629,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     liveUpdateBtn: document.getElementById('liveUpdateBtn'), toggleLiveUpdateBtn: document.getElementById('toggleLiveUpdateBtn'), clearAllBtn: document.getElementById('clearAllBtn'),
                     portfolioFilter: document.getElementById('portfolioFilter'), 
                     platformFilter: document.getElementById('platformFilter'),
+                    assetTypeFilter: document.getElementById('assetTypeFilter'),
                     portfolioSort: document.getElementById('portfolioSort'), settingsBtn: document.getElementById('settingsBtn'),
                     mutualFundInput: document.getElementById('mutualFundInput'), addFundBtn: document.getElementById('addFundBtn'),
                     watchlistInput: document.getElementById('watchlistInput'), addWatchlistBtn: document.getElementById('addWatchlistBtn'),
@@ -5685,6 +5733,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 if (this.elements.importFile) this.elements.importFile.addEventListener('change', (e) => this.importData(e));
                 if (this.elements.portfolioFilter) this.elements.portfolioFilter.addEventListener('input', () => this.renderContent());
                 if (this.elements.platformFilter) this.elements.platformFilter.addEventListener('change', () => this.renderContent());
+                if (this.elements.assetTypeFilter) this.elements.assetTypeFilter.addEventListener('change', () => this.renderContent());
                 if (this.elements.portfolioSort) this.elements.portfolioSort.addEventListener('change', () => this.renderContent());
                 if (this.elements.addFundBtn) this.elements.addFundBtn.addEventListener('click', () => this.addItemFromInput('fund'));
                 if (this.elements.mutualFundInput) this.elements.mutualFundInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.addItemFromInput('fund'); });
@@ -6045,11 +6094,25 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     case 'pl_overall':
                         return items.sort((a, b) => {
                             const statsA = this.calculateTransactionStats(a.transactions, a.price);
-                            const statsB = this.calculateTransactionStats(b.transactions, a.price);
+                            const statsB = this.calculateTransactionStats(b.transactions, b.price); // was a.price -- valued B's holdings at A's share price
                             const totalPlA = statsA.unrealizedPL + statsA.realizedPL;
                             const totalPlB = statsB.unrealizedPL + statsB.realizedPL;
                             return totalPlB - totalPlA;
                         });
+
+                    case 'assetType': {
+                        // Group Stocks -> ETFs -> Mutual Funds, then by value
+                        // within each group so the biggest holdings lead.
+                        const rank = {stock:0, etf:1, fund:2};
+                        return items.sort((a, b) => {
+                            const ra = rank[window.classifyAsset(a, this)] ?? 0;
+                            const rb = rank[window.classifyAsset(b, this)] ?? 0;
+                            if (ra !== rb) return ra - rb;
+                            const va = this.calculateTransactionStats(a.transactions, a.price).currentValue;
+                            const vb = this.calculateTransactionStats(b.transactions, b.price).currentValue;
+                            return vb - va;
+                        });
+                    }
 
                     case 'platform':
                         // This case is handled by grouping, but we'll sort within groups by performance.
@@ -6093,6 +6156,24 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
 
                 const sortBy = this.elements.portfolioSort ? this.elements.portfolioSort.value : 'performance';
                 let filteredItems = items || [];
+
+                // ── Asset type filter ──────────────────────────────────────
+                // Only meaningful on holdings tabs. On the funds tab every
+                // item is already a mutual fund, so the control is hidden
+                // there rather than offering choices that return nothing.
+                const _atEl = this.elements.assetTypeFilter;
+                if (_atEl) {
+                    const onHoldings = (this.currentTab === 'stocks');
+                    _atEl.style.display = onHoldings ? 'block' : 'none';
+                    if (onHoldings) {
+                        const want = _atEl.value || 'all';
+                        if (want !== 'all') {
+                            filteredItems = filteredItems.filter(
+                                it => window.classifyAsset(it, this) === want
+                            );
+                        }
+                    }
+                }
 
                 if (this.currentTab === 'stocks' || this.currentTab === 'funds') {
                     if (sortBy === 'platform') {
@@ -6628,6 +6709,10 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                                         item.fiftyTwoWeekLow  = meta52.fiftyTwoWeekLow  ?? item.fiftyTwoWeekLow  ?? null;
                                         item.sector           = meta52.sector   ?? item.sector   ?? null;
                                         item.industry         = meta52.industry ?? item.industry ?? null;
+                                        // Authoritative asset class straight from Yahoo -- EQUITY /
+                                        // ETF / MUTUALFUND. Already in this response; capturing it
+                                        // costs no extra request and beats ticker-list guessing.
+                                        item.instrumentType   = meta52.instrumentType ?? item.instrumentType ?? null;
                                         // Regular-session split (was previously re-fetched by fetchYahooEnrichment)
                                         const regularPrice   = meta52.regularMarketPrice ?? meta52.chartPreviousClose ?? null;
                                         const previousClose  = meta52.previousClose ?? meta52.chartPreviousClose ?? null;
