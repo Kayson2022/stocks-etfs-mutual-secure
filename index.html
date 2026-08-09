@@ -17589,8 +17589,8 @@ window.runAIDoctor = async function(mode) {
   const _goalEl = document.getElementById('t62Goal');
   const _goalRaw = _goalEl ? parseFloat(String(_goalEl.value).replace(/[,$]/g,'')) : NaN;
   const _goalFallback = parseFloat((window.stockTracker && window.stockTracker.config && window.stockTracker.config.retirementGoal) || localStorage.getItem('coastFireGoal') || 0);
-  const goalAmt = (_goalRaw > 0) ? _goalRaw : (_goalFallback > 0 ? _goalFallback : 3000000);
-  const goalStr = '$' + goalAmt.toLocaleString('en-US');
+  const _goalAmt = (_goalRaw > 0) ? _goalRaw : (_goalFallback > 0 ? _goalFallback : 3000000);
+  const _goalStr = '$' + _goalAmt.toLocaleString('en-US');
 
   const portfolioContext = `
 Portfolio Total: $${totalVal.toLocaleString('en-US',{maximumFractionDigits:0})}
@@ -17598,7 +17598,7 @@ Number of positions: ${numPositions}
 Diversification score: ${divScore}/100
 Top holding: ${topHolding.symbol} at ${topPct}%
 Top 5 positions: ${top5Pct.toFixed(1)}% of portfolio
-Goal: ${goalStr} retirement
+Goal: ${_goalStr} retirement
 All positions (top 20): ${positionSummary}`;
 
   const prompts = {
@@ -22990,12 +22990,55 @@ window.__taxPlannerBalances = function() {
     if(st.br){const sStd=st.std[status]||0,sInc=o.pretaxWithdrawals+o.rothConversion+(st.cg?o.ltGains:0),sT=Math.max(0,sInc-sStd);stTax=bt(sT,st.br[status]);if(st.mh&&sT>st.mh.t)stTax+=(sT-st.mh.t)*st.mh.r;}
     return{fed,state:stTax,total:fed+stTax,taxableSS:tSS};
   }
+  // ── Social Security claim-age adjustment ────────────────────────────────
+  // Full Retirement Age by birth year (SSA schedule).
+  const ssFRA = by => {
+    if (!by || by <= 1954) return 66;
+    if (by >= 1960) return 67;
+    return 66 + ({1955:2,1956:4,1957:6,1958:8,1959:10}[by] || 0)/12;
+  };
+  // Benefit as a multiple of PIA at a given claim age.
+  // Early: 5/9 of 1%/mo for the first 36 months, then 5/12 of 1%/mo.
+  // Late:  2/3 of 1%/mo (8%/yr) delayed-retirement credits, capped at 70.
+  const ssFactor = (claimAge, by) => {
+    const fra = ssFRA(by);
+    const a = Math.max(62, Math.min(70, claimAge||62));
+    if (a < fra) {
+      const m = Math.round((fra - a) * 12);
+      const red = Math.min(m,36)*(5/9/100) + Math.max(0,m-36)*(5/12/100);
+      return Math.max(0, 1 - red);
+    }
+    const m = Math.round((Math.min(a,70) - fra) * 12);
+    return 1 + m*(2/3/100);
+  };
+  // Convert a benefit quoted at one claim age into the benefit at another.
+  // Returns the same number when the age is unchanged, so existing runs are
+  // bit-identical to before this was added.
+  const ssAtAge = (benefitAtEntered, enteredAge, newAge, by) => {
+    // Exact identity when the claim age is unchanged -- avoids float drift
+    // from dividing and re-multiplying by the same factor.
+    if (Math.round((enteredAge||62)*12) === Math.round((newAge||62)*12)) return benefitAtEntered;
+    const f0 = ssFactor(enteredAge, by);
+    if (!(f0 > 0)) return benefitAtEntered;
+    const pia = benefitAtEntered / f0;
+    return pia * ssFactor(newAge, by);
+  };
+  window.__ssAtAge = ssAtAge; window.__ssFactor = ssFactor; window.__ssFRA = ssFRA;
+
   const rmdAge=by=>(!by?73:(by>=1960?75:73));
 
   function simulate(inp,strat){
     const st=inp.status||'mfj', RMD=rmdAge(inp.birthYear);
+    // 10% early-distribution penalty applies to 401k money taken before 59.5.
+    // Rule of 55: separating from service in the year you turn 55+ makes THAT
+    // employer's plan penalty-free, so a retirement age of 55+ clears it.
+    // Roth CONVERSIONS are never penalised -- only distributions for spending.
+    const PENALTY_FREE_AGE = 59.5;
+    const ruleOf55 = (inp.retireAge||62) >= 55;
+    const penaltyApplies = age => !ruleOf55 && age < PENALTY_FREE_AGE;
+    const penaltyAware = inp._penaltyAware !== false;
     let b401=inp.bal401k,bRoth=inp.balRoth,bBrk=inp.balBrokerage,brkBasis=inp.balBrokerage*(inp.brokerageBasisPct??0.5);
-    const rows=[];let ltTax=0,ltFed=0,ltState=0,dep=null;
+    const rows=[];let ltTax=0,ltFed=0,ltState=0,dep=null,ltPenalty=0;
     for(let age=inp.retireAge;age<=inp.endAge;age++){
       const yr=age-inp.retireAge, inf=Math.pow(1+(inp.inflRate??.025),yr);
       const spend=inp.annualSpend*inf, ss=age>=(inp.ssClaimAge??62)?inp.ssAnnual*inf:0;
@@ -23007,9 +23050,11 @@ window.__taxPlannerBalances = function() {
         const cap=inp.convBracketTop?TAX_CFG[inp.convBracketTop][st]:TAX_CFG.B12[st];
         const tSSe=ssTax(ss,from401,st), ordSoFar=from401+tSSe;
         let room=Math.max(0,cap+std-ordSoFar);
-        const fill=Math.min(room,need,b401);if(fill>0){b401-=fill;from401+=fill;need-=fill;room-=fill;}
+        const avoid401 = penaltyAware && penaltyApplies(age);
+        if(!avoid401){const fill=Math.min(room,need,b401);if(fill>0){b401-=fill;from401+=fill;need-=fill;room-=fill;}}
         if(need>0&&bBrk>0){const take=Math.min(need,bBrk),gf=bBrk>0?Math.max(0,(bBrk-brkBasis)/bBrk):0;gains+=take*gf;brkBasis-=take*(1-gf);bBrk-=take;fromBrk+=take;need-=take;}
         if(need>0&&bRoth>0){const take=Math.min(need,bRoth);bRoth-=take;fromRoth+=take;need-=take;}
+        if(need>0&&b401>0){const t=Math.min(need,b401);b401-=t;from401+=t;need-=t;}
         if(!inp._noConvert&&age<RMD&&room>0&&b401>0){conv=Math.min(room,b401);b401-=conv;bRoth+=conv;}
       }else{
         if(need>0&&bBrk>0){const take=Math.min(need,bBrk),gf=bBrk>0?Math.max(0,(bBrk-brkBasis)/bBrk):0;gains+=take*gf;brkBasis-=take*(1-gf);bBrk-=take;fromBrk+=take;need-=take;}
@@ -23017,12 +23062,16 @@ window.__taxPlannerBalances = function() {
         if(need>0&&bRoth>0){const take=Math.min(need,bRoth);bRoth-=take;fromRoth+=take;need-=take;}
       }
       const tax=annualTax({pretaxWithdrawals:from401,rothConversion:conv,ssBenefit:ss,ltGains:gains,status:st,stateCode:inp.stateCode,age,spouseAge:age});
+      // RMDs cannot occur before 59.5, so every from401 dollar here is a
+      // voluntary distribution and penalised in full when the rule applies.
+      const penalty = penaltyApplies(age) ? from401*0.10 : 0;
+      ltPenalty += penalty;
       ltTax+=tax.total;ltFed+=tax.fed;ltState+=tax.state;
       const total=b401+bRoth+bBrk;if(total<=0&&dep===null)dep=age;
-      rows.push({age,spend,ss,from401,fromBrk,fromRoth,rmd,conv,gains,taxableSS:tax.taxableSS,fed:tax.fed,state:tax.state,tax:tax.total,shortfall:need,b401:Math.max(0,b401),bRoth:Math.max(0,bRoth),bBrk:Math.max(0,bBrk),total:Math.max(0,total)});
+      rows.push({age,spend,ss,from401,fromBrk,fromRoth,rmd,conv,gains,penalty,taxableSS:tax.taxableSS,fed:tax.fed,state:tax.state,tax:tax.total,shortfall:need,b401:Math.max(0,b401),bRoth:Math.max(0,bRoth),bBrk:Math.max(0,bBrk),total:Math.max(0,total)});
     }
     const fRoth=Math.max(0,bRoth),fBrk=Math.max(0,bBrk),f401=Math.max(0,b401);
-    return{rows,ltTax,ltFed,ltState,dep,RMD,finalRoth:fRoth,finalBrk:fBrk,final401:f401,afterTax:fRoth+fBrk*.85+f401*.70};
+    return{rows,ltTax,ltFed,ltState,ltPenalty,ltTotalCost:ltTax+ltPenalty,dep,RMD,ruleOf55,finalRoth:fRoth,finalBrk:fBrk,final401:f401,afterTax:fRoth+fBrk*.85+f401*.70-ltPenalty};
   }
   window.__taxSim=simulate; // expose for testing
 
@@ -23173,6 +23222,308 @@ window.__taxPlannerBalances = function() {
         ${level!=='none' ? `<div style="margin-top:10px;font-size:.68rem;color:#9aa7b4;">Order shown is this year's snapshot — RMDs (starting age ${opt.RMD}) eventually force 401k withdrawals regardless of bracket, which is precisely what pre-emptive Roth conversion is designed to soften.</div>` : ''}
       </div>` : '';
 
+
+    // ── What's driving the tax bill — every figure below is computed from the
+    // user's own inputs. Where a lever is testable, the real engine is re-run
+    // with that one input changed (not a rule of thumb).
+    const obs = [];
+
+    // 1) Peak tax window + share of lifetime tax landing there
+    const peakRow = opt.rows.reduce((a,b)=>b.tax>a.tax?b:a, opt.rows[0]);
+    const convYears = opt.rows.filter(r=>r.conv>0);
+    if (convYears.length) {
+      const convTax = convYears.reduce((s,r)=>s+r.tax,0);
+      const convShare = opt.ltTax>0 ? (convTax/opt.ltTax*100) : 0;
+      obs.push({
+        t:'Your tax bill is front-loaded into the conversion years',
+        d:'Ages '+convYears[0].age+'\u2013'+convYears[convYears.length-1].age+' carry '+fF(convTax)+' of tax \u2014 <strong>'+convShare.toFixed(0)+'% of your entire lifetime tax</strong>, peaking at '+fF(peakRow.tax)+' at age '+peakRow.age+'. That is the price paid up front to shrink the 401k before RMDs force withdrawals at worse rates. It is intentional \u2014 but it is also where every lever below has the most leverage.'
+      });
+    }
+
+    // 2) Social Security inclusion \u2014 pinned at the 85% ceiling or not
+    const ssRows = opt.rows.filter(r=>r.ss>0 && r.taxableSS>0);
+    if (ssRows.length) {
+      const r0 = ssRows[0];
+      const inclPct = r0.ss>0 ? (r0.taxableSS/r0.ss*100) : 0;
+      const totalSSIncl = opt.rows.reduce((s,r)=>s+(r.taxableSS||0),0);
+      if (inclPct >= 84) {
+        obs.push({
+          t:'Social Security is maxed out at the 85% taxable ceiling',
+          d:'At age '+r0.age+', '+fF(r0.taxableSS)+' of your '+fF(r0.ss)+' benefit counts as taxable income \u2014 the <strong>85% legal maximum</strong>. Across the plan, '+fF(totalSSIncl)+' of benefits get pulled into taxable income. The conversions themselves cause this: they push provisional income far past the threshold. The upside is you are already at the ceiling, so it cannot get worse \u2014 but small reductions in conversions will not help either, since income would need to fall a long way to drop below the threshold.'
+        });
+      } else {
+        obs.push({
+          t:'Only '+inclPct.toFixed(0)+'% of Social Security is taxable \u2014 you still have room',
+          d:'At age '+r0.age+', '+fF(r0.taxableSS)+' of your '+fF(r0.ss)+' benefit is taxable, below the 85% ceiling. Each additional dollar of ordinary income drags more of the benefit in, so extra conversions cost more than their face bracket rate suggests.'
+        });
+      }
+    }
+
+    // 3) Cheapest-tax preset vs. selected (uses the real preset re-simulations)
+    const lowTax = presets.reduce((a,b)=>b.s.ltTax<a.s.ltTax?b:a);
+    const curP = presets.find(p=>p.lv===level);
+    if (curP && lowTax.lv !== level) {
+      const taxDrop = curP.s.ltTax - lowTax.s.ltTax;
+      const estDrop = curP.s.afterTax - lowTax.s.afterTax;
+      obs.push({
+        t:'Switching to "'+lowTax.lv+'" cuts lifetime tax by '+fF(taxDrop),
+        d:lowTax.lv.charAt(0).toUpperCase()+lowTax.lv.slice(1)+' pays '+fF(lowTax.s.ltTax)+' versus your current '+fF(curP.s.ltTax)+'. '+(estDrop>0
+            ? 'The trade-off: after-tax estate falls by '+fF(estDrop)+' \u2014 you keep more cash now but leave heirs a larger embedded tax bill.'
+            : 'It also leaves a <strong>larger</strong> after-tax estate ('+fF(lowTax.s.afterTax)+') \u2014 on these inputs the more aggressive setting is not buying you anything.')+' Change the Roth Conversion dropdown above to see it live.'
+      });
+    }
+
+    // 4) Delaying Social Security \u2014 real re-simulation with one input changed
+    if (inp.ssAnnual>0 && (inp.ssClaimAge==null || inp.ssClaimAge < 70)) {
+      // Benefit is re-derived for the later claim age (delayed-retirement
+      // credits), not held flat -- holding it flat made delaying look like
+      // pure loss and would invert the recommendation.
+      const altSS = simulate(Object.assign({}, inp, {ssClaimAge:70,
+        ssAnnual: ssAtAge(inp.ssAnnual, inp.ssClaimAge||62, 70, inp.birthYear)}), 'optimized');
+      const dTax = opt.ltTax - altSS.ltTax, dEst = altSS.afterTax - opt.afterTax;
+      obs.push({
+        t: (dTax>0 && dEst>=0) ? 'Claiming Social Security at 70 instead of '+(inp.ssClaimAge||62)+' saves '+fF(dTax)+' in lifetime tax'
+           : (dTax>0 && dEst<0) ? 'Claiming Social Security at 70 trades '+fF(Math.abs(dEst))+' of estate for '+fF(dTax)+' of tax savings'
+           : 'Claiming Social Security at 70 does not reduce tax on these inputs',
+        d: (dTax>0
+              ? 'Delaying keeps benefits out of your income during the high-conversion years, which is exactly when they are taxed hardest. '+(dEst>=0?'After-tax estate also improves by '+fF(dEst)+'.':'But after-tax estate <strong>falls by '+fF(Math.abs(dEst))+'</strong> \u2014 the forgone benefits have to be replaced from the portfolio, so on these inputs the lower tax bill is not actually a net win.')
+              : 'Re-running with a claim age of 70 raises lifetime tax by '+fF(Math.abs(dTax))+', because the missing benefit forces larger taxable 401k withdrawals during the gap years.')
+            +' <em style="color:#8b949e;">Benefit re-derived for age 70 using SSA delayed-retirement credits: '+fF(inp.ssAnnual)+'/yr at '+(inp.ssClaimAge||62)+' becomes '+fF(ssAtAge(inp.ssAnnual,inp.ssClaimAge||62,70,inp.birthYear))+'/yr at 70.</em>'
+      });
+    }
+
+    // 5) Fed vs state split \u2014 where the tax actually goes
+    if (opt.ltTax>0) {
+      const stShare = opt.ltState/opt.ltTax*100;
+      obs.push({
+        t: stShare.toFixed(0)+'% of your lifetime tax is '+inp.stateCode+' state tax ('+fF(opt.ltState)+')',
+        d:'Federal accounts for '+fF(opt.ltFed)+'. '+(inp.stateCode==='CA'
+            ? 'California does <strong>not</strong> tax Social Security, but it does tax Roth conversions and capital gains as ordinary income with no preferential rate \u2014 so conversions drive most of this number.'
+            : 'State treatment of conversions and capital gains varies widely and is worth confirming for your state.')+' Where you are a resident during the conversion years is the single biggest lever on this line.'
+      });
+    }
+
+    // 6) Spending sensitivity \u2014 real re-simulation at 90% spend
+    const altSpend = simulate(Object.assign({}, inp, {annualSpend:inp.annualSpend*0.9}), 'optimized');
+    const spendDrop = opt.ltTax - altSpend.ltTax;
+    if (spendDrop > 0) {
+      obs.push({
+        t:'Spending 10% less ('+fF(inp.annualSpend*0.9)+'/yr) cuts lifetime tax by '+fF(spendDrop),
+        d:'Smaller forced withdrawals leave more bracket room for cheaper conversions and drag less Social Security into taxable income. After-tax estate rises to '+fF(altSpend.afterTax)+'.'
+      });
+    }
+
+    const obsHTML = obs.length ? '<div style="background:rgba(224,164,88,.05);border:1px solid rgba(224,164,88,.25);border-radius:10px;padding:14px 16px;margin-bottom:16px;">'
+      + '<div style="font-size:.85rem;font-weight:800;color:#e6edf3;margin-bottom:2px;">\U0001F4A1 What is driving your tax bill \u2014 and the levers that move it</div>'
+      + '<div style="font-size:.7rem;color:#9aa7b4;margin-bottom:12px;">Every figure below is computed from your own inputs. Where a lever is testable, the engine was re-run with that one input changed.</div>'
+      + obs.map(function(o,i){ return '<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:'+(i<obs.length-1?'12px':'0')+';">'
+          + '<div style="flex-shrink:0;width:20px;height:20px;border-radius:50%;background:#e0a458;color:#0d1117;font-weight:800;font-size:.68rem;display:flex;align-items:center;justify-content:center;margin-top:1px;">'+(i+1)+'</div>'
+          + '<div style="flex:1;"><div style="font-size:.79rem;font-weight:700;color:#e6edf3;">'+o.t+'</div>'
+          + '<div style="font-size:.73rem;color:#9aa7b4;margin-top:3px;line-height:1.55;">'+o.d+'</div></div></div>'; }).join('')
+      + '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #30363d;font-size:.68rem;color:#8b949e;line-height:1.5;">'
+      + 'These are observations about this model\u2019s output, not a recommendation. Roth conversions cannot be undone once the tax year closes, and this model omits IRMAA, NIIT and ACA effects that can materially change the answer \u2014 confirm with a CPA or CFP before acting.'
+      + '</div></div>' : '';
+
+
+    // ── Ways to reduce your tax ─────────────────────────────────────────────
+    // Grid-searches claim age x conversion aggressiveness using the REAL
+    // engine. Social Security is re-priced at each claim age via SSA
+    // actuarial factors, so delaying is credited properly.
+    const curSSAge = inp.ssClaimAge||62;
+    const claimAges = [62,65,67,70].filter(a=>a>=curSSAge || a===curSSAge);
+    const aggrKeys = ['none','conservative','moderate','aggressive'];
+    const grid = [];
+    for (const ca of claimAges) {
+      for (const lv of aggrKeys) {
+        const ssAdj = inp.ssAnnual>0 ? ssAtAge(inp.ssAnnual, curSSAge, ca, inp.birthYear) : 0;
+        const s = simulate(Object.assign({}, inp, {
+          ssClaimAge: ca, ssAnnual: ssAdj,
+          convBracketTop: AGGR[lv]||'B12', _noConvert: AGGR[lv]===null
+        }), 'optimized');
+        grid.push({ca, lv, ssAdj, ltTax:s.ltTax, afterTax:s.afterTax, dep:s.dep, s});
+      }
+    }
+    const curCell = grid.find(g=>g.ca===curSSAge && g.lv===level) || grid[0];
+    const viable = grid.filter(g=>!g.dep);          // never runs out of money
+    const pool = viable.length ? viable : grid;
+    const bestEst  = pool.reduce((a,b)=>b.afterTax>a.afterTax?b:a);
+    const bestTax  = pool.reduce((a,b)=>b.ltTax<a.ltTax?b:a);
+    const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
+
+    const sugg = [];
+
+    // 1) Best overall on after-tax estate
+    if (bestEst && curCell && (bestEst.ca!==curCell.ca || bestEst.lv!==curCell.lv)) {
+      const dEst = bestEst.afterTax - curCell.afterTax;
+      const dTax = bestEst.ltTax - curCell.ltTax;
+      sugg.push({
+        tag:'BEST OVERALL', col:'#3fb950',
+        t:'Claim Social Security at '+bestEst.ca+' with '+cap(bestEst.lv)+' conversions',
+        d:'After-tax estate '+fF(bestEst.afterTax)+' \u2014 <strong>'+(dEst>=0?'+':'')+fF(dEst)+'</strong> versus your current setting. Lifetime tax '+fF(bestEst.ltTax)+' ('+(dTax>=0?'+':'\u2212')+fF(Math.abs(dTax))+').'
+          + (inp.ssAnnual>0 && bestEst.ca!==curSSAge ? ' Delaying raises the benefit from '+fF(inp.ssAnnual)+'/yr to '+fF(bestEst.ssAdj)+'/yr, so less has to come out of the portfolio each year.' : '')
+      });
+    }
+
+    // 2) Lowest lifetime tax (only if it differs from #1)
+    if (bestTax && curCell && (bestTax.ca!==bestEst.ca || bestTax.lv!==bestEst.lv)
+        && (bestTax.ca!==curCell.ca || bestTax.lv!==curCell.lv)) {
+      const dTax = curCell.ltTax - bestTax.ltTax;
+      const dEst = bestTax.afterTax - curCell.afterTax;
+      sugg.push({
+        tag:'LOWEST TAX', col:'#e0a458',
+        t:'Claim at '+bestTax.ca+' with '+cap(bestTax.lv)+' conversions \u2014 '+fF(dTax)+' less lifetime tax',
+        d:'Lifetime tax drops to '+fF(bestTax.ltTax)+'. '+(dEst>=0
+            ? 'After-tax estate also improves by '+fF(dEst)+'.'
+            : 'But after-tax estate falls '+fF(Math.abs(dEst))+' \u2014 lower tax paid is not the same as more money kept, because untaxed 401k dollars still owe tax later.')
+      });
+    }
+
+    // 3) Isolated effect of delaying SS, holding conversions where they are
+    if (inp.ssAnnual>0 && curSSAge<70) {
+      const sameLv = g=>g.lv===level;
+      const at67 = grid.find(g=>g.ca===67 && sameLv(g));
+      const at70 = grid.find(g=>g.ca===70 && sameLv(g));
+      const parts = [];
+      if (at67 && curSSAge<67) parts.push('claiming at 67 gives '+fF(at67.afterTax)+' estate / '+fF(at67.ltTax)+' tax');
+      if (at70) parts.push('claiming at 70 gives '+fF(at70.afterTax)+' estate / '+fF(at70.ltTax)+' tax');
+      if (parts.length) {
+        const ref = at70||at67;
+        const better = ref.afterTax > curCell.afterTax;
+        sugg.push({
+          tag:'SS TIMING ALONE', col:'#58a6ff',
+          t:'Delaying Social Security while keeping '+cap(level)+' conversions',
+          d:'Holding everything else fixed at your current '+fF(curCell.afterTax)+' estate / '+fF(curCell.ltTax)+' tax: '+parts.join(', ')+'. '
+            + (better
+                ? 'Delaying wins here because the larger benefit covers more of your spending, so fewer taxable dollars have to leave the 401k each year.'
+                : 'Delaying does not win on these inputs \u2014 the gap years force extra 401k withdrawals that outweigh the larger benefit.')
+        });
+      }
+    }
+
+    // 4) Concrete year-1 conversion headroom guidance
+    const y1r = opt.rows[0];
+    if (y1r && level!=='none') {
+      sugg.push({
+        tag:'EXECUTION', col:'#9aa7b4',
+        t:'Convert in December, not January',
+        d:'Your year-1 plan converts '+fF(y1r.conv)+' to fill the bracket. Actual bracket room depends on realised income, dividends and capital gains you will not know until late in the year \u2014 converting near year end lets you size it to the room that is actually left instead of over- or under-filling. Conversions cannot be undone once the tax year closes.'
+      });
+    }
+
+    // 5) IRMAA warning -- not modelled, and conversions are the usual trigger
+    if (level!=='none' && (inp.retireAge<=63 || true)) {
+      sugg.push({
+        tag:'NOT MODELLED', col:'#e74c3c',
+        t:'Check IRMAA before converting at age 63 and later',
+        d:'Medicare premiums at 65+ are set from your tax return two years earlier, so income at 63 drives your age-65 premiums. Large conversions can push you into surcharge brackets costing thousands per year per person. This model does <strong>not</strong> include IRMAA, NIIT or ACA subsidy effects \u2014 all three can materially change which option above actually wins.'
+      });
+    }
+
+    const suggHTML = sugg.length ? '<div style="background:rgba(63,185,80,.05);border:1px solid rgba(63,185,80,.28);border-radius:10px;padding:14px 16px;margin-top:16px;">'
+      + '<div style="font-size:.85rem;font-weight:800;color:#e6edf3;margin-bottom:2px;">\u2705 Ways to reduce your tax</div>'
+      + '<div style="font-size:.7rem;color:#9aa7b4;margin-bottom:12px;">Tested by re-running the engine across '+grid.length+' combinations of Social Security claim age and conversion aggressiveness. Benefits are re-priced at each claim age using SSA actuarial factors.</div>'
+      + sugg.map(function(o,i){ return '<div style="margin-bottom:'+(i<sugg.length-1?'13px':'0')+';padding-left:10px;border-left:3px solid '+o.col+';">'
+          + '<div style="font-size:.6rem;letter-spacing:.5px;font-weight:800;color:'+o.col+';margin-bottom:2px;">'+o.tag+'</div>'
+          + '<div style="font-size:.79rem;font-weight:700;color:#e6edf3;">'+o.t+'</div>'
+          + '<div style="font-size:.73rem;color:#9aa7b4;margin-top:3px;line-height:1.55;">'+o.d+'</div></div>'; }).join('')
+      + '<div style="margin-top:12px;padding-top:10px;border-top:1px solid #30363d;font-size:.68rem;color:#8b949e;line-height:1.5;">'
+      + 'Ranked on this model\u2019s assumptions only. It cannot see your health, longevity expectations, a spouse\u2019s survivor benefit, or state-of-residence changes \u2014 all of which can outweigh everything above. Roth conversions are irreversible once the tax year closes; confirm with a CPA or CFP before acting.'
+      + '</div></div>' : '';
+
+
+    // ── Early-withdrawal penalty exposure ───────────────────────────────────
+    // Only meaningful when retirement starts before 59.5 and the rule of 55
+    // does not clear it.
+    let penaltyHTML = '';
+    if (inp.retireAge < 59.5) {
+      const naive = simulate(Object.assign({}, inp, {_penaltyAware:false}), 'optimized');
+      const saved = naive.ltPenalty - opt.ltPenalty;
+      const earlyRows = opt.rows.filter(r=>r.age<59.5);
+      const stillPaying = opt.ltPenalty > 0;
+      penaltyHTML = '<div style="background:rgba(231,76,60,.06);border:1px solid rgba(231,76,60,.3);border-radius:10px;padding:14px 16px;margin-bottom:16px;">'
+        + '<div style="font-size:.85rem;font-weight:800;color:#e6edf3;margin-bottom:2px;">\u26a0\ufe0f Retiring at ' + inp.retireAge + ' \u2014 early-withdrawal penalty</div>'
+        + '<div style="font-size:.73rem;color:#9aa7b4;margin-bottom:10px;line-height:1.55;">'
+        + '401(k) money taken before age 59\u00bd is hit with a 10% penalty on top of income tax. '
+        + (opt.ruleOf55
+            ? 'Because you separate from service at ' + inp.retireAge + ' (55 or later), the <strong>rule of 55</strong> clears this for that employer\u2019s plan \u2014 no penalty is applied.'
+            : 'The rule of 55 does <strong>not</strong> apply at age ' + inp.retireAge + ' \u2014 you would need to separate at 55 or later.')
+        + '</div>'
+        + (!opt.ruleOf55 ? ('<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'
+            + '<div style="flex:1;min-width:150px;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 12px;">'
+              + '<div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.5px;color:#9aa7b4;font-weight:600;">If you fund spending from the 401k</div>'
+              + '<div style="font-size:1rem;font-weight:800;color:#e74c3c;">' + fF(naive.ltPenalty) + '</div>'
+              + '<div style="font-size:.65rem;color:#9aa7b4;">in penalties, ages ' + inp.retireAge + '\u201359</div></div>'
+            + '<div style="flex:1;min-width:150px;background:#0d1117;border:1px solid #30363d;border-left:3px solid #3fb950;border-radius:8px;padding:10px 12px;">'
+              + '<div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.5px;color:#9aa7b4;font-weight:600;">Funding from brokerage/Roth first</div>'
+              + '<div style="font-size:1rem;font-weight:800;color:' + (stillPaying?'#e0a458':'#3fb950') + ';">' + fF(opt.ltPenalty) + '</div>'
+              + '<div style="font-size:.65rem;color:#9aa7b4;">' + (stillPaying ? 'unavoidable \u2014 other accounts run dry' : 'penalty fully avoided') + '</div></div>'
+            + '<div style="flex:1;min-width:150px;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:10px 12px;">'
+              + '<div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.5px;color:#9aa7b4;font-weight:600;">Saved by ordering</div>'
+              + '<div style="font-size:1rem;font-weight:800;color:#3fb950;">' + fF(saved) + '</div>'
+              + '<div style="font-size:.65rem;color:#9aa7b4;">already applied in the plan above</div></div>'
+            + '</div>') : '')
+        + '<div style="font-size:.72rem;color:#9aa7b4;line-height:1.55;">'
+        + (stillPaying && !opt.ruleOf55
+            ? '<strong style="color:#e0a458;">Note:</strong> even drawing brokerage and Roth first, ' + fF(opt.ltPenalty) + ' of penalty remains \u2014 those accounts cannot cover the full gap to 59\u00bd. A <strong>72(t)/SEPP</strong> schedule is the usual remedy: it removes the penalty entirely, but locks you into fixed annual distributions for 5 years or until 59\u00bd, whichever is longer. '
+            : '')
+        + 'Roth <em>conversions</em> are never penalised \u2014 only distributions taken for spending. That makes ages ' + inp.retireAge + '\u201359 a strong conversion window even while you avoid touching the 401k for cash.'
+        + '</div>'
+        + (earlyRows.some(function(r){return r.fromRoth>0;})
+            ? ('<div style="margin-top:10px;padding:10px;background:rgba(224,164,88,.08);border-left:3px solid #e0a458;border-radius:6px;font-size:.71rem;color:#e6edf3;line-height:1.55;">'
+              + '<strong style="color:#e0a458;">Two caveats on this ordering.</strong> To avoid the penalty the plan draws '
+              + fF(earlyRows.reduce(function(s,r){return s+r.fromRoth;},0)) + ' from the <strong>Roth</strong> before 59\u00bd \u2014 the opposite of the \u201cRoth last\u201d principle elsewhere in this planner. It still wins on after-tax estate here, but it spends your most valuable dollars early. '
+              + 'Also, each Roth <em>conversion</em> carries its own <strong>5-year clock</strong>: converted amounts withdrawn before 5 years have passed (and before 59\u00bd) are themselves hit with the 10% penalty. This model does not track those clocks \u2014 it assumes withdrawals come from seasoned contributions and older conversions first, which is the correct IRS ordering, but the margin is worth checking with a CPA before relying on it.'
+              + '</div>')
+            : '')
+        + '</div>';
+    }
+
+    // ── Longevity sensitivity ───────────────────────────────────────────────
+    // The single most decision-relevant unknown for SS timing. Re-runs the
+    // engine across death ages x claim ages, benefits re-priced actuarially.
+    let longevityHTML = '';
+    if (inp.ssAnnual > 0) {
+      const deathAges = [75,80,82,85,88,90,95].filter(a=>a>inp.retireAge);
+      const ages = [62,67,70].filter(a=>a>=(inp.ssClaimAge||62) || a===(inp.ssClaimAge||62));
+      const useAges = ages.length>1 ? ages : [62,67,70];
+      const lrows = deathAges.map(function(da){
+        const cells = useAges.map(function(ca){
+          const s = simulate(Object.assign({}, inp, {endAge:da, ssClaimAge:ca,
+            ssAnnual: ssAtAge(inp.ssAnnual, inp.ssClaimAge||62, ca, inp.birthYear)}), 'optimized');
+          return {ca, est:s.afterTax};
+        });
+        const best = cells.reduce(function(a,b){return b.est>a.est?b:a;});
+        return {da, cells, best:best.ca};
+      });
+      // Find where the answer flips
+      let flip = null;
+      for (let i=1;i<lrows.length;i++){ if(lrows[i].best!==lrows[i-1].best && flip===null) flip = lrows[i].da; }
+      longevityHTML = '<div style="background:rgba(88,166,255,.05);border:1px solid rgba(88,166,255,.28);border-radius:10px;padding:14px 16px;margin-bottom:16px;">'
+        + '<div style="font-size:.85rem;font-weight:800;color:#e6edf3;margin-bottom:2px;">\u23f3 How long you live changes the answer</div>'
+        + '<div style="font-size:.7rem;color:#9aa7b4;margin-bottom:10px;line-height:1.5;">After-tax estate by Social Security claim age, at each assumed death age. Your plan currently assumes age ' + inp.endAge + '.'
+        + (flip ? ' <strong style="color:#e6edf3;">The best choice flips around age ' + flip + '.</strong>' : '')
+        + '</div>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:.73rem;">'
+        + '<thead><tr style="font-size:.66rem;color:#9aa7b4;border-bottom:1.5px solid #30363d;">'
+        + '<th style="padding:5px 8px;text-align:left;color:#9aa7b4;">If you live to</th>'
+        + useAges.map(function(a){return '<th style="padding:5px 8px;text-align:right;color:#9aa7b4;">Claim at '+a+'</th>';}).join('')
+        + '<th style="padding:5px 8px;text-align:right;color:#9aa7b4;">Best</th></tr></thead><tbody>'
+        + lrows.map(function(r){
+            const isCur = r.da===inp.endAge;
+            return '<tr style="border-bottom:.5px solid #30363d;'+(isCur?'background:rgba(88,166,255,.08);':'')+'">'
+              + '<td style="padding:4px 8px;font-weight:'+(isCur?'800':'600')+';color:#e6edf3;">'+r.da+(isCur?' \u25c0 yours':'')+'</td>'
+              + r.cells.map(function(cl){
+                  const win = cl.ca===r.best;
+                  return '<td style="padding:4px 8px;text-align:right;color:'+(win?'#3fb950':'#9aa7b4')+';font-weight:'+(win?'700':'400')+';">'+f0(cl.est)+'</td>';
+                }).join('')
+              + '<td style="padding:4px 8px;text-align:right;font-weight:700;color:#3fb950;">'+r.best+'</td></tr>';
+          }).join('')
+        + '</tbody></table>'
+        + '<div style="margin-top:10px;padding-top:9px;border-top:1px solid #30363d;font-size:.7rem;color:#8b949e;line-height:1.55;">'
+        + '<strong style="color:#e0a458;">The survivor benefit is not in this table.</strong> When one spouse dies the survivor keeps the <em>larger</em> of the two benefits, not both \u2014 so the higher earner\u2019s claim age sets a permanent floor under the survivor\u2019s income. If you are the higher earner and your spouse is likely to outlive you, that argues for delaying regardless of what the rows above say, because the relevant lifespan is the longer of the two, not yours alone.'
+        + '</div></div>';
+    }
+
     el.innerHTML=`
       ${accountsHTML}
       ${orderHTML}
@@ -23184,6 +23535,11 @@ window.__taxPlannerBalances = function() {
         ${pill('Ending Roth',f0(opt.finalRoth),'#3fb950')}
         ${pill('RMD Age',String(opt.RMD),'#e6edf3')}
       </div>
+
+      ${penaltyHTML}
+      ${longevityHTML}
+
+      ${obsHTML}
 
       <div style="background:rgba(52,152,219,.06);border:1px solid rgba(52,152,219,.22);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:.8rem;color:#9aa7b4;line-height:1.5;">
         <strong style="color:#e6edf3;">Strategy comparison</strong> — same inputs, four conversion aggressiveness levels. ★ = best after-tax estate. Note the trade-off: aggressive usually pays <em>more</em> lifetime tax but leaves a larger tax-free estate.
@@ -23207,6 +23563,8 @@ window.__taxPlannerBalances = function() {
           </tr></thead><tbody>${rowsHTML}</tbody>
         </table>
       </div>
+
+      ${suggHTML}
 
       <p style="font-size:.66rem;color:#9aa7b4;margin-top:12px;line-height:1.5;">
         <strong>⚠️ Estates only — not tax advice.</strong> Uses 2026 federal (IRS Rev. Proc. 2025-32) and California (FTB 2025) figures. After-tax estate applies rough haircuts (401k ×0.70, brokerage ×0.85, Roth ×1.0). Does <strong>not</strong> model IRMAA Medicare surcharges, NIIT (3.8%), ACA subsidies, state-specific SS rules, or market volatility beyond the stress test. Consult a CPA or CFP before executing Roth conversions.
