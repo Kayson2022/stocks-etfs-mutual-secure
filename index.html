@@ -17582,13 +17582,23 @@ window.runAIDoctor = async function(mode) {
     `${p.symbol}: ${p.pct}% ($${parseInt(p.val).toLocaleString()}, P/L: ${p.plPct}%)`
   ).join(', ');
 
+  // Dynamic goal — was hardcoded to $3,000,000 regardless of the user's actual
+  // target (same bug class as the 401k app's fmtGoal issue). Reads the live
+  // Target 62 goal input first, falls back to the Coast FIRE config/localStorage
+  // value, and only defaults to $3,000,000 if neither is set.
+  const _goalEl = document.getElementById('t62Goal');
+  const _goalRaw = _goalEl ? parseFloat(String(_goalEl.value).replace(/[,$]/g,'')) : NaN;
+  const _goalFallback = parseFloat((window.stockTracker && window.stockTracker.config && window.stockTracker.config.retirementGoal) || localStorage.getItem('coastFireGoal') || 0);
+  const goalAmt = (_goalRaw > 0) ? _goalRaw : (_goalFallback > 0 ? _goalFallback : 3000000);
+  const goalStr = '$' + goalAmt.toLocaleString('en-US');
+
   const portfolioContext = `
 Portfolio Total: $${totalVal.toLocaleString('en-US',{maximumFractionDigits:0})}
 Number of positions: ${numPositions}
 Diversification score: ${divScore}/100
 Top holding: ${topHolding.symbol} at ${topPct}%
 Top 5 positions: ${top5Pct.toFixed(1)}% of portfolio
-Goal: $3,000,000 retirement
+Goal: ${goalStr} retirement
 All positions (top 20): ${positionSummary}`;
 
   const prompts = {
