@@ -19,6 +19,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -6701,6 +6702,12 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                  if(this.elements.smallCountdownContainer) this.elements.smallCountdownContainer.textContent = 'Updates Paused';
             }
             toggleLiveUpdate() { this.isLiveUpdatePaused ? this.startLiveUpdate() : this.stopLiveUpdate(); }
+            // Local pacing helper. NOTE: ApiService has its own _sleep for retry
+            // backoff; this one is needed because refreshItems() lives on
+            // StockTracker, a DIFFERENT class -- calling this.apiService._sleep
+            // from here would work too, but a local copy keeps the call site
+            // readable and avoids reaching across objects for a one-liner.
+            _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             async refreshStocks() { await this.refreshItems(this.stocks, 'stock'); }
             async refreshFunds() { await this.refreshItems(this.mutualFunds, 'fund'); }
             async refreshWatchlist() { await this.refreshItems(this.watchlist, 'watchlist'); }
@@ -6815,7 +6822,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                                     // skip the duplicate request entirely.
                                 } else {
                                 const url52 = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(item.symbol)}?interval=1d&range=5d`;
-                                const res52 = await this._fetchWithRetry429(() => fetch(url52, { cache: 'no-store' }));
+                                const res52 = await this.apiService._fetchWithRetry429(() => fetch(url52, { cache: 'no-store' }));
                                 if (res52.ok) {
                                     const json52 = await res52.json();
                                     const meta52 = json52?.chart?.result?.[0]?.meta;
