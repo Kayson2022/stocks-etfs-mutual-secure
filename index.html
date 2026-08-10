@@ -5059,6 +5059,72 @@ async fetchYahooHistory(symbol, range) {
             // available. Returns the SAME shape as fetchStockEtfQuote() so the
             // caller can use it interchangeably, plus `_meta` so the caller can
             // reuse the same response for enrichment instead of re-fetching.
+            // Batched quote fetch -- THE fix for the 429 storms.
+            // Yahoo's /v7/finance/quote takes a comma-separated symbol list and
+            // returns them all in one response, so 63 holdings become 2 requests
+            // instead of 126. Returns a Map of symbol -> quote-shaped data using
+            // the SAME field names as fetchStockEtfQuote() so callers are
+            // interchangeable. Symbols Yahoo omits simply won't be in the Map;
+            // the caller falls back per-symbol for those.
+            async fetchBatchQuotes(symbols, chunkSize = 50) {
+                const out = new Map();
+                if (!symbols || !symbols.length) return out;
+
+                for (let i = 0; i < symbols.length; i += chunkSize) {
+                    const chunk = symbols.slice(i, i + chunkSize);
+                    try {
+                        const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(chunk.join(','))}`;
+                        const res = await this._fetchWithRetry429(() => fetch(url, { cache: 'no-store' }));
+                        if (!res || !res.ok) continue;
+
+                        let data;
+                        const ct = (res.headers.get('content-type') || '').toLowerCase();
+                        if (ct.includes('application/json')) data = await res.json();
+                        else { const t = await res.text(); try { data = JSON.parse(t); } catch { continue; } }
+
+                        const results = data?.quoteResponse?.result || data?.result || [];
+                        for (const q of results) {
+                            const sym = q?.symbol;
+                            if (!sym) continue;
+                            const price = (typeof q.regularMarketPrice === 'number') ? q.regularMarketPrice : null;
+                            if (price == null) continue;
+                            const prev = (typeof q.regularMarketPreviousClose === 'number') ? q.regularMarketPreviousClose : null;
+                            const change = (typeof q.regularMarketChange === 'number') ? q.regularMarketChange
+                                         : (prev != null ? price - prev : 0);
+                            let pct = (typeof q.regularMarketChangePercent === 'number') ? q.regularMarketChangePercent
+                                    : (prev ? (change / prev) * 100 : 0);
+                            if (pct && typeof pct === 'object' && 'raw' in pct) pct = pct.raw;
+
+                            out.set(sym.toUpperCase(), {
+                                price,
+                                change,
+                                changePercent: pct,
+                                open:          q.regularMarketOpen        ?? price,
+                                high:          q.regularMarketDayHigh     ?? price,
+                                low:           q.regularMarketDayLow      ?? price,
+                                previousClose: prev ?? price,
+                                // enrichment fields -- same response, no extra request
+                                _enrich: {
+                                    fiftyTwoWeekHigh: q.fiftyTwoWeekHigh ?? null,
+                                    fiftyTwoWeekLow:  q.fiftyTwoWeekLow  ?? null,
+                                    instrumentType:   q.quoteType        ?? null,
+                                    marketState:      q.marketState      ?? 'CLOSED',
+                                    postMarketPrice:  q.postMarketPrice  ?? null,
+                                    postMarketChange: q.postMarketChange ?? null,
+                                    postMarketChangePercent: q.postMarketChangePercent ?? null,
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.warn('Batch quote chunk failed:', e.message);
+                    }
+                    // Only fires between chunks -- 2 chunks means exactly 1 short
+                    // pause for a whole 63-stock refresh, not 63 of them.
+                    if (i + chunkSize < symbols.length) await this._sleep(300);
+                }
+                return out;
+            }
+
             async fetchYahooQuoteFallback(symbol) {
                 try {
                     const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
@@ -6738,24 +6804,39 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 let stats = { success: 0, gains: 0, losses: 0, unchanged: 0, failed: 0, fallback: 0 };
                 let needsGroupRerender = false; // if any item flips gain/loss during refresh
 
-                
+                // ── BATCH FETCH ────────────────────────────────────────────────
+                // One request per 50 symbols instead of one request per symbol.
+                // A 63-stock refresh is 2 HTTP calls, not 126 -- which is why the
+                // per-stock pacing delay is no longer needed.
+                let batch = new Map();
+                if (type !== 'fund') {
+                    this.showLoading(true, `Fetching ${itemsToRefresh.length} quotes...`);
+                    batch = await this.apiService.fetchBatchQuotes(itemsToRefresh.map(it => it.symbol));
+                }
+
                 for (const [i, item] of itemsToRefresh.entries()) {
                     let result;
                     let usedYahooFallback = false;
                     if (type === 'fund') {
                         result = await this.apiService.fetchMutualFundDataWithFallback(item.symbol);
-                    } else { 
-                        result = await this.apiService.fetchStockEtfQuote(item.symbol);
-                        // REAL FALLBACK: Finnhub was previously a hard dependency --
-                        // if it failed, the stock was marked failed even though Yahoo
-                        // could have supplied a price. Only runs when Finnhub failed,
-                        // so the success path is completely unchanged.
-                        if (!result.success) {
-                            const fb = await this.apiService.fetchYahooQuoteFallback(item.symbol);
-                            if (fb.success) {
-                                console.warn(`${item.symbol}: Finnhub failed (${result.reason}) — using Yahoo fallback price.`);
-                                result = fb;
-                                usedYahooFallback = true;
+                    } else {
+                        const hit = batch.get(String(item.symbol).toUpperCase());
+                        if (hit) {
+                            // Served from the batch -- zero additional requests.
+                            const { _enrich, ...quote } = hit;
+                            result = { success: true, data: quote, _batchEnrich: _enrich };
+                        } else {
+                            // Not in the batch (Yahoo didn't return it) -- fall back
+                            // to the per-symbol path. Rare, so the old per-request
+                            // cost applies to only a handful of symbols instead of all.
+                            result = await this.apiService.fetchStockEtfQuote(item.symbol);
+                            if (!result.success) {
+                                const fb = await this.apiService.fetchYahooQuoteFallback(item.symbol);
+                                if (fb.success) {
+                                    console.warn(`${item.symbol}: not in batch and Finnhub failed (${result.reason}) — using Yahoo chart fallback.`);
+                                    result = fb;
+                                    usedYahooFallback = true;
+                                }
                             }
                         }
                     }
@@ -6797,6 +6878,21 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                             // If the Yahoo fallback already ran, its response contains
                             // every enrichment field -- reuse it rather than issuing a
                             // second identical request to the same URL.
+                            // Enrichment straight from the batch response -- no request.
+                            if (result._batchEnrich) {
+                                const b = result._batchEnrich;
+                                chartFetchOk = true;
+                                item.fiftyTwoWeekHigh = b.fiftyTwoWeekHigh ?? item.fiftyTwoWeekHigh ?? null;
+                                item.fiftyTwoWeekLow  = b.fiftyTwoWeekLow  ?? item.fiftyTwoWeekLow  ?? null;
+                                item.instrumentType   = b.instrumentType   ?? item.instrumentType   ?? null;
+                                item.priceRegular    = result.data.price;
+                                item.changeRegular   = result.data.change;
+                                item.percentRegular  = result.data.changePercent;
+                                item.priceExtended   = b.postMarketPrice   ?? item.price;
+                                item.changeExtended  = b.postMarketChange  ?? item.change;
+                                item.percentExtended = b.postMarketChangePercent ?? item.changePercent;
+                                item.marketState     = b.marketState || 'CLOSED';
+                            }
                             if (usedYahooFallback && result._meta) {
                                 const m = result._meta;
                                 chartFetchOk = true;
@@ -6897,15 +6993,13 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         console.error(`Failed to refresh ${item.symbol}:`, result.reason);
                     }
                     this.showLoading(true, `Refreshing ${item.symbol}... (${i + 1}/${itemsToRefresh.length})`);
-                    // Pace requests so Finnhub's 60/min free-tier ceiling (and
-                    // corsproxy's own per-IP limit) is never approached in the
-                    // first place. 60/min = 1 call/sec at the exact ceiling, so
-                    // 1100ms between items (with 1 Finnhub call per item) keeps
-                    // sustained throughput at ~54/min -- a real margin, not just
-                    // barely under. (350ms was wrong: it works out to ~174/min,
-                    // nearly 3x over the limit -- caught by testing the actual
-                    // arithmetic rather than trusting the comment.)
-                    if (i < itemsToRefresh.length - 1) await this._sleep(1100);
+                    // No pacing delay needed: items served from the batch make ZERO
+                    // requests. Only symbols missing from the batch hit the network,
+                    // and those are rare -- so a short pause applies to just those.
+                    if (!batch.has(String(item.symbol).toUpperCase()) && type !== 'fund'
+                        && i < itemsToRefresh.length - 1) {
+                        await this._sleep(300);
+                    }
                 }
                 this.showLoading(false);
                 this.showRefreshStatus(type, stats);
