@@ -19,6 +19,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -3278,6 +3279,202 @@ body.dark-mode .modal-content {
 }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+<!-- ===== SECURE SETTINGS (Telegram creds in Firestore) =====
+     Injected in <head> because this document has unbalanced </script>
+     tags further down, which stop later scripts from running. -->
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+/* ============================================================================
+ *  SECURE SETTINGS  —  Telegram credentials stored in Firestore, not in code.
+ *  ---------------------------------------------------------------------------
+ *  WHY: this app is published to a PUBLIC GitHub Pages repo, so anything
+ *  hardcoded in the HTML is readable by anyone who views source. A bot token
+ *  in the file can be used to read and send messages as your bot.
+ *
+ *  This is the browser equivalent of the Pi's `.env` approach: the secret is
+ *  stored separately from the code and loaded at runtime. Because it lives in
+ *  Firestore under your authenticated user, it also syncs to every device you
+ *  sign into — unlike localStorage, which is per-browser.
+ *
+ *  Path: users/{userId}/settings/telegram   (readable only by your account)
+ * ========================================================================== */
+(function(){
+  if (window.__secureSettingsLoaded) return; window.__secureSettingsLoaded = true;
+
+  const C = { bg:'#0d1117', card:'#161b22', bd:'#30363d', tx:'#e6edf3',
+              dim:'#9aa7b4', grn:'#3fb950', red:'#e74c3c', amb:'#e0a458', blu:'#58a6ff' };
+
+  function H(){ return (typeof window.__getFirebaseHandles==='function') ? window.__getFirebaseHandles() : null; }
+  function ready(){ const h=H(); return !!(h && h.db && h.userId && h.doc && h.setDoc && h.getDoc); }
+  function ref(){ const h=H(); return h.doc(h.db,'users',h.userId,'settings','telegram'); }
+
+  // In-memory cache so callers don't hit Firestore on every send.
+  let cached = null;
+
+  /** Returns {token, chatId} or null. Used by the app's backup code. */
+  window.getTelegramConfig = async function(force){
+    if (cached && !force) return cached;
+    if (!ready()) return null;
+    try{
+      const snap = await H().getDoc(ref());
+      if (snap.exists()) {
+        const d = snap.data();
+        if (d && d.token && d.chatId) { cached = { token:d.token, chatId:d.chatId }; return cached; }
+      }
+    }catch(e){ console.warn('Could not load Telegram settings:', e); }
+    return null;
+  };
+
+  window.saveTelegramConfig = async function(token, chatId){
+    if (!ready()) throw new Error('Not signed in yet — wait for the app to finish loading.');
+    await H().setDoc(ref(), { token:token.trim(), chatId:String(chatId).trim(),
+                              updatedAt:new Date().toISOString() });
+    cached = { token:token.trim(), chatId:String(chatId).trim() };
+    return cached;
+  };
+
+  window.clearTelegramConfig = async function(){
+    if (!ready()) throw new Error('Not signed in.');
+    await H().setDoc(ref(), { token:'', chatId:'', updatedAt:new Date().toISOString() });
+    cached = null;
+  };
+
+  // ---- UI -----------------------------------------------------------------
+  function mask(s){
+    if(!s) return '';
+    return s.length <= 12 ? s.slice(0,4)+'…' : s.slice(0,10) + '…' + s.slice(-4);
+  }
+
+  async function refreshStatus(){
+    const el = document.getElementById('ssStatus');
+    if(!el) return;
+    if(!ready()){ el.innerHTML = `<span style="color:${C.amb};">Waiting for sign-in…</span>`; return; }
+    const cfg = await window.getTelegramConfig(true);
+    el.innerHTML = cfg
+      ? `<span style="color:${C.grn};">✓ Configured</span>
+         <span style="color:${C.dim};"> — token ${mask(cfg.token)} · chat ${mask(cfg.chatId)} · synced to all your devices</span>`
+      : `<span style="color:${C.amb};">Not configured</span>
+         <span style="color:${C.dim};"> — Telegram backups are disabled until you enter credentials below.</span>`;
+  }
+
+  window.__ssSave = async function(){
+    const t = document.getElementById('ssToken').value.trim();
+    const c = document.getElementById('ssChat').value.trim();
+    const msg = document.getElementById('ssMsg');
+    if(!t || !c){ msg.style.color=C.red; msg.textContent='Enter both the bot token and the chat ID.'; return; }
+    if(!/^\d+:[A-Za-z0-9_-]+$/.test(t)){
+      msg.style.color=C.red; msg.textContent='That does not look like a Telegram bot token (expected format 1234567890:AA...).'; return; }
+    try{
+      await window.saveTelegramConfig(t,c);
+      msg.style.color=C.grn; msg.textContent='✓ Saved to your account. It will sync to every device you sign into.';
+      document.getElementById('ssToken').value=''; document.getElementById('ssChat').value='';
+      await refreshStatus();
+    }catch(e){ msg.style.color=C.red; msg.textContent='Could not save: '+e.message; }
+  };
+
+  window.__ssTest = async function(){
+    const msg = document.getElementById('ssMsg');
+    const cfg = await window.getTelegramConfig(true);
+    if(!cfg){ msg.style.color=C.red; msg.textContent='Nothing saved yet.'; return; }
+    msg.style.color=C.dim; msg.textContent='Sending a test message…';
+    try{
+      const res = await fetch('https://api.telegram.org/bot'+cfg.token+'/sendMessage', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ chat_id: cfg.chatId, text: '✅ Test message — your portfolio app can reach Telegram.' })
+      });
+      const r = await res.json();
+      if(r.ok){ msg.style.color=C.grn; msg.textContent='✓ Test message sent — check Telegram.'; }
+      else { msg.style.color=C.red; msg.textContent='Telegram rejected it: '+(r.description||'unknown error'); }
+    }catch(e){ msg.style.color=C.red; msg.textContent='Could not reach Telegram: '+e.message; }
+  };
+
+  window.__ssClear = async function(){
+    if(!confirm('Remove the stored Telegram credentials?\n\nTelegram backups will stop working until you enter them again.')) return;
+    const msg = document.getElementById('ssMsg');
+    try{ await window.clearTelegramConfig(); msg.style.color=C.dim; msg.textContent='Credentials removed.'; await refreshStatus(); }
+    catch(e){ msg.style.color=C.red; msg.textContent='Could not clear: '+e.message; }
+  };
+
+  function ensure(){
+    if(document.getElementById('secureSettingsWidget')) return;
+    const w=document.createElement('div');
+    w.id='secureSettingsWidget';
+    w.style.cssText=`display:none;margin:18px 0;padding:20px;border:1px solid ${C.bd};border-radius:14px;background:${C.card};color:${C.tx};`;
+    w.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <h3 style="font-size:1.1rem;font-weight:700;color:${C.tx};margin:0;">🔑 Telegram Credentials</h3>
+        <span onclick="document.getElementById('secureSettingsWidget').style.display='none'" style="cursor:pointer;color:${C.dim};font-size:1.3rem;line-height:1;">×</span>
+      </div>
+      <p style="font-size:.78rem;color:${C.dim};margin:0 0 6px;line-height:1.55;">
+        Stored in <strong>your Firestore account</strong>, not in the app file — so it is never exposed in the published
+        code, and it syncs to every device you sign into. This is the browser equivalent of the <code>.env</code> file on your Pi.</p>
+      <div id="ssStatus" style="font-size:.8rem;margin:10px 0 14px;"></div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:10px;">
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          <label style="font-size:.64rem;text-transform:uppercase;letter-spacing:.4px;color:${C.dim};font-weight:600;">Bot token</label>
+          <input id="ssToken" type="password" placeholder="1234567890:AA..." autocomplete="off"
+            style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid ${C.bd};border-radius:7px;background:${C.bg};color:${C.tx};font-size:.85rem;"/></div>
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          <label style="font-size:.64rem;text-transform:uppercase;letter-spacing:.4px;color:${C.dim};font-weight:600;">Chat ID</label>
+          <input id="ssChat" placeholder="e.g. 8748935089" autocomplete="off"
+            style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid ${C.bd};border-radius:7px;background:${C.bg};color:${C.tx};font-size:.85rem;"/></div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button onclick="window.__ssSave()" style="padding:8px 18px;background:${C.grn};color:#04260f;border:none;border-radius:8px;font-weight:800;font-size:.85rem;cursor:pointer;">Save</button>
+        <button onclick="window.__ssTest()" style="padding:8px 18px;background:transparent;color:${C.blu};border:1px solid ${C.blu};border-radius:8px;cursor:pointer;font-size:.85rem;">Send test message</button>
+        <button onclick="window.__ssClear()" style="padding:8px 18px;background:transparent;color:${C.red};border:1px solid ${C.red};border-radius:8px;cursor:pointer;font-size:.85rem;">Remove</button>
+      </div>
+      <div id="ssMsg" style="font-size:.78rem;color:${C.dim};min-height:1.2em;margin-top:10px;"></div>
+
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid ${C.bd};font-size:.72rem;color:${C.dim};line-height:1.6;">
+        <strong style="color:${C.tx};">Rotating your token:</strong> message @BotFather → <code>/revoke</code> → pick your bot →
+        copy the new token → paste it here. If your Raspberry Pi also uses the same bot, update
+        <code>TELEGRAM_TOKEN</code> in each <code>.env</code> file there and restart those services.
+      </div>`;
+    document.body.appendChild(w);
+    refreshStatus();
+  }
+
+  window.openSecureSettings = function(){
+    ensure();
+    const w=document.getElementById('secureSettingsWidget');
+    const open=w.style.display!=='none';
+    w.style.display=open?'none':'block';
+    if(!open){ refreshStatus(); w.scrollIntoView({behavior:'smooth',block:'start'}); }
+  };
+
+  function injectBtn(){
+    if(document.getElementById('_ssBtn')) return;
+    // Prefer the host app's control bar if it has one; otherwise fall back to a
+    // fixed floating button so this works in ANY app regardless of structure.
+    const g=document.getElementById('_enhControlsInjected');
+    if(g){
+      const b=document.createElement('span'); b.id='_ssBtn'; b.className='density-toggle';
+      b.title='Telegram credentials (stored securely in your account)';
+      b.textContent='🔑 Telegram Setup';
+      b.style.cursor='pointer';
+      b.addEventListener('click',window.openSecureSettings); g.appendChild(b);
+    } else {
+      const b=document.createElement('button'); b.id='_ssBtn';
+      b.title='Telegram credentials (stored securely in your account)';
+      b.textContent='🔑 Telegram Setup';
+      b.style.cssText='position:fixed;right:16px;bottom:16px;z-index:99999;padding:9px 15px;'+
+        'background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:9px;'+
+        'font-size:.82rem;font-weight:600;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,.45);';
+      b.addEventListener('click',window.openSecureSettings);
+      document.body.appendChild(b);
+    }
+  }
+  setTimeout(injectBtn,2500);
+  setTimeout(injectBtn,5000);
+  window.addEventListener('load',()=>setTimeout(injectBtn,2200));
+})();
+
+});
+</script>
 </head>
 <body>
 <!-- 
@@ -4426,8 +4623,6 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
             window._auth = auth; // expose for worker auth shim
 
             // Bridge for injected add-on modules (Telegram credential storage).
-            // Firestore fns live in this module scope; expose only what's needed.
-            // userId is read at call time so it stays correct as auth resolves.
             window.__getFirebaseHandles = function(){
                 return { db: db, auth: auth,
                          userId: (auth && auth.currentUser) ? auth.currentUser.uid : null,
@@ -6921,7 +7116,14 @@ renderPortfolioSummary() {
         
                 const dateInput = this.elements.modalDate ? this.elements.modalDate.value : '';
                 if (!dateInput) { this.showError('Transaction date is required.'); return; }
-                const transactionDateISO = new Date(dateInput).toISOString();
+                // FIX: <input type="date"> gives "YYYY-MM-DD". new Date("YYYY-MM-DD")
+                // parses as UTC midnight, which shifts BACK a day in US timezones
+                // (May 8 shown as May 7). Build at LOCAL noon so it reads back as
+                // the correct calendar day in any timezone.
+                const _dParts = String(dateInput).split('-').map(Number);
+                const transactionDateISO = (_dParts.length === 3 && !isNaN(_dParts[0]))
+                    ? new Date(_dParts[0], _dParts[1] - 1, _dParts[2], 12, 0, 0).toISOString()
+                    : new Date(dateInput).toISOString();
         
                 if (transactionType === 'buy' || transactionType === 'sell') {
                     const shares = parseFloat(this.elements.modalShares ? this.elements.modalShares.value : 0);
@@ -20268,7 +20470,6 @@ window.sendSecureBackupToTelegram = async function() {
 
         // Credentials load at RUNTIME from Firestore (users/{uid}/settings/telegram).
         // NOT hardcoded, because this file is published publicly.
-        // Configure via the "Telegram Setup" button.
         var _tgCfg = (typeof window.getTelegramConfig === 'function')
             ? await window.getTelegramConfig() : null;
         if (!_tgCfg || !_tgCfg.token || !_tgCfg.chatId) {
@@ -20316,182 +20517,6 @@ window.sendSecureBackupToTelegram = async function() {
 </script>
 
 
-<!-- ===== SECURE SETTINGS (Telegram creds in Firestore) ===== -->
-<script>
-/* ============================================================================
- *  SECURE SETTINGS  —  Telegram credentials stored in Firestore, not in code.
- *  ---------------------------------------------------------------------------
- *  WHY: this app is published to a PUBLIC GitHub Pages repo, so anything
- *  hardcoded in the HTML is readable by anyone who views source. A bot token
- *  in the file can be used to read and send messages as your bot.
- *
- *  This is the browser equivalent of the Pi's `.env` approach: the secret is
- *  stored separately from the code and loaded at runtime. Because it lives in
- *  Firestore under your authenticated user, it also syncs to every device you
- *  sign into — unlike localStorage, which is per-browser.
- *
- *  Path: users/{userId}/settings/telegram   (readable only by your account)
- * ========================================================================== */
-(function(){
-  if (window.__secureSettingsLoaded) return; window.__secureSettingsLoaded = true;
-
-  const C = { bg:'#0d1117', card:'#161b22', bd:'#30363d', tx:'#e6edf3',
-              dim:'#9aa7b4', grn:'#3fb950', red:'#e74c3c', amb:'#e0a458', blu:'#58a6ff' };
-
-  function H(){ return (typeof window.__getFirebaseHandles==='function') ? window.__getFirebaseHandles() : null; }
-  function ready(){ const h=H(); return !!(h && h.db && h.userId && h.doc && h.setDoc && h.getDoc); }
-  function ref(){ const h=H(); return h.doc(h.db,'users',h.userId,'settings','telegram'); }
-
-  // In-memory cache so callers don't hit Firestore on every send.
-  let cached = null;
-
-  /** Returns {token, chatId} or null. Used by the app's backup code. */
-  window.getTelegramConfig = async function(force){
-    if (cached && !force) return cached;
-    if (!ready()) return null;
-    try{
-      const snap = await H().getDoc(ref());
-      if (snap.exists()) {
-        const d = snap.data();
-        if (d && d.token && d.chatId) { cached = { token:d.token, chatId:d.chatId }; return cached; }
-      }
-    }catch(e){ console.warn('Could not load Telegram settings:', e); }
-    return null;
-  };
-
-  window.saveTelegramConfig = async function(token, chatId){
-    if (!ready()) throw new Error('Not signed in yet — wait for the app to finish loading.');
-    await H().setDoc(ref(), { token:token.trim(), chatId:String(chatId).trim(),
-                              updatedAt:new Date().toISOString() });
-    cached = { token:token.trim(), chatId:String(chatId).trim() };
-    return cached;
-  };
-
-  window.clearTelegramConfig = async function(){
-    if (!ready()) throw new Error('Not signed in.');
-    await H().setDoc(ref(), { token:'', chatId:'', updatedAt:new Date().toISOString() });
-    cached = null;
-  };
-
-  // ---- UI -----------------------------------------------------------------
-  function mask(s){
-    if(!s) return '';
-    return s.length <= 12 ? s.slice(0,4)+'…' : s.slice(0,10) + '…' + s.slice(-4);
-  }
-
-  async function refreshStatus(){
-    const el = document.getElementById('ssStatus');
-    if(!el) return;
-    if(!ready()){ el.innerHTML = `<span style="color:${C.amb};">Waiting for sign-in…</span>`; return; }
-    const cfg = await window.getTelegramConfig(true);
-    el.innerHTML = cfg
-      ? `<span style="color:${C.grn};">✓ Configured</span>
-         <span style="color:${C.dim};"> — token ${mask(cfg.token)} · chat ${mask(cfg.chatId)} · synced to all your devices</span>`
-      : `<span style="color:${C.amb};">Not configured</span>
-         <span style="color:${C.dim};"> — Telegram backups are disabled until you enter credentials below.</span>`;
-  }
-
-  window.__ssSave = async function(){
-    const t = document.getElementById('ssToken').value.trim();
-    const c = document.getElementById('ssChat').value.trim();
-    const msg = document.getElementById('ssMsg');
-    if(!t || !c){ msg.style.color=C.red; msg.textContent='Enter both the bot token and the chat ID.'; return; }
-    if(!/^\d+:[A-Za-z0-9_-]+$/.test(t)){
-      msg.style.color=C.red; msg.textContent='That does not look like a Telegram bot token (expected format 1234567890:AA...).'; return; }
-    try{
-      await window.saveTelegramConfig(t,c);
-      msg.style.color=C.grn; msg.textContent='✓ Saved to your account. It will sync to every device you sign into.';
-      document.getElementById('ssToken').value=''; document.getElementById('ssChat').value='';
-      await refreshStatus();
-    }catch(e){ msg.style.color=C.red; msg.textContent='Could not save: '+e.message; }
-  };
-
-  window.__ssTest = async function(){
-    const msg = document.getElementById('ssMsg');
-    const cfg = await window.getTelegramConfig(true);
-    if(!cfg){ msg.style.color=C.red; msg.textContent='Nothing saved yet.'; return; }
-    msg.style.color=C.dim; msg.textContent='Sending a test message…';
-    try{
-      const res = await fetch('https://api.telegram.org/bot'+cfg.token+'/sendMessage', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ chat_id: cfg.chatId, text: '✅ Test message — your portfolio app can reach Telegram.' })
-      });
-      const r = await res.json();
-      if(r.ok){ msg.style.color=C.grn; msg.textContent='✓ Test message sent — check Telegram.'; }
-      else { msg.style.color=C.red; msg.textContent='Telegram rejected it: '+(r.description||'unknown error'); }
-    }catch(e){ msg.style.color=C.red; msg.textContent='Could not reach Telegram: '+e.message; }
-  };
-
-  window.__ssClear = async function(){
-    if(!confirm('Remove the stored Telegram credentials?\n\nTelegram backups will stop working until you enter them again.')) return;
-    const msg = document.getElementById('ssMsg');
-    try{ await window.clearTelegramConfig(); msg.style.color=C.dim; msg.textContent='Credentials removed.'; await refreshStatus(); }
-    catch(e){ msg.style.color=C.red; msg.textContent='Could not clear: '+e.message; }
-  };
-
-  function ensure(){
-    if(document.getElementById('secureSettingsWidget')) return;
-    const w=document.createElement('div');
-    w.id='secureSettingsWidget';
-    w.style.cssText=`display:none;margin:18px 0;padding:20px;border:1px solid ${C.bd};border-radius:14px;background:${C.card};color:${C.tx};`;
-    w.innerHTML=`
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-        <h3 style="font-size:1.1rem;font-weight:700;color:${C.tx};margin:0;">🔑 Telegram Credentials</h3>
-        <span onclick="document.getElementById('secureSettingsWidget').style.display='none'" style="cursor:pointer;color:${C.dim};font-size:1.3rem;line-height:1;">×</span>
-      </div>
-      <p style="font-size:.78rem;color:${C.dim};margin:0 0 6px;line-height:1.55;">
-        Stored in <strong>your Firestore account</strong>, not in the app file — so it is never exposed in the published
-        code, and it syncs to every device you sign into. This is the browser equivalent of the <code>.env</code> file on your Pi.</p>
-      <div id="ssStatus" style="font-size:.8rem;margin:10px 0 14px;"></div>
-
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:10px;">
-        <div style="display:flex;flex-direction:column;gap:3px;">
-          <label style="font-size:.64rem;text-transform:uppercase;letter-spacing:.4px;color:${C.dim};font-weight:600;">Bot token</label>
-          <input id="ssToken" type="password" placeholder="1234567890:AA..." autocomplete="off"
-            style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid ${C.bd};border-radius:7px;background:${C.bg};color:${C.tx};font-size:.85rem;"/></div>
-        <div style="display:flex;flex-direction:column;gap:3px;">
-          <label style="font-size:.64rem;text-transform:uppercase;letter-spacing:.4px;color:${C.dim};font-weight:600;">Chat ID</label>
-          <input id="ssChat" placeholder="e.g. 8748935089" autocomplete="off"
-            style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid ${C.bd};border-radius:7px;background:${C.bg};color:${C.tx};font-size:.85rem;"/></div>
-      </div>
-
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button onclick="window.__ssSave()" style="padding:8px 18px;background:${C.grn};color:#04260f;border:none;border-radius:8px;font-weight:800;font-size:.85rem;cursor:pointer;">Save</button>
-        <button onclick="window.__ssTest()" style="padding:8px 18px;background:transparent;color:${C.blu};border:1px solid ${C.blu};border-radius:8px;cursor:pointer;font-size:.85rem;">Send test message</button>
-        <button onclick="window.__ssClear()" style="padding:8px 18px;background:transparent;color:${C.red};border:1px solid ${C.red};border-radius:8px;cursor:pointer;font-size:.85rem;">Remove</button>
-      </div>
-      <div id="ssMsg" style="font-size:.78rem;color:${C.dim};min-height:1.2em;margin-top:10px;"></div>
-
-      <div style="margin-top:14px;padding-top:12px;border-top:1px solid ${C.bd};font-size:.72rem;color:${C.dim};line-height:1.6;">
-        <strong style="color:${C.tx};">Rotating your token:</strong> message @BotFather → <code>/revoke</code> → pick your bot →
-        copy the new token → paste it here. If your Raspberry Pi also uses the same bot, update
-        <code>TELEGRAM_TOKEN</code> in each <code>.env</code> file there and restart those services.
-      </div>`;
-    document.body.appendChild(w);
-    refreshStatus();
-  }
-
-  window.openSecureSettings = function(){
-    ensure();
-    const w=document.getElementById('secureSettingsWidget');
-    const open=w.style.display!=='none';
-    w.style.display=open?'none':'block';
-    if(!open){ refreshStatus(); w.scrollIntoView({behavior:'smooth',block:'start'}); }
-  };
-
-  function injectBtn(){
-    const g=document.getElementById('_enhControlsInjected');
-    if(!g||document.getElementById('_ssBtn'))return;
-    const b=document.createElement('span'); b.id='_ssBtn'; b.className='density-toggle';
-    b.title='Telegram credentials (stored securely in your account)';
-    b.textContent='🔑 Telegram Setup';
-    b.addEventListener('click',window.openSecureSettings); g.appendChild(b);
-  }
-  setTimeout(injectBtn,3000);
-  window.addEventListener('load',()=>setTimeout(injectBtn,2200));
-})();
-
-</script>
 </body>
 <script>
 (function() {
