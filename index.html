@@ -179,6 +179,22 @@
 /* ===== END FINNHUB PRIMARY + YAHOO OVERFLOW ===== */
 </script>
 <script>
+/* ===== YAHOO PROXY HELPER (added 2026-08-30) =====
+   corsproxy.io is a free shared proxy that started returning 403, which
+   broke the batch quote call. That failure was expensive: instead of one
+   batch request the app fell back to one Finnhub call per symbol, draining
+   the 60/min budget and producing the 429 storm.
+
+   Routes every Yahoo request through the user's own Cloudflare Worker
+   instead. The Worker's /raw route returns Yahoo's body byte-for-byte, so
+   every caller keeps parsing exactly as it did under corsproxy -- only the
+   URL construction changes. */
+window.YQ = function (yahooUrl) {
+  return 'https://yahoo-proxy.giolamchieu1975.workers.dev/raw?url='
+       + encodeURIComponent(yahooUrl);
+};
+</script>
+<script>
 /* ===== XSS-SAFE ESCAPE HELPER (added 2026-07-06) ===== */
 function escHtml(str) {
   if (str == null) return '';
@@ -4837,7 +4853,7 @@ async fetchYahooQuote(symbol) {
                 }
             }
 async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
-                const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`;
+                const url = YQ(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`);
                 const res = await fetch(url, { cache: "no-store" });
                 if (!res.ok) throw new Error(`Yahoo quote fetch failed (HTTP ${res.status})`);
 
@@ -4906,7 +4922,7 @@ async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
             }
 
             async _fetchYahooQuoteViaChartMeta(symbol) {
-                const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+                const url = YQ(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`);
                 const res = await fetch(url, { cache: "no-store" });
                 if (!res.ok) throw new Error(`Yahoo chart fetch failed (HTTP ${res.status})`);
                 const json = await res.json();
@@ -4945,7 +4961,7 @@ async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
             async fetchYahooEnrichment(symbol) {
                 try {
                     // Use the same chart endpoint as the rest of the app — corsproxy.io works on GitHub Pages
-                    const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+                    const url = YQ(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`);
                     const res = await fetch(url, { cache: 'no-store' });
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     const json = await res.json();
@@ -4998,8 +5014,8 @@ async fetchYahooHistory(symbol, range) {
 
                     // Try multiple proxies in sequence
                     const proxyUrls = [
-                        `https://corsproxy.io/?${yahooPath}`,
-                        `https://corsproxy.io/?${yahooPath.replace('query1','query2')}`,
+                        YQ(`${yahooPath}`),
+                        YQ(`${yahooPath.replace('query1','query2')}`),
                         `https://api.allorigins.win/raw?url=${encodeURIComponent(yahooPath)}`,
                     ];
 
@@ -5277,7 +5293,7 @@ async fetchYahooHistory(symbol, range) {
                 for (let i = 0; i < symbols.length; i += chunkSize) {
                     const chunk = symbols.slice(i, i + chunkSize);
                     try {
-                        const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(chunk.join(','))}`;
+                        const url = YQ(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(chunk.join(','))}`);
                         const res = await this._fetchWithRetry429(() => fetch(url, { cache: 'no-store' }));
                         if (!res || !res.ok) continue;
 
@@ -5331,7 +5347,7 @@ async fetchYahooHistory(symbol, range) {
 
             async fetchYahooQuoteFallback(symbol) {
                 try {
-                    const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`;
+                    const url = YQ(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`);
                     const res = await this._fetchWithRetry429(() => fetch(url, { cache: 'no-store' }));
                     if (!res || !res.ok) return { success: false, symbol, reason: `Yahoo fallback HTTP Error: ${res ? res.status : 'no response'}` };
                     const json = await res.json();
@@ -7376,7 +7392,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                                     // Already enriched from the fallback's own response above --
                                     // skip the duplicate request entirely.
                                 } else {
-                                const url52 = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(item.symbol)}?interval=1d&range=5d`;
+                                const url52 = YQ(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(item.symbol)}?interval=1d&range=5d`);
                                 const res52 = await this.apiService._fetchWithRetry429(() => fetch(url52, { cache: 'no-store' }));
                                 if (res52.ok) {
                                     const json52 = await res52.json();
@@ -10199,7 +10215,7 @@ getOldestTransactionDate(item) {
             async fetchDividendHistory(symbol) {
                 // Yahoo chart API returns dividend events when events=dividends is passed
                 // range=max gives full history going back years
-                const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=max&events=dividends`;
+                const url = YQ(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=max&events=dividends`);
                 const res = await fetch(url, { cache: 'no-store' });
                 if (!res.ok) throw new Error(`Yahoo dividend fetch HTTP ${res.status}`);
                 const json = await res.json();
@@ -15576,7 +15592,7 @@ async function _bmFetchHistory(symbol, rangeKey) {
   const rangeMap = { '1Y':'1y', '3Y':'3y', '5Y':'5y' };
   const yRange   = rangeMap[rangeKey] || '1y';
   try {
-    const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1wk&range=${yRange}`;
+    const url = YQ(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1wk&range=${yRange}`);
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
@@ -20198,7 +20214,7 @@ document.addEventListener('click', function(e) {
 
         const fetchHistory = async (sym) => {
             try {
-                const url = `https://corsproxy.io/?https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1wk&range=${range}`;
+                const url = YQ(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1wk&range=${range}`);
                 const r = await fetch(url, { cache:'no-store' });
                 if (!r.ok) return [];
                 const j = await r.json();
