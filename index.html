@@ -6616,9 +6616,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         const acctTypes = [...new Set(allTxns.map(t => String(t.accountType || '').trim()).filter(p => p))].sort();
                         // Transactions saved with no account type are invisible to
                         // every AT:: filter, which makes account totals silently
-                        // undercount. Count them so they can be found and fixed.
+                        // undercount. Surface them as their own option instead.
                         const blankAcctCount = allTxns.filter(t => !String(t.accountType || '').trim()).length;
-                        const _txnCount = term => allTxns.filter(t => window.matchesAccountFilter(t, term)).length;
 
                         const currentSelection = this.elements.platformFilter.value || 'All Platforms';
                         let optsHTML = '<option value="All Platforms">All Accounts</option>';
@@ -6630,22 +6629,22 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         const hasTaxable    = acctTypes.some(a => !window.isRetirementAccount(a));
                         let combinedHTML = '';
                         if (hasRetirement && hasTaxable) {
-                            combinedHTML += `<option value="TAXABLE">All Taxable (exclude retirement) — ${_txnCount('TAXABLE')} txns</option>`
-                                         +  `<option value="RETIREMENT">All Retirement only — ${_txnCount('RETIREMENT')} txns</option>`;
+                            combinedHTML += '<option value="TAXABLE">All Taxable (exclude retirement)</option>'
+                                         +  '<option value="RETIREMENT">All Retirement only</option>';
                         }
-                        combinedHTML += acctTypes.map(a => `<option value="EX::${a}">All except ${a} — ${_txnCount('EX::' + a)} txns</option>`).join('');
+                        combinedHTML += acctTypes.map(a => `<option value="EX::${a}">All except ${a}</option>`).join('');
                         if (combinedHTML) {
                             optsHTML += '<optgroup label="Combined Views">' + combinedHTML + '</optgroup>';
                         }
                         if (acctTypes.length || blankAcctCount) {
                             optsHTML += '<optgroup label="By Account Type (all brokers)">'
-                                + acctTypes.map(a => `<option value="AT::${a}">${a} (All Brokers) — ${_txnCount('AT::' + a)} txns</option>`).join('')
-                                + (blankAcctCount ? `<option value="UNASSIGNED">⚠️ No account type set — ${blankAcctCount} txns</option>` : '')
+                                + acctTypes.map(a => `<option value="AT::${a}">${a} (All Brokers)</option>`).join('')
+                                + (blankAcctCount ? '<option value="UNASSIGNED">Unassigned account type</option>' : '')
                                 + '</optgroup>';
                         }
                         if (platforms.length) {
                             optsHTML += '<optgroup label="By Broker">'
-                                + platforms.map(p => `<option value="${p}">${p} — ${_txnCount(p)} txns</option>`).join('')
+                                + platforms.map(p => `<option value="${p}">${p}</option>`).join('')
                                 + '</optgroup>';
                         }
                         this.elements.platformFilter.innerHTML = optsHTML;
