@@ -5782,20 +5782,64 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
         window.matchesAccountFilter = function(txn, term){
             if (!term || term === 'All Platforms') return true;
             if (!txn) return false;
-            if (term === 'TAXABLE')      return !window.isRetirementAccount(txn.accountType);
-            if (term === 'RETIREMENT')   return window.isRetirementAccount(txn.accountType);
-            if (term.startsWith('AT::')) return txn.accountType === term.slice(4);
-            if (term.startsWith('EX::')) return txn.accountType !== term.slice(4);
-            return txn.platform === term;
+            const acct = String(txn.accountType || '').trim();
+            const norm = acct.toLowerCase();
+            if (term === 'TAXABLE')      return acct !== '' && !window.isRetirementAccount(acct);
+            if (term === 'RETIREMENT')   return window.isRetirementAccount(acct);
+            if (term === 'UNASSIGNED')   return acct === '';
+            if (term.startsWith('AT::')) return norm === term.slice(4).trim().toLowerCase();
+            if (term.startsWith('EX::')) return norm !== term.slice(4).trim().toLowerCase();
+            return String(txn.platform || '').trim().toLowerCase() === term.trim().toLowerCase();
         };
         window.accountFilterLabel = function(term){
             if (!term || term === 'All Platforms') return 'Combined Total';
             if (term === 'TAXABLE')      return 'All Taxable Accounts';
             if (term === 'RETIREMENT')   return 'All Retirement Accounts';
+            if (term === 'UNASSIGNED')   return 'Unassigned Account Type';
             if (term.startsWith('AT::')) return term.slice(4) + ' (All Brokers)';
             if (term.startsWith('EX::')) return 'All except ' + term.slice(4);
             return term;
         };
+
+        // ── Data audit ───────────────────────────────────────────────────────
+        // Run window.auditAccounts() in the browser console to see exactly how
+        // every transaction is tagged. Filters match on the accountType string,
+        // so blank or inconsistently-typed values silently vanish from
+        // account-type filters; this surfaces them instead of hiding them.
+        window.auditAccounts = function(){
+            const tr = window.stockTracker;
+            if (!tr) { console.warn('stockTracker not ready'); return; }
+            const items = [...(tr.stocks || []), ...(tr.mutualFunds || [])];
+            const rows = [];
+            const byAcct = {};
+            items.forEach(it => {
+                (it.transactions || []).forEach(t => {
+                    const acct = String(t.accountType || '').trim() || '(BLANK)';
+                    const plat = String(t.platform || '').trim() || '(BLANK)';
+                    const key = acct + '  ||  ' + plat;
+                    if (!byAcct[key]) byAcct[key] = { accountType: acct, platform: plat, txns: 0, symbols: new Set() };
+                    byAcct[key].txns++;
+                    byAcct[key].symbols.add(it.symbol);
+                });
+            });
+            Object.values(byAcct).forEach(v => rows.push({
+                accountType: v.accountType,
+                platform: v.platform,
+                transactions: v.txns,
+                symbols: [...v.symbols].sort().join(', ')
+            }));
+            rows.sort((a,b) => a.accountType.localeCompare(b.accountType) || a.platform.localeCompare(b.platform));
+            console.table(rows.map(r => ({ ...r, symbols: r.symbols.slice(0, 80) })));
+            const blanks = rows.filter(r => r.accountType === '(BLANK)');
+            if (blanks.length) {
+                console.warn('Transactions with NO account type (excluded from every account-type filter):');
+                blanks.forEach(b => console.warn('   broker=' + b.platform + '  txns=' + b.transactions + '  ' + b.symbols));
+            }
+            console.log('Distinct account types:', [...new Set(rows.map(r => r.accountType))]);
+            console.log('Distinct brokers:', [...new Set(rows.map(r => r.platform))]);
+            return rows;
+        };
+
         class StockTracker {
             constructor() {
                 this.activeBottomRange = "BAR_TODAY"; this.currentRange = "BAR_TODAY";
@@ -6568,8 +6612,13 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
 
                         const allItems = [...this.stocks, ...this.mutualFunds];
                         const allTxns = allItems.flatMap(s => s.transactions || []);
-                        const platforms = [...new Set(allTxns.map(t => t.platform).filter(p => p))].sort();
-                        const acctTypes = [...new Set(allTxns.map(t => t.accountType).filter(p => p))].sort();
+                        const platforms = [...new Set(allTxns.map(t => String(t.platform || '').trim()).filter(p => p))].sort();
+                        const acctTypes = [...new Set(allTxns.map(t => String(t.accountType || '').trim()).filter(p => p))].sort();
+                        // Transactions saved with no account type are invisible to
+                        // every AT:: filter, which makes account totals silently
+                        // undercount. Count them so they can be found and fixed.
+                        const blankAcctCount = allTxns.filter(t => !String(t.accountType || '').trim()).length;
+                        const _txnCount = term => allTxns.filter(t => window.matchesAccountFilter(t, term)).length;
 
                         const currentSelection = this.elements.platformFilter.value || 'All Platforms';
                         let optsHTML = '<option value="All Platforms">All Accounts</option>';
@@ -6581,21 +6630,22 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         const hasTaxable    = acctTypes.some(a => !window.isRetirementAccount(a));
                         let combinedHTML = '';
                         if (hasRetirement && hasTaxable) {
-                            combinedHTML += '<option value="TAXABLE">All Taxable (exclude retirement)</option>'
-                                         +  '<option value="RETIREMENT">All Retirement only</option>';
+                            combinedHTML += `<option value="TAXABLE">All Taxable (exclude retirement) — ${_txnCount('TAXABLE')} txns</option>`
+                                         +  `<option value="RETIREMENT">All Retirement only — ${_txnCount('RETIREMENT')} txns</option>`;
                         }
-                        combinedHTML += acctTypes.map(a => `<option value="EX::${a}">All except ${a}</option>`).join('');
+                        combinedHTML += acctTypes.map(a => `<option value="EX::${a}">All except ${a} — ${_txnCount('EX::' + a)} txns</option>`).join('');
                         if (combinedHTML) {
                             optsHTML += '<optgroup label="Combined Views">' + combinedHTML + '</optgroup>';
                         }
-                        if (acctTypes.length) {
+                        if (acctTypes.length || blankAcctCount) {
                             optsHTML += '<optgroup label="By Account Type (all brokers)">'
-                                + acctTypes.map(a => `<option value="AT::${a}">${a} (All Brokers)</option>`).join('')
+                                + acctTypes.map(a => `<option value="AT::${a}">${a} (All Brokers) — ${_txnCount('AT::' + a)} txns</option>`).join('')
+                                + (blankAcctCount ? `<option value="UNASSIGNED">⚠️ No account type set — ${blankAcctCount} txns</option>` : '')
                                 + '</optgroup>';
                         }
                         if (platforms.length) {
                             optsHTML += '<optgroup label="By Broker">'
-                                + platforms.map(p => `<option value="${p}">${p}</option>`).join('')
+                                + platforms.map(p => `<option value="${p}">${p} — ${_txnCount(p)} txns</option>`).join('')
                                 + '</optgroup>';
                         }
                         this.elements.platformFilter.innerHTML = optsHTML;
