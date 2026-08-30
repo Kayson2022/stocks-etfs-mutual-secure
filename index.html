@@ -6710,20 +6710,16 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
 
                         const currentSelection = this.elements.platformFilter.value || 'All Platforms';
                         let optsHTML = '<option value="All Platforms">All Accounts</option>';
-                        // Combined views — let one selection span several brokers
-                        // or exclude an account type entirely, so "everything I
-                        // hold outside my Roth" is one choice instead of adding
-                        // up each broker by hand.
+                        // One combined view: everything outside retirement
+                        // accounts, spanning every broker in a single choice.
+                        // The per-type "All except X" options were dropped --
+                        // with one retirement account they only duplicated this
+                        // one, and they misfired whenever the same real account
+                        // existed under two different account-type strings.
                         const hasRetirement = acctTypes.some(a => window.isRetirementAccount(a));
                         const hasTaxable    = acctTypes.some(a => !window.isRetirementAccount(a));
-                        let combinedHTML = '';
                         if (hasRetirement && hasTaxable) {
-                            combinedHTML += '<option value="TAXABLE">All Taxable (exclude retirement)</option>'
-                                         +  '<option value="RETIREMENT">All Retirement only</option>';
-                        }
-                        combinedHTML += acctTypes.map(a => `<option value="EX::${a}">All except ${a}</option>`).join('');
-                        if (combinedHTML) {
-                            optsHTML += '<optgroup label="Combined Views">' + combinedHTML + '</optgroup>';
+                            optsHTML += '<option value="TAXABLE">All Taxable (exclude retirement)</option>';
                         }
                         if (acctTypes.length || blankAcctCount) {
                             optsHTML += '<optgroup label="By Account Type (all brokers)">'
