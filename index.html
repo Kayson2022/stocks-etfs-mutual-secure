@@ -5840,6 +5840,95 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             return rows;
         };
 
+        // ── Account type cleanup ─────────────────────────────────────────────
+        // Two problems this repairs:
+        //   1. Broker names stored in the account-type field, so the same real
+        //      account exists under several strings ("Fidelity Regular
+        //      Brokerage" vs "Regular Brokerage") and neither filter sees all
+        //      of it.
+        //   2. Transactions with a blank account type, which match no
+        //      account-type filter at all and vanish from those totals.
+        // Account type is inferred from the broker name when it is missing,
+        // since brokers here are already named per-account ("Fidelity Roth
+        // IRA"). Dry run by default -- nothing is written until you pass
+        // {apply:true}, and that path exports a JSON backup first.
+        window.canonicalAccountType = function(raw){
+            const s = String(raw || '').trim().toLowerCase();
+            if (!s) return null;
+            if (s.includes('roth'))                            return 'Roth IRA';
+            if (s.includes('401'))                             return '401k';
+            if (s.includes('529'))                             return '529 College Saving';
+            if (s.includes('hsa'))                             return 'HSA';
+            if (s.includes('traditional') || s.includes('rollover') || s.includes('sep ira')) return 'Traditional IRA';
+            if (s.includes('brokerage') || s.includes('taxable') || s.includes('individual'))  return 'Regular Brokerage';
+            return String(raw).trim();
+        };
+        // Inferring from a broker name is only safe when the name actually
+        // states the account ("Fidelity Roth IRA"). A plain broker name like
+        // "Charles Schwab" says nothing about the account type, so it falls
+        // back to Regular Brokerage rather than inventing "Charles Schwab" as
+        // a new account type.
+        window.inferAccountTypeFromBroker = function(broker){
+            const s = String(broker || '').trim().toLowerCase();
+            if (s.includes('roth'))                            return 'Roth IRA';
+            if (s.includes('401'))                             return '401k';
+            if (s.includes('529'))                             return '529 College Saving';
+            if (s.includes('hsa'))                             return 'HSA';
+            if (s.includes('traditional') || s.includes('rollover') || s.includes('sep ira')) return 'Traditional IRA';
+            return 'Regular Brokerage';
+        };
+        window.fixAccountTypes = function(opts){
+            opts = opts || {};
+            const apply = opts.apply === true;
+            const tr = window.stockTracker;
+            if (!tr) { console.warn('stockTracker not ready'); return; }
+            const items = [...(tr.stocks || []), ...(tr.mutualFunds || [])];
+
+            const planned = [];
+            items.forEach(it => {
+                (it.transactions || []).forEach((t, i) => {
+                    const before = String(t.accountType || '').trim();
+                    // Blank account type: infer from the broker, which is
+                    // already account-specific in this data set.
+                    const after = before
+                        ? window.canonicalAccountType(before)
+                        : window.inferAccountTypeFromBroker(t.platform);
+                    if (after && after !== before) {
+                        planned.push({ symbol: it.symbol, txnIndex: i, broker: t.platform || '(blank)',
+                                       from: before || '(BLANK)', to: after, _t: t });
+                    }
+                });
+            });
+
+            if (!planned.length) { console.log('Nothing to change — account types are already consistent.'); return []; }
+            console.table(planned.map(p => ({ symbol: p.symbol, broker: p.broker, from: p.from, to: p.to })));
+            console.log(planned.length + ' transaction(s) would change.');
+
+            if (!apply) {
+                console.log('DRY RUN — nothing was written. Re-run as fixAccountTypes({apply:true}) to save.');
+                return planned;
+            }
+
+            // Backup before writing, so a bad inference is recoverable.
+            try {
+                const backup = JSON.stringify({ stocks: tr.stocks, mutualFunds: tr.mutualFunds }, null, 2);
+                const blob = new Blob([backup], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'portfolio-backup-' + new Date().toISOString().slice(0,10) + '.json';
+                a.click();
+                console.log('Backup downloaded before applying changes.');
+            } catch (e) { console.warn('Backup failed, aborting.', e); return planned; }
+
+            planned.forEach(p => { p._t.accountType = p.to; });
+            Promise.resolve(tr.saveData()).then(() => {
+                tr.renderContent();
+                console.log('Applied ' + planned.length + ' change(s) and saved.');
+            });
+            return planned;
+        };
+
+
         class StockTracker {
             constructor() {
                 this.activeBottomRange = "BAR_TODAY"; this.currentRange = "BAR_TODAY";
