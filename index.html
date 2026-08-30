@@ -5910,7 +5910,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             console.log(planned.length + ' transaction(s) would change.');
 
             if (!apply) {
-                console.log('DRY RUN — nothing was written. Re-run as fixAccountTypes({apply:true}) to save.');
+                const cmd = includeBlanks ? 'fixAccountTypes({apply:true})' : 'mergeAccountTypes({apply:true})';
+                console.log('DRY RUN — nothing was written. Re-run as ' + cmd + ' to save.');
                 return planned;
             }
 
