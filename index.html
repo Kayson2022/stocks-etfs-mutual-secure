@@ -5880,6 +5880,10 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
         window.fixAccountTypes = function(opts){
             opts = opts || {};
             const apply = opts.apply === true;
+            // includeBlanks:false does only the safe half -- rename account
+            // types that are already filled in. Blank account types require
+            // guessing from the broker name, which is a separate decision.
+            const includeBlanks = opts.includeBlanks !== false;
             const tr = window.stockTracker;
             if (!tr) { console.warn('stockTracker not ready'); return; }
             const items = [...(tr.stocks || []), ...(tr.mutualFunds || [])];
@@ -5888,6 +5892,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             items.forEach(it => {
                 (it.transactions || []).forEach((t, i) => {
                     const before = String(t.accountType || '').trim();
+                    if (!before && !includeBlanks) return;
                     // Blank account type: infer from the broker, which is
                     // already account-specific in this data set.
                     const after = before
@@ -5926,6 +5931,15 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 console.log('Applied ' + planned.length + ' change(s) and saved.');
             });
             return planned;
+        };
+
+        // Safe half only: rename account types that are already filled in, so
+        // one real account stops being split across several strings (e.g.
+        // "Fidelity Regular Brokerage" -> "Regular Brokerage"). Transactions
+        // with no account type are left untouched.
+        window.mergeAccountTypes = function(opts){
+            opts = opts || {};
+            return window.fixAccountTypes({ apply: opts.apply === true, includeBlanks: false });
         };
 
 
