@@ -7571,16 +7571,14 @@ renderPortfolioSummary() {
                     totalDividends: stockMetrics.totalDividends + fundMetrics.totalDividends
                 };
 
-                // FIX: Use the calculated group totals for display consistency and accuracy
-                const aggregatedPLToday = 
-                    (this.biggestGainToday || 0) +
-                    (this.todaysGainsTotal || 0) -
-                    (this.todaysLossesTotal || 0); // Explicitly subtract the positive loss amount
-
-                // Prefer the group-based total if it's non-zero (meaning groups were rendered and totals were updated), otherwise fall back to the direct item sum.
-                const totalPLTodayFinal = (aggregatedPLToday !== 0 && !isNaN(aggregatedPLToday)) 
-                    ? aggregatedPLToday 
-                    : combinedMetrics.totalPLToday;
+                // The group totals below are reset on every renderGroupedView
+                // call, which runs once per asset type. Rendering funds after
+                // stocks overwrote the stock figures, so this only ever held
+                // whichever type was drawn last -- the header then showed a
+                // partial number while claiming to be the portfolio total.
+                // combinedMetrics sums filtered stocks and funds together, so
+                // it is the figure that actually matches the holdings on screen.
+                const totalPLTodayFinal = combinedMetrics.totalPLToday;
 
                 // Expose for header summary (Today: $X.XX)
                 this.totalPLToday = totalPLTodayFinal;
