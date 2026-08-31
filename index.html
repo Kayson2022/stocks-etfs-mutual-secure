@@ -4618,8 +4618,19 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <input class="search-input" id="modal-fmp-key" placeholder="Enter your Financial Modeling Prep API Key" type="text"/>
 </div>
 <div class="transaction-input-group">
-<label for="modal-refresh-interval">Auto-Refresh Interval (seconds):</label>
+<label for="modal-refresh-interval">Auto-Refresh — Regular Hours (seconds):</label>
 <input class="search-input" id="modal-refresh-interval" min="10" placeholder="e.g., 60" type="number"/>
+<small style="opacity:0.7;font-size:11px;">9:30 AM – 4:00 PM ET (6:30 AM – 1:00 PM Pacific)</small>
+</div>
+<div class="transaction-input-group">
+<label for="modal-premarket-interval">Auto-Refresh — Pre-Market (seconds):</label>
+<input class="search-input" id="modal-premarket-interval" min="10" placeholder="e.g., 120" type="number"/>
+<small style="opacity:0.7;font-size:11px;">4:00 – 9:30 AM ET (1:00 – 6:30 AM Pacific)</small>
+</div>
+<div class="transaction-input-group">
+<label for="modal-afterhours-interval">Auto-Refresh — After-Hours (seconds):</label>
+<input class="search-input" id="modal-afterhours-interval" min="10" placeholder="e.g., 120" type="number"/>
+<small style="opacity:0.7;font-size:11px;">4:00 – 8:00 PM ET (1:00 – 5:00 PM Pacific). Overnight and weekends stay at 300s.</small>
 </div>
 <div class="transaction-input-group">
 <label for="enable-push-notifications-btn">Enable Push Notifications:</label>
@@ -6154,6 +6165,15 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             loadConfig() {
                 this.config = {
                     refreshIntervalMs: 90000,
+                    // Extended-hours sessions get their own cadence. Before
+                    // this, anything outside 9:30-16:00 ET was hardcoded to
+                    // 5 minutes -- which meant the after-hours window, when
+                    // earnings land and prices move hardest, refreshed the
+                    // slowest. Defaults to 2 minutes: quicker than 5, but
+                    // these sessions are thin enough that matching the
+                    // regular-hours rate would spend quota for little gain.
+                    preMarketIntervalMs:  120000,
+                    afterHoursIntervalMs: 120000,
                     finnhubApiKey: "",
                     alphaVantageKey: "",
                     fmpApiKey: "",
@@ -6181,6 +6201,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         if (keys.fmpKey) this.config.fmpApiKey = keys.fmpKey;
                         if (keys.marketstackKey) this.config.marketstackApiKey = keys.marketstackKey;
                         if (keys.refreshIntervalMs) this.config.refreshIntervalMs = keys.refreshIntervalMs;
+                        if (keys.preMarketIntervalMs)  this.config.preMarketIntervalMs  = keys.preMarketIntervalMs;
+                        if (keys.afterHoursIntervalMs) this.config.afterHoursIntervalMs = keys.afterHoursIntervalMs;
 
                         // Load Coast FIRE settings from Firestore (syncs across devices)
                         const cf = data.coastFire || {};
@@ -6253,6 +6275,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     modalAlphaVantageKey: document.getElementById('modal-alpha-vantage-key'),
                     modalFmpKey: document.getElementById('modal-fmp-key'),
                     modalRefreshInterval: document.getElementById('modal-refresh-interval'),
+                    modalPreMarketInterval: document.getElementById('modal-premarket-interval'),
+                    modalAfterHoursInterval: document.getElementById('modal-afterhours-interval'),
                     modalRetirementGoal: document.getElementById('modal-retirement-goal'),
                     modalYearsToRetirement: document.getElementById('modal-years-to-retirement'),
                     modalGrowthRate: document.getElementById('modal-growth-rate'),
@@ -7182,9 +7206,12 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 const m   = et.getMinutes();
                 const t   = h * 60 + m;
                 const isWeekend    = day === 0 || day === 6;
-                const isMarketOpen = !isWeekend && t >= 570 && t < 960;
-                if (isMarketOpen) return this.config.refreshIntervalMs;
-                return 300000; // 5 minutes after hours / weekends
+                if (isWeekend) return 300000;
+                // 04:00-09:30 pre-market, 09:30-16:00 regular, 16:00-20:00 post.
+                if (t >= 570 && t < 960)  return this.config.refreshIntervalMs;
+                if (t >= 240 && t < 570)  return this.config.preMarketIntervalMs  || 120000;
+                if (t >= 960 && t < 1200) return this.config.afterHoursIntervalMs || 120000;
+                return 300000; // overnight -- nothing trades
             }
             startLiveUpdate() {
                 this.stopLiveUpdate();
@@ -9868,6 +9895,8 @@ getOldestTransactionDate(item) {
                 if (this.elements.modalAlphaVantageKey) this.elements.modalAlphaVantageKey.value = this.config.alphaVantageKey;
                 if (this.elements.modalFmpKey) this.elements.modalFmpKey.value = this.config.fmpApiKey;
                 if (this.elements.modalRefreshInterval) this.elements.modalRefreshInterval.value = this.config.refreshIntervalMs / 1000;
+                if (this.elements.modalPreMarketInterval) this.elements.modalPreMarketInterval.value = (this.config.preMarketIntervalMs || 120000) / 1000;
+                if (this.elements.modalAfterHoursInterval) this.elements.modalAfterHoursInterval.value = (this.config.afterHoursIntervalMs || 120000) / 1000;
                 if (this.elements.modalRetirementGoal) {
                     const _gv = parseFloat(this.config.retirementGoal) || 0;
                     this.elements.modalRetirementGoal.value = _gv > 0 ? _gv.toLocaleString('en-US') : '';
@@ -9897,13 +9926,25 @@ getOldestTransactionDate(item) {
                     10
                 );
 
-                if (refreshInterval < 10) {
-                    this.showError("Refresh interval must be at least 10 seconds.");
+                // Blank extended-hours fields keep the current value rather
+                // than snapping to a default, so clearing a box is never
+                // destructive.
+                const _preRaw = this.elements.modalPreMarketInterval
+                    ? String(this.elements.modalPreMarketInterval.value).trim() : '';
+                const _postRaw = this.elements.modalAfterHoursInterval
+                    ? String(this.elements.modalAfterHoursInterval.value).trim() : '';
+                const preInterval  = _preRaw  === '' ? (this.config.preMarketIntervalMs  || 120000) / 1000 : parseInt(_preRaw, 10);
+                const postInterval = _postRaw === '' ? (this.config.afterHoursIntervalMs || 120000) / 1000 : parseInt(_postRaw, 10);
+
+                if (refreshInterval < 10 || isNaN(preInterval) || preInterval < 10 || isNaN(postInterval) || postInterval < 10) {
+                    this.showError("Refresh intervals must be at least 10 seconds.");
                     return;
                 }
 
-                // Update refresh interval in config
+                // Update refresh intervals in config
                 this.config.refreshIntervalMs = refreshInterval * 1000;
+                this.config.preMarketIntervalMs  = preInterval  * 1000;
+                this.config.afterHoursIntervalMs = postInterval * 1000;
 
                 // Update local config immediately so app uses new keys even if Firestore fails
                 this.config.finnhubApiKey = finnhubKey;
@@ -9935,6 +9976,8 @@ getOldestTransactionDate(item) {
                                     fmpKey,
                                     marketstackKey,
                                     refreshIntervalMs: this.config.refreshIntervalMs,
+                                    preMarketIntervalMs:  this.config.preMarketIntervalMs,
+                                    afterHoursIntervalMs: this.config.afterHoursIntervalMs,
                                     updatedAt: serverTimestamp()
                                 },
                                 coastFire: {
