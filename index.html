@@ -8347,7 +8347,13 @@ renderPortfolioSummary() {
                     card.dataset.id = item.id;
                     card.dataset.type = type;
                     card.dataset.symbol = item.symbol;
-                    const stats = this.calculateTransactionStats(item.transactions, item.price);
+                    // Value the position at the extended-hours price when the
+                    // After-Hours toggle is on, so the card's Total Value and
+                    // P/L agree with the price shown at the top of it. With the
+                    // toggle off this is the regular close, unchanged.
+                    const _useExt = this.showAfterHours && item.priceExtended && item.marketState !== 'REGULAR';
+                    const _cardPrice = _useExt ? item.priceExtended : item.price;
+                    const stats = this.calculateTransactionStats(item.transactions, _cardPrice);
                     
                     let stockInfoHTML = '';
                     let cardChartHTML = `
