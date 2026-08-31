@@ -5286,14 +5286,19 @@ async fetchYahooHistory(symbol, range) {
             // the SAME field names as fetchStockEtfQuote() so callers are
             // interchangeable. Symbols Yahoo omits simply won't be in the Map;
             // the caller falls back per-symbol for those.
-            async fetchBatchQuotes(symbols, chunkSize = 50) {
+            async fetchBatchQuotes(symbols, chunkSize = 25) {
                 const out = new Map();
                 if (!symbols || !symbols.length) return out;
 
                 for (let i = 0; i < symbols.length; i += chunkSize) {
                     const chunk = symbols.slice(i, i + chunkSize);
                     try {
-                        const url = YQ(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(chunk.join(','))}`);
+                        // Yahoo's v7/quote endpoint refuses datacenter IPs, so the
+                        // Worker rebuilds the same shape from v8 chart calls it
+                        // makes in parallel. Chunk size matches the Worker's
+                        // subrequest cap.
+                        const url = 'https://yahoo-proxy.giolamchieu1975.workers.dev/batch?symbols='
+                                  + encodeURIComponent(chunk.join(','));
                         const res = await this._fetchWithRetry429(() => fetch(url, { cache: 'no-store' }));
                         if (!res || !res.ok) continue;
 
