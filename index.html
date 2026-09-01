@@ -5866,33 +5866,55 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 } catch (e) { info.errors.push('Hash failed: ' + e.message); }
             }
 
-            // GitHub Pages only: derive owner/repo/path from the URL.
+            // GitHub Pages serves two shapes and the URL alone cannot tell
+            // them apart: a user site (owner.github.io repo, folders inside)
+            // or a project site (owner.github.io/repo-name/). Try the project
+            // reading first, since that is what a path segment usually means,
+            // then fall back to the user-site reading.
             const host = location.hostname;
             if (host.endsWith('.github.io')) {
                 const owner = host.split('.')[0];
                 const parts = location.pathname.split('/').filter(Boolean);
-                const isProjectPage = host !== owner + '.github.io' ? false : true;
-                const repo = isProjectPage && parts.length ? host : host;
-                let path = location.pathname.replace(/^\//, '');
-                if (!path || path.endsWith('/')) path += 'index.html';
-                try {
-                    const api = 'https://api.github.com/repos/' + owner + '/' + repo
-                              + '/commits?path=' + encodeURIComponent(path) + '&per_page=1';
-                    const r = await fetch(api);
-                    if (r.ok) {
+                const tail  = parts.filter(p => !p.endsWith('.html'));
+                const file  = parts.find(p => p.endsWith('.html')) || 'index.html';
+
+                const candidates = [];
+                if (tail.length) {
+                    // project site: first segment is the repo
+                    candidates.push({ repo: tail[0], path: tail.slice(1).concat(file).join('/') });
+                }
+                // user site: repo is owner.github.io, whole path is the path
+                candidates.push({ repo: host, path: tail.concat(file).join('/') });
+
+                for (const c of candidates) {
+                    try {
+                        const api = 'https://api.github.com/repos/' + owner + '/' + c.repo
+                                  + '/commits?path=' + encodeURIComponent(c.path) + '&per_page=1';
+                        const r = await fetch(api);
+                        if (r.status === 403) {
+                            info.errors.push('GitHub API rate limit reached — try again in an hour.');
+                            break;
+                        }
+                        if (!r.ok) continue;          // wrong shape, try the next
                         const j = await r.json();
                         if (j && j[0]) {
                             info.commit = {
                                 sha: j[0].sha.slice(0, 7),
+                                fullSha: j[0].sha,
                                 date: new Date(j[0].commit.author.date),
                                 message: (j[0].commit.message || '').split('\n')[0],
-                                url: j[0].html_url
+                                url: j[0].html_url,
+                                historyUrl: 'https://github.com/' + owner + '/' + c.repo
+                                          + '/commits/main/' + c.path
                             };
+                            break;
                         }
-                    } else if (r.status === 403) {
-                        info.errors.push('GitHub API rate limit reached — try again later.');
-                    }
-                } catch (e) { info.errors.push('GitHub lookup failed: ' + e.message); }
+                    } catch (e) { info.errors.push('GitHub lookup failed: ' + e.message); }
+                }
+                if (!info.commit && !info.errors.length) {
+                    info.errors.push('No GitHub commit found for this file. '
+                        + 'Tried: ' + candidates.map(c => c.repo + '/' + c.path).join(' and ') + '.');
+                }
             }
             return info;
         };
@@ -5939,6 +5961,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                      + 'style="color:#58a6ff;"><code>' + esc(info.commit.sha) + '</code></a>');
                 body += row('Committed', info.commit.date.toLocaleString());
                 body += row('Message', esc(info.commit.message));
+                body += row('History', '<a href="' + esc(info.commit.historyUrl) + '" target="_blank" '
+                     + 'style="color:#58a6ff;">all versions of this file</a>');
             }
             body += row('Holdings', holdings);
             body += row('Transactions', txns);
