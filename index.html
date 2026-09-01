@@ -20,6 +20,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -3919,9 +3920,9 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
   })()" id="toggleUtilityBtnInner" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);font-size:0.78rem;padding:6px 16px;border-radius:6px;cursor:pointer;width:100%;">🔧 Tools &amp; Actions ▼</button>
 </div>
 <div class="utility-buttons-grid" id="utilityButtonsGrid" style="display:none;">
-<button class="add-btn" id="dataHealthBtn" onclick="window.runDataHealthCheck()">🩺 Data Health Check</button>
 <button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
 <button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
+<button class="add-btn" id="dataHealthBtn" onclick="window.runDataHealthCheck()">🩺 Data Health Check</button>
 <div class="import-wrapper">
 <button class="add-btn" id="exportBtn">📥 Export Data</button>
 <button class="add-btn" id="telegramBackupBtn" onclick="window.sendSecureBackupToTelegram()">📲 Backup to Telegram</button>
@@ -3951,6 +3952,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
 <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
 <button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
+<button class="add-btn" id="aboutBtn" onclick="window.showAppVersion()">ℹ️ About / Version</button>
 </div>
 </div>
 </div><!-- end portfolio-summary -->
@@ -5831,6 +5833,87 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             if (term.startsWith('AT::')) return term.slice(4) + ' (All Brokers)';
             if (term.startsWith('EX::')) return 'All except ' + term.slice(4);
             return term;
+        };
+
+        // ── Version panel ────────────────────────────────────────────────────
+        // Which build is actually running is otherwise unknowable from inside
+        // the app, and with dozens of downloaded copies floating around it is
+        // easy to edit one file and load another. The service worker state is
+        // shown alongside because a stale worker is the usual reason a fresh
+        // deploy does not appear.
+        window.APP_BUILD = '2026-09-01';
+        window.showAppVersion = function(){
+            const esc = v => String(v == null ? '' : v)
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const row = (k, v) => '<div style="display:flex;justify-content:space-between;gap:16px;'
+                + 'padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);">'
+                + '<span style="opacity:0.6;">' + esc(k) + '</span>'
+                + '<span style="font-weight:600;text-align:right;">' + esc(v) + '</span></div>';
+
+            let modal = document.getElementById('aboutModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'aboutModal';
+                modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;'
+                    + 'display:flex;align-items:center;justify-content:center;padding:20px;';
+                modal.onclick = e => { if (e.target === modal) modal.remove(); };
+                document.body.appendChild(modal);
+            }
+
+            const tr = window.stockTracker;
+            const holdings = tr ? ((tr.stocks||[]).length + (tr.mutualFunds||[]).length) : 0;
+            const txns = tr ? [...(tr.stocks||[]), ...(tr.mutualFunds||[])]
+                .reduce((n, it) => n + ((it.transactions||[]).length), 0) : 0;
+
+            let body = row('Build', window.APP_BUILD)
+                     + row('Loaded at', new Date().toLocaleString())
+                     + row('Holdings', holdings)
+                     + row('Transactions', txns)
+                     + row('Service worker', 'checking...');
+
+            modal.innerHTML = '<div style="background:#161b22;color:#e6edf3;max-width:460px;width:100%;'
+                + 'border-radius:12px;padding:22px;">'
+                + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
+                + '<h3 style="margin:0;">About</h3>'
+                + '<button onclick="document.getElementById(\'aboutModal\').remove()" '
+                + 'style="background:none;border:none;color:#8b949e;font-size:24px;cursor:pointer;line-height:1;">&times;</button>'
+                + '</div><div id="aboutBody" style="font-size:0.86rem;">' + body + '</div>'
+                + '<button onclick="window.forceAppUpdate()" style="margin-top:16px;width:100%;padding:9px;'
+                + 'border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);'
+                + 'color:#e6edf3;cursor:pointer;">Clear cache and reload</button>'
+                + '<div style="font-size:0.72rem;opacity:0.5;margin-top:8px;">'
+                + 'Use this if a change you deployed is not showing up.</div>'
+                + '</div>';
+
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(rs => {
+                    const el = document.getElementById('aboutBody');
+                    if (!el) return;
+                    const state = rs.length
+                        ? rs.length + ' registered' + (rs[0].active ? ' (active)' : '')
+                        : 'none';
+                    el.innerHTML = el.innerHTML.replace('checking...', state);
+                }).catch(() => {});
+            }
+        };
+
+        // Unregisters the worker and drops every cache before reloading, which
+        // is the only reliable way to escape a stale build on mobile where
+        // there is no hard-refresh shortcut.
+        window.forceAppUpdate = async function(){
+            try {
+                if ('serviceWorker' in navigator) {
+                    const rs = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(rs.map(r => r.unregister()));
+                }
+                if (window.caches) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map(k => caches.delete(k)));
+                }
+            } catch (e) {
+                console.warn('Cache clear failed:', e);
+            }
+            location.reload(true);
         };
 
         // ── Data health check ────────────────────────────────────────────────
@@ -22476,11 +22559,37 @@ window.fixAllReconcile = async function() {
         var storedCost = localStorage.getItem(COST_KEY + s.symbol);
         var actualCost = storedCost ? parseFloat(storedCost) : 0;
         var appCost    = getAppCost(s);
+        // Average cost of what is already held. Used as the fallback price so
+        // an adjustment nets to zero gain instead of inventing one.
+        var avgCost    = appShares > 0 ? appCost / appShares : 0;
         var adjPrice   = 0;
-        if (actualCost > 0 && diff > 0) {
-            var costDiff = actualCost - appCost;
-            adjPrice = costDiff > 0 ? costDiff / diff : 0;
+        if (diff > 0) {
+            // Adding shares: price them so the app's total cost basis lands on
+            // the figure from the brokerage, when one was entered.
+            if (actualCost > 0) {
+                var costDiff = actualCost - appCost;
+                adjPrice = costDiff > 0 ? costDiff / diff : 0;
+            }
+            if (!(adjPrice > 0)) adjPrice = avgCost;
+        } else {
+            // Removing shares: price at average cost so realized P/L is zero.
+            // This branch previously left the price at 0, which booked a
+            // realized loss equal to the entire cost basis of the shares
+            // removed -- a loss that never happened, on a transaction that is
+            // a bookkeeping correction rather than a real sale.
+            adjPrice = avgCost;
         }
+        // Carry the account type across, otherwise these land in the "no
+        // account type" bucket and disappear from every account filter.
+        var recAccount = '';
+        var _counts = {};
+        (s.transactions || []).forEach(function(t) {
+            var a = String(t.accountType || '').trim();
+            if (a) _counts[a] = (_counts[a] || 0) + 1;
+        });
+        Object.keys(_counts).forEach(function(a) {
+            if (!recAccount || _counts[a] > _counts[recAccount]) recAccount = a;
+        });
         var recPlatform = localStorage.getItem('rec_platform_' + s.symbol) || 'Reconciliation';
         s.transactions.push({
             type: diff > 0 ? 'buy' : 'sell',
@@ -22488,6 +22597,7 @@ window.fixAllReconcile = async function() {
             price: parseFloat(adjPrice.toFixed(4)),
             date: today,
             platform: recPlatform,
+            accountType: recAccount,
             note: 'Reconciliation ' + today + (adjPrice > 0 ? ' @ ' + fmt(adjPrice) : ' — enter cost basis for accuracy')
         });
         localStorage.setItem(VERIFY_KEY + s.symbol, 'yes');
@@ -22495,7 +22605,17 @@ window.fixAllReconcile = async function() {
     });
 
     if (deleted.length) {
-        window.stockTracker.stocks = stocks.filter(function(s) { return !deleted.includes(s.symbol); });
+        // Entering 0 shares removes the holding outright, taking its entire
+        // transaction history and realized P/L with it. That is irreversible
+        // and easy to trigger with a stray keystroke, so it gets a prompt.
+        var ok = confirm('This will permanently delete ' + deleted.length + ' holding(s) and all their '
+            + 'transaction history:\n\n  ' + deleted.join(', ')
+            + '\n\nRealized gains and losses on them will be lost. Continue?');
+        if (!ok) {
+            deleted = [];
+        } else {
+            window.stockTracker.stocks = stocks.filter(function(s) { return !deleted.includes(s.symbol); });
+        }
     }
     if (!fixed.length && !deleted.length) {
         document.getElementById('reconcileStatus').innerHTML = '<span style="color:#34d399;">All shares already match!</span>';
