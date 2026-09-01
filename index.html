@@ -3939,12 +3939,6 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <button class="add-btn" onclick="window.stockTracker.sendBackupEmail(true)" style="background:linear-gradient(135deg,#00b894,#00cec9);color:#fff;border:none;">📧 Backup Now</button>
 <button class="add-btn" id="toggleBackupBtn" onclick="window.stockTracker.toggleAutoBackup()">⏸️ Pause Auto-Backup</button>
 <button class="add-btn" onclick="document.getElementById('secureRestorePanel').style.display=document.getElementById('secureRestorePanel').style.display==='none'?'block':'none'" style="background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;border:none;">📥 Restore Backup</button>
-<span id="secureBackupBadge" class="backup-status-badge"></span>
-<div id="secureRestorePanel" style="display:none;margin-top:10px;width:100%;">
-  <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:6px;">Paste backup JSON from your email, then click Restore:</p>
-  <textarea id="secureRestoreInput" rows="5" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:0.78rem;resize:vertical;" placeholder='Paste JSON here...'></textarea>
-  <button class="add-btn" onclick="window.stockTracker.restoreFromBackup(document.getElementById('secureRestoreInput').value)" style="margin-top:6px;background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;border:none;">✅ Restore Now</button>
-</div>
 <button class="add-btn" id="listAllBtn">📋 List All Stocks</button>
 <button class="add-btn" onclick="window.stockTracker.collapseAllCards()">🗜️ Collapse All</button>
 <button class="add-btn" onclick="window.stockTracker.expandAllCards()">📂 Expand All</button>
@@ -3953,6 +3947,12 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
 <button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
 <button class="add-btn" id="aboutBtn" onclick="window.showAppVersion()">ℹ️ About / Version</button>
+</div>
+<span id="secureBackupBadge" class="backup-status-badge"></span>
+<div id="secureRestorePanel" style="display:none;margin-top:10px;width:100%;">
+  <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:6px;">Paste backup JSON from your email, then click Restore:</p>
+  <textarea id="secureRestoreInput" rows="5" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:0.78rem;resize:vertical;" placeholder='Paste JSON here...'></textarea>
+  <button class="add-btn" onclick="window.stockTracker.restoreFromBackup(document.getElementById('secureRestoreInput').value)" style="margin-top:6px;background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;border:none;">✅ Restore Now</button>
 </div>
 </div>
 </div><!-- end portfolio-summary -->
@@ -5836,19 +5836,74 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
         };
 
         // ── Version panel ────────────────────────────────────────────────────
-        // Which build is actually running is otherwise unknowable from inside
-        // the app, and with dozens of downloaded copies floating around it is
-        // easy to edit one file and load another. The service worker state is
-        // shown alongside because a stale worker is the usual reason a fresh
-        // deploy does not appear.
-        window.APP_BUILD = '2026-09-01';
-        window.showAppVersion = function(){
+        // Nothing here is hand-maintained. A version string typed into the
+        // source is only correct until someone edits the file and forgets to
+        // bump it -- which is exactly when you need it to be right. These three
+        // come from outside the file instead:
+        //   Last-Modified  — when the server's copy was actually deployed
+        //   fingerprint    — hash of the running bytes, so two builds can be
+        //                    told apart even when timestamps look alike
+        //   commit         — GitHub's own history, which is what a revert uses
+        window.getBuildInfo = async function(){
+            const info = { modified: null, fingerprint: null, commit: null, errors: [] };
+
+            // Bypass the cache, otherwise this reports the service worker's
+            // copy rather than what is on the server.
+            let text = null;
+            try {
+                const res = await fetch(location.href, { cache: 'reload' });
+                const lm = res.headers.get('Last-Modified');
+                if (lm) info.modified = new Date(lm);
+                text = await res.text();
+            } catch (e) { info.errors.push('Could not re-fetch page: ' + e.message); }
+
+            if (text && window.crypto && crypto.subtle) {
+                try {
+                    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+                    info.fingerprint = [...new Uint8Array(buf)].slice(0, 4)
+                        .map(b => b.toString(16).padStart(2, '0')).join('');
+                    info.sizeKb = Math.round(text.length / 1024);
+                } catch (e) { info.errors.push('Hash failed: ' + e.message); }
+            }
+
+            // GitHub Pages only: derive owner/repo/path from the URL.
+            const host = location.hostname;
+            if (host.endsWith('.github.io')) {
+                const owner = host.split('.')[0];
+                const parts = location.pathname.split('/').filter(Boolean);
+                const isProjectPage = host !== owner + '.github.io' ? false : true;
+                const repo = isProjectPage && parts.length ? host : host;
+                let path = location.pathname.replace(/^\//, '');
+                if (!path || path.endsWith('/')) path += 'index.html';
+                try {
+                    const api = 'https://api.github.com/repos/' + owner + '/' + repo
+                              + '/commits?path=' + encodeURIComponent(path) + '&per_page=1';
+                    const r = await fetch(api);
+                    if (r.ok) {
+                        const j = await r.json();
+                        if (j && j[0]) {
+                            info.commit = {
+                                sha: j[0].sha.slice(0, 7),
+                                date: new Date(j[0].commit.author.date),
+                                message: (j[0].commit.message || '').split('\n')[0],
+                                url: j[0].html_url
+                            };
+                        }
+                    } else if (r.status === 403) {
+                        info.errors.push('GitHub API rate limit reached — try again later.');
+                    }
+                } catch (e) { info.errors.push('GitHub lookup failed: ' + e.message); }
+            }
+            return info;
+        };
+
+        window.showAppVersion = async function(){
             const esc = v => String(v == null ? '' : v)
                 .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
             const row = (k, v) => '<div style="display:flex;justify-content:space-between;gap:16px;'
                 + 'padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06);">'
                 + '<span style="opacity:0.6;">' + esc(k) + '</span>'
-                + '<span style="font-weight:600;text-align:right;">' + esc(v) + '</span></div>';
+                + '<span style="font-weight:600;text-align:right;">' + v + '</span></div>';
 
             let modal = document.getElementById('aboutModal');
             if (!modal) {
@@ -5859,40 +5914,57 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 modal.onclick = e => { if (e.target === modal) modal.remove(); };
                 document.body.appendChild(modal);
             }
+            const shell = body => '<div style="background:#161b22;color:#e6edf3;max-width:480px;width:100%;'
+                + 'max-height:82vh;overflow:auto;border-radius:12px;padding:22px;">'
+                + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
+                + '<h3 style="margin:0;">About</h3>'
+                + '<button onclick="document.getElementById(\'aboutModal\').remove()" '
+                + 'style="background:none;border:none;color:#8b949e;font-size:24px;cursor:pointer;line-height:1;">&times;</button>'
+                + '</div>' + body + '</div>';
+
+            modal.innerHTML = shell('<div style="opacity:0.6;font-size:0.86rem;">Reading build info…</div>');
 
             const tr = window.stockTracker;
             const holdings = tr ? ((tr.stocks||[]).length + (tr.mutualFunds||[]).length) : 0;
             const txns = tr ? [...(tr.stocks||[]), ...(tr.mutualFunds||[])]
                 .reduce((n, it) => n + ((it.transactions||[]).length), 0) : 0;
 
-            let body = row('Build', window.APP_BUILD)
-                     + row('Loaded at', new Date().toLocaleString())
-                     + row('Holdings', holdings)
-                     + row('Transactions', txns)
-                     + row('Service worker', 'checking...');
+            const info = await window.getBuildInfo();
 
-            modal.innerHTML = '<div style="background:#161b22;color:#e6edf3;max-width:460px;width:100%;'
-                + 'border-radius:12px;padding:22px;">'
-                + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">'
-                + '<h3 style="margin:0;">About</h3>'
-                + '<button onclick="document.getElementById(\'aboutModal\').remove()" '
-                + 'style="background:none;border:none;color:#8b949e;font-size:24px;cursor:pointer;line-height:1;">&times;</button>'
-                + '</div><div id="aboutBody" style="font-size:0.86rem;">' + body + '</div>'
-                + '<button onclick="window.forceAppUpdate()" style="margin-top:16px;width:100%;padding:9px;'
-                + 'border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);'
-                + 'color:#e6edf3;cursor:pointer;">Clear cache and reload</button>'
-                + '<div style="font-size:0.72rem;opacity:0.5;margin-top:8px;">'
-                + 'Use this if a change you deployed is not showing up.</div>'
-                + '</div>';
+            let body = '<div style="font-size:0.86rem;">';
+            body += row('Deployed', info.modified ? info.modified.toLocaleString() : '<span style="opacity:0.5;">unknown</span>');
+            if (info.fingerprint) body += row('Fingerprint', '<code>' + info.fingerprint + '</code> · ' + info.sizeKb + ' KB');
+            if (info.commit) {
+                body += row('Commit', '<a href="' + esc(info.commit.url) + '" target="_blank" '
+                     + 'style="color:#58a6ff;"><code>' + esc(info.commit.sha) + '</code></a>');
+                body += row('Committed', info.commit.date.toLocaleString());
+                body += row('Message', esc(info.commit.message));
+            }
+            body += row('Holdings', holdings);
+            body += row('Transactions', txns);
+            body += row('Service worker', '<span id="swState">checking…</span>');
+            body += '</div>';
+
+            if (info.errors.length) {
+                body += '<div style="font-size:0.74rem;opacity:0.5;margin-top:10px;">'
+                     + info.errors.map(esc).join('<br>') + '</div>';
+            }
+
+            body += '<button onclick="window.forceAppUpdate()" style="margin-top:16px;width:100%;padding:9px;'
+                 + 'border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);'
+                 + 'color:#e6edf3;cursor:pointer;">Clear cache and reload</button>'
+                 + '<div style="font-size:0.72rem;opacity:0.5;margin-top:8px;">'
+                 + 'Clears cached files for this app only. Other sites and your browser history are untouched. '
+                 + 'To go back to an earlier build, open the commit link above and revert it on GitHub.</div>';
+
+            modal.innerHTML = shell(body);
 
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.getRegistrations().then(rs => {
-                    const el = document.getElementById('aboutBody');
-                    if (!el) return;
-                    const state = rs.length
+                    const el = document.getElementById('swState');
+                    if (el) el.textContent = rs.length
                         ? rs.length + ' registered' + (rs[0].active ? ' (active)' : '')
                         : 'none';
-                    el.innerHTML = el.innerHTML.replace('checking...', state);
                 }).catch(() => {});
             }
         };
