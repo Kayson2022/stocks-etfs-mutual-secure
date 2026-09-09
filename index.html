@@ -20,6 +20,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -9171,8 +9172,13 @@ renderPortfolioSummary() {
                                     if (!denom) return '';
                                     const pct = (stats.currentValue / denom) * 100;
                                     const col = pct >= 20 ? '#e74c3c' : pct >= 10 ? '#f39c12' : '';
-                                    return `<div class="info-row"> <span class="info-label">% of Stocks:</span> `
-                                         + `<span class="info-value"${col?` style="color:${col};font-weight:700;"`:''}>`
+                                    // The badge in the card header already shows a
+                                    // percentage, but measured against the whole
+                                    // portfolio including ETFs and funds. Both numbers
+                                    // are correct and they differ a lot, so each says
+                                    // which denominator it uses.
+                                    return `<div class="info-row"> <span class="info-label">% of Stocks Only:</span> `
+                                         + `<span class="info-value"${col?` style="color:${col} !important;font-weight:700;"`:''}>`
                                          + `${pct.toFixed(2)}%</span> </div>`;
                                 }).call(this)}
                                 <div class="info-row"> <span class="info-label">Avg. Cost:</span> <span class="info-value">${this.formatCurrency(stats.averageCostBasis)}</span> </div>
