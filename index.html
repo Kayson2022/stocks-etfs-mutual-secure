@@ -6045,6 +6045,29 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             return total;
         };
 
+        // Same idea, for ETFs. A separate cache and a separate total, because
+        // an ETF's weight against other ETFs is a different question from a
+        // stock's weight against other stocks -- mixing them into one
+        // denominator would make both numbers wrong.
+        window.getEtfOnlyTotal = function(force) {
+            const tr = window.stockTracker;
+            if (!tr) return 0;
+            const now = Date.now();
+            if (!force && tr._etfTotalCache && (now - tr._etfTotalCacheAt) < 3000) {
+                return tr._etfTotalCache;
+            }
+            let total = 0;
+            (tr.stocks || []).forEach(it => {
+                if (window.classifyAsset(it, tr) !== 'etf') return;
+                const st = tr.calculateTransactionStats(it.transactions || [], it.price);
+                const sh = st.totalSharesOwned || 0;
+                if (sh > 0) total += sh * (Number(it.price) || 0);
+            });
+            tr._etfTotalCache = total;
+            tr._etfTotalCacheAt = now;
+            return total;
+        };
+
         // ── Concentration ────────────────────────────────────────────────────
         // Position size as a share of the portfolio is not visible anywhere
         // else: a card shows a holding is up 2,500%, but not that it now makes
@@ -9164,11 +9187,15 @@ renderPortfolioSummary() {
                                 <div class="info-row"> <span class="info-label">Total Shares:</span> <span class="info-value">${this.formatNumber(stats.totalSharesOwned, 3)}</span> </div>
                                 <div class="info-row"> <span class="info-label">Total Value:</span> <span class="info-value ${positiveClass(totalPL)}">${this.formatCurrency(stats.currentValue)}</span> </div>
                                 ${(function(){
-                                    // Weight is only meaningful for individual stocks, since
-                                    // that is what the denominator counts. ETFs and funds get
-                                    // no row rather than a misleading one.
-                                    if (window.classifyAsset(item, this) !== 'stock') return '';
-                                    const denom = window.getStockOnlyTotal();
+                                    // One row, but which denominator applies depends on the
+                                    // asset class: a stock is weighed against other stocks,
+                                    // an ETF against other ETFs. Funds get no row, same as
+                                    // before -- there's no "individual funds" total defined.
+                                    const cls = window.classifyAsset(item, this);
+                                    let label, denom;
+                                    if (cls === 'stock')      { label = 'Individual Stocks %'; denom = window.getStockOnlyTotal(); }
+                                    else if (cls === 'etf')   { label = 'Individual ETFs %';    denom = window.getEtfOnlyTotal(); }
+                                    else return '';
                                     if (!denom) return '';
                                     const pct = (stats.currentValue / denom) * 100;
                                     const col = pct >= 20 ? '#e74c3c' : pct >= 10 ? '#f39c12' : '';
@@ -9177,7 +9204,7 @@ renderPortfolioSummary() {
                                     // portfolio including ETFs and funds. Both numbers
                                     // are correct and they differ a lot, so each says
                                     // which denominator it uses.
-                                    return `<div class="info-row"> <span class="info-label">Individual Stocks %:</span> `
+                                    return `<div class="info-row"> <span class="info-label">${label}:</span> `
                                          + `<span class="info-value"${col?` style="color:${col} !important;font-weight:700;"`:''}>`
                                          + `${pct.toFixed(2)}%</span> </div>`;
                                 }).call(this)}
