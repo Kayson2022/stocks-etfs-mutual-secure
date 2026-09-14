@@ -6253,6 +6253,88 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             render();
         };
 
+        // ── Earnings calendar fetch ──────────────────────────────────────────
+        window._erCache    = null;
+        window._erFetching = false;
+
+        window.getErCache = function() {
+            if (window._erCache) return window._erCache.data;
+            try {
+                const raw = localStorage.getItem('stockTracker_erCache');
+                if (raw) {
+                    const obj = JSON.parse(raw);
+                    if (Date.now() - (obj.at || 0) < 86400000) { window._erCache = obj; return obj.data; }
+                }
+            } catch (e) {}
+            return null;
+        };
+
+        window.saveErCache = function(data) {
+            const obj = { data, at: Date.now() };
+            window._erCache = obj;
+            try { localStorage.setItem('stockTracker_erCache', JSON.stringify(obj)); } catch (e) {}
+        };
+
+        window.fetchAllEarnings = async function(force) {
+            if (window._erFetching && !force) return;
+            const cached = window.getErCache();
+            if (cached && !force) return;
+            const tr = window.stockTracker;
+            if (!tr) return;
+            const key = tr.config?.finnhubApiKey || tr.config?.finnhubKey || '';
+            if (!key) return;
+            const symbols = [...new Set(
+                [...(tr.stocks||[]),...(tr.mutualFunds||[])]
+                    .filter(it=>window.classifyAsset(it,tr)==='stock')
+                    .map(it=>it.symbol)
+            )];
+            if (!symbols.length) return;
+            window._erFetching = true;
+            const today  = new Date().toISOString().slice(0,10);
+            const future = new Date(Date.now()+90*86400000).toISOString().slice(0,10);
+            const data   = cached ? {...cached} : {};
+            for (const sym of symbols) {
+                if (!force && data[sym] !== undefined) continue;
+                try {
+                    const res = await fetch(
+                        `https://finnhub.io/api/v1/calendar/earnings?symbol=${sym}&from=${today}&to=${future}&token=${key}`
+                    );
+                    if (res.ok) {
+                        const j = await res.json();
+                        const dates = (j.earningsCalendar||[]).map(e=>e.date).filter(Boolean).sort();
+                        data[sym] = dates[0] || null;
+                    } else { data[sym] = null; }
+                } catch (e) { data[sym] = null; }
+                window.saveErCache(data);
+                window.updateErOnCards && window.updateErOnCards();
+                await new Promise(r=>setTimeout(r,1000));
+            }
+            window._erFetching = false;
+            window.saveErCache(data);
+            window.updateErOnCards && window.updateErOnCards();
+        };
+
+        window.updateErOnCards = function() {
+            const cache = window.getErCache();
+            if (!cache) return;
+            const today = new Date();
+            document.querySelectorAll('.stock-card[data-symbol]').forEach(card => {
+                const sym = card.dataset.symbol;
+                const el  = card.querySelector('.er-date-row');
+                if (!el) return;
+                const dateStr = cache[sym];
+                if (!dateStr) { el.innerHTML = ''; return; }
+                const date = new Date(dateStr + 'T00:00:00');
+                const days = Math.round((date - today) / 86400000);
+                if (days < 0 || days > 90) { el.innerHTML = ''; return; }
+                const col = days <= 14 ? '#e74c3c' : days <= 30 ? '#f39c12' : '#8b949e';
+                const lbl = days===0?'Today':days===1?'Tomorrow':`in ${days}d`;
+                el.innerHTML = `<span class="info-label">Next ER:</span> `
+                    + `<span class="info-value" style="color:${col} !important;font-weight:${days<=30?'700':'400'};">`
+                    + `${date.toLocaleDateString('en-US',{month:'short',day:'numeric'})} (${lbl})</span>`;
+            });
+        };
+
         // ── Earnings calendar panel ─────────────────────────────────────────
         window.showErCalendar = function() {
             let modal = document.getElementById('erCalModal');
