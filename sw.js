@@ -14,7 +14,7 @@
 //   3. CACHE_NAME was pinned to v1, so the activate handler never had
 //      an old cache to purge.
 // ═══════════════════════════════════════════════════
-const CACHE_NAME   = 'stocks-tracker-v2';
+const CACHE_NAME   = 'stocks-tracker-v3';
 const CACHE_ASSETS = [
   './',
   './index.html',
@@ -107,7 +107,13 @@ self.addEventListener('fetch', event => {
     caches.match(event.request).then(cached => {
       if (cached) return cached;
       return fetch(event.request).then(response => {
-        if (response.ok && event.request.method === 'GET') {
+        // Cache.put() rejects any scheme other than http(s). Browser extensions
+        // issue chrome-extension:// requests through the page, which landed here
+        // and threw an uncaught promise rejection on every page load. They are
+        // not ours to cache, so they are passed straight through.
+        const scheme = new URL(event.request.url).protocol;
+        const cacheable = scheme === 'http:' || scheme === 'https:';
+        if (response.ok && event.request.method === 'GET' && cacheable) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
