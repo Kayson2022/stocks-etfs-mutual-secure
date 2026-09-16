@@ -9395,7 +9395,25 @@ renderPortfolioSummary() {
                                          + `<span class="info-value"${col?` style="color:${col} !important;font-weight:700;"`:''}>`
                                          + `${pct.toFixed(2)}%</span> </div>`;
                                 }).call(this)}
-                                <div class="info-row er-date-row"></div>
+                                ${(function(){
+                                    // Rendered inline rather than patched in afterwards.
+                                    // The previous version filled this row from
+                                    // updateErOnCards() once the fetch finished, but the
+                                    // card is re-rendered on every price refresh, which
+                                    // recreated the row empty and wiped the date roughly
+                                    // once a minute.
+                                    const cache = window.getErCache && window.getErCache();
+                                    const dateStr = cache && cache[item.symbol];
+                                    if (!dateStr) return '<div class="info-row er-date-row"></div>';
+                                    const date = new Date(dateStr + 'T00:00:00');
+                                    const days = Math.round((date - new Date()) / 86400000);
+                                    if (days < 0 || days > 90) return '<div class="info-row er-date-row"></div>';
+                                    const col = days <= 14 ? '#e74c3c' : days <= 30 ? '#f39c12' : '#8b949e';
+                                    const lbl = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `in ${days}d`;
+                                    return `<div class="info-row er-date-row"> <span class="info-label">Next ER:</span> `
+                                         + `<span class="info-value" style="color:${col} !important;font-weight:${days<=30?'700':'400'};">`
+                                         + `${date.toLocaleDateString('en-US',{month:'short',day:'numeric'})} (${lbl})</span> </div>`;
+                                })()}
                                 <div class="info-row"> <span class="info-label">Avg. Cost:</span> <span class="info-value">${this.formatCurrency(stats.averageCostBasis)}</span> </div>
                                 <div class="info-row"> <span class="info-label">Total P/L:</span> <span class="info-value ${positiveClass(totalPL)}">${this.formatCurrency(totalPL)}</span> </div>
                                 <div class="info-row"> <span class="info-label">Total P/L %:</span> <span class="info-value ${positiveClass(totalPLPercent)}">${this.formatNumber(totalPLPercent, 2)}%</span> </div>
