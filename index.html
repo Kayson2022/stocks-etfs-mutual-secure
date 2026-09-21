@@ -21,6 +21,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -1127,11 +1128,13 @@ function safeUrl(str) {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
             gap: 24px;
-            /* FIX: Increased max-height to a very large value to prevent cutoff */
-            max-height: 50000px; 
+            /* FIX: No height cap when expanded. The old 50000px cap clipped the
+               last cards of long groups on phones, where cards stack in one
+               column and grow much taller. */
+            max-height: none;
             opacity: 1;
-            overflow: hidden;
-            transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out;
+            overflow: visible;
+            transition: opacity 0.3s ease-in-out;
         }
         .group-content.collapsed {
             max-height: 0;
