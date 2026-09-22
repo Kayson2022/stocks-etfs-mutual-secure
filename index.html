@@ -3361,6 +3361,92 @@ body.dark-mode .modal-content {
     border-color: var(--accent-primary);
     color: #fff;
 }
+
+/* ═══ LIGHT MODE COMFORT PASS (loads last, wins over earlier day-theme packs) ═══
+   - Calmer page background (no bright blue glow), solid white cards
+   - Deep green/red for numbers so they stay crisp on a light background
+   - Removes the dark text-shadow halo that made green/red numbers look blurry
+   - Darker secondary labels (52W Range, Vol, EPS, etc.)
+   - Softer price pulse: faint tint, no scaling */
+body:not(.dark-mode){
+  --bg-primary: #eef1f5;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --border-color: #dbe1e8;
+  --color-positive: #047857;
+  --color-negative: #b91c1c;
+  --chart-positive-fill-color-rgb: 4, 120, 87;
+  --chart-negative-fill-color-rgb: 185, 28, 28;
+  background: #eef1f5 !important;
+  background-image: none !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+body:not(.dark-mode) .card,
+body:not(.dark-mode) .stock-card,
+body:not(.dark-mode) .fund-card,
+body:not(.dark-mode) .watchlist-card,
+body:not(.dark-mode) .panel,
+body:not(.dark-mode) #portfolio-summary,
+body:not(.dark-mode) #portfolio-summary .summary-total,
+body:not(.dark-mode) #portfolio-summary .summary-box,
+body:not(.dark-mode) #portfolio-summary .summary-item{
+  background: #ffffff !important;
+  border: 1px solid #dbe1e8 !important;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.05), 0 4px 14px rgba(15,23,42,0.05) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body:not(.dark-mode) #portfolio-summary{ animation: none !important; }
+body:not(.dark-mode) #chart-summary-panel{
+  background: #ffffff !important;
+  border-color: #dbe1e8 !important;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.05), 0 6px 18px rgba(15,23,42,0.06) !important;
+}
+
+/* Crisp numbers: no halo, solid weight */
+body:not(.dark-mode) .summary-value,
+body:not(.dark-mode) .summary-value.positive,
+body:not(.dark-mode) .summary-value.negative,
+body:not(.dark-mode) .positive,
+body:not(.dark-mode) .negative,
+body:not(.dark-mode) .stock-price,
+body:not(.dark-mode) .stock-change,
+body:not(.dark-mode) .info-value,
+body:not(.dark-mode) .summary-arrow{
+  text-shadow: none !important;
+}
+body:not(.dark-mode) .summary-value.positive,
+body:not(.dark-mode) .summary-value.negative{
+  font-weight: 800 !important;
+  letter-spacing: -0.01em;
+}
+
+/* Secondary labels a step darker */
+body:not(.dark-mode) .info-label,
+body:not(.dark-mode) .summary-label,
+body:not(.dark-mode) .summary-item-label,
+body:not(.dark-mode) .muted,
+body:not(.dark-mode) .subtext,
+body:not(.dark-mode) #portfolio-summary .summary-badge{
+  color: #475569 !important;
+  text-shadow: none !important;
+}
+
+/* Gentle pulse on the live-update pills */
+@keyframes lmPulsePos{ 0%,100%{ background:#ffffff; } 45%{ background:rgba(4,120,87,0.12); } }
+@keyframes lmPulseNeg{ 0%,100%{ background:#ffffff; } 45%{ background:rgba(185,28,28,0.10); } }
+@keyframes lmPulseNeu{ 0%,100%{ background:#ffffff; } 45%{ background:rgba(71,85,105,0.10); } }
+body:not(.dark-mode) #chart-summary-panel .summary-pill.pulse-positive{ animation: lmPulsePos 700ms ease-out both !important; transform:none !important; }
+body:not(.dark-mode) #chart-summary-panel .summary-pill.pulse-negative{ animation: lmPulseNeg 700ms ease-out both !important; transform:none !important; }
+body:not(.dark-mode) #chart-summary-panel .summary-pill.pulse-neutral { animation: lmPulseNeu 700ms ease-out both !important; transform:none !important; }
+body:not(.dark-mode) #chart-summary-panel .summary-pill{
+  background:#ffffff !important;
+  border-color:#dbe1e8 !important;
+  box-shadow:none !important;
+}
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 
@@ -8755,7 +8841,7 @@ renderPortfolioSummary() {
                     const coastNum = _g / Math.pow(1 + _r, _y);
                     const pct = Math.min(200, (_cv/coastNum)*100);
                     const reached = pct >= 100;
-                    if (cBar) { cBar.style.width=Math.min(100,pct).toFixed(1)+'%'; cBar.style.background=reached?'#27ae60':pct>=75?'#f39c12':'#3498db'; }
+                    if (cBar) { cBar.style.width=Math.min(100,pct).toFixed(1)+'%'; cBar.style.background=_add401?'linear-gradient(90deg,#2dd4bf,#0d9488)':reached?'#27ae60':pct>=75?'#f39c12':'#3498db'; }
                     if (cPct) { cPct.textContent=pct.toFixed(0)+'%'; cPct.style.color=reached?'#27ae60':'rgba(255,255,255,0.9)'; }
                     if (cDet) {
                         if (reached) { cDet.innerHTML='🎉 <strong>Coast FIRE reached!</strong> Your '+(_add401 ? fc(_cv)+' ('+fc(_brk)+' + '+fc(_k401)+' 401(k))' : fc(_cv))+' will compound to '+fc(_g)+' in '+_y+' yrs @ '+(_r*100).toFixed(1)+'%/yr — zero new contributions needed.'; cDet.style.color='#27ae60'; }
