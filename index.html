@@ -7849,7 +7849,15 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     }
                 }
 
-                const sortedItems = this.sortItems([...filteredItems], sortBy);
+                // Hide closed positions everywhere except the performance sort,
+                // which has its own dedicated 🔒 Closed Positions group.
+                const activeFilteredItems = sortBy === 'performance'
+                    ? filteredItems
+                    : filteredItems.filter(item => {
+                        const sh = this.calculateTransactionStats(item.transactions, item.price).totalSharesOwned;
+                        return sh > 0.0001;
+                    });
+                const sortedItems = this.sortItems([...activeFilteredItems], sortBy);
                 
                 // Reset P/L totals before rendering groups
                 this.todaysGainsTotal = 0;
