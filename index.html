@@ -5879,6 +5879,28 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
         window.isRetirementAccount = function(acctType){
             return window.RETIREMENT_ACCOUNT_TYPES.has(String(acctType || '').trim().toLowerCase());
         };
+// Broker name from an account label, so "Fidelity Brokerage" and
+        // "Fidelity Roth IRA" both group under "Fidelity".
+        window.brokerOf = function (platform) {
+          const raw = String(platform || '').trim();
+          if (!raw) return 'Uncategorized';
+          const p = raw.toLowerCase();
+          const known = [
+            ['fidelity', 'Fidelity'], ['vanguard', 'Vanguard'], ['schwab', 'Charles Schwab'],
+            ['merrill', 'Merrill Edge'], ['robinhood', 'Robinhood'], ['e*trade', 'E*TRADE'],
+            ['etrade', 'E*TRADE'], ['webull', 'Webull'], ['interactive brokers', 'Interactive Brokers'],
+            ['ibkr', 'Interactive Brokers'], ['sofi', 'SoFi'], ['ally', 'Ally Invest'],
+            ['tastytrade', 'tastytrade'], ['td ameritrade', 'TD Ameritrade'], ['m1', 'M1 Finance'],
+            ['wells fargo', 'Wells Fargo'], ['chase', 'J.P. Morgan'], ['j.p. morgan', 'J.P. Morgan'],
+            ['jpmorgan', 'J.P. Morgan'], ['public', 'Public'], ['firstrade', 'Firstrade']
+          ];
+          for (const [key, name] of known) if (p.includes(key)) return name;
+          // Unknown broker: strip account-type words and keep the rest
+          const stripped = raw
+            .replace(/\b(roth|traditional|rollover|sep|simple|ira|401\s*\(?k\)?|403\s*\(?b\)?|hsa|529|brokerage|individual|joint|taxable|retirement|account|acct)\b/gi, '')
+            .replace(/[-–—_()|/]+/g, ' ').replace(/\s+/g, ' ').trim();
+          return stripped || raw;
+        };
         window.matchesAccountFilter = function(txn, term){
             if (!term || term === 'All Platforms') return true;
             if (!txn) return false;
@@ -5889,7 +5911,21 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             if (term === 'UNASSIGNED')   return acct === '';
             if (term.startsWith('AT::')) return norm === term.slice(4).trim().toLowerCase();
             if (term.startsWith('EX::')) return norm !== term.slice(4).trim().toLowerCase();
+            if (term.startsWith('BR::')) return window.brokerOf && window.brokerOf(txn.platform) === term.slice(4);
             return String(txn.platform || '').trim().toLowerCase() === term.trim().toLowerCase();
+        };
+        window.brokerOptionsHTML = function(platforms){
+            const byBroker = {};
+            platforms.forEach(p => {
+                const b = window.brokerOf ? window.brokerOf(p) : p;
+                (byBroker[b] = byBroker[b] || []).push(p);
+            });
+            return Object.keys(byBroker).sort().map(b => {
+                const accts = byBroker[b];
+                if (accts.length < 2) return accts.map(p => `<option value="${p}">${p}</option>`).join('');
+                return `<option value="BR::${b}">${b} (all accounts combined)</option>`
+                    + accts.map(p => `<option value="${p}">&nbsp;&nbsp;↳ ${p}</option>`).join('');
+            }).join('');
         };
         window.accountFilterLabel = function(term){
             if (!term || term === 'All Platforms') return 'Combined Total';
@@ -5898,6 +5934,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             if (term === 'UNASSIGNED')   return 'Unassigned Account Type';
             if (term.startsWith('AT::')) return term.slice(4) + ' (All Brokers)';
             if (term.startsWith('EX::')) return 'All except ' + term.slice(4);
+            if (term.startsWith('BR::')) return term.slice(4) + ' (all accounts)';
             return term;
         };
 
@@ -6201,7 +6238,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             }
             if (platforms.length) {
                 acctOpts += '<optgroup label="By Broker">'
-                    + platforms.map(p => `<option value="${p}">${p}</option>`).join('')
+                    + window.brokerOptionsHTML(platforms)
                     + '</optgroup>';
             }
 
@@ -7774,7 +7811,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         }
                         if (platforms.length) {
                             optsHTML += '<optgroup label="By Broker">'
-                                + platforms.map(p => `<option value="${p}">${p}</option>`).join('')
+                                + window.brokerOptionsHTML(platforms)
                                 + '</optgroup>';
                         }
                         this.elements.platformFilter.innerHTML = optsHTML;
@@ -22474,28 +22511,6 @@ window.sendSecureBackupToTelegram = async function() {
 
 <script>
 /* ═══ Secure app: view toggle + sticky filter bar ═══ */
-// Broker name from an account label, so "Fidelity Brokerage" and
-// "Fidelity Roth IRA" both group under "Fidelity".
-window.brokerOf = function (platform) {
-  const raw = String(platform || '').trim();
-  if (!raw) return 'Uncategorized';
-  const p = raw.toLowerCase();
-  const known = [
-    ['fidelity', 'Fidelity'], ['vanguard', 'Vanguard'], ['schwab', 'Charles Schwab'],
-    ['merrill', 'Merrill Edge'], ['robinhood', 'Robinhood'], ['e*trade', 'E*TRADE'],
-    ['etrade', 'E*TRADE'], ['webull', 'Webull'], ['interactive brokers', 'Interactive Brokers'],
-    ['ibkr', 'Interactive Brokers'], ['sofi', 'SoFi'], ['ally', 'Ally Invest'],
-    ['tastytrade', 'tastytrade'], ['td ameritrade', 'TD Ameritrade'], ['m1', 'M1 Finance'],
-    ['wells fargo', 'Wells Fargo'], ['chase', 'J.P. Morgan'], ['j.p. morgan', 'J.P. Morgan'],
-    ['jpmorgan', 'J.P. Morgan'], ['public', 'Public'], ['firstrade', 'Firstrade']
-  ];
-  for (const [key, name] of known) if (p.includes(key)) return name;
-  // Unknown broker: strip account-type words and keep the rest
-  const stripped = raw
-    .replace(/\b(roth|traditional|rollover|sep|simple|ira|401\s*\(?k\)?|403\s*\(?b\)?|hsa|529|brokerage|individual|joint|taxable|retirement|account|acct)\b/gi, '')
-    .replace(/[-–—_()|/]+/g, ' ').replace(/\s+/g, ' ').trim();
-  return stripped || raw;
-};
 (function () {
   function getMode() { try { return localStorage.getItem('secureViewMode') || 'card'; } catch (e) { return 'card'; } }
   function paintToggle() {
