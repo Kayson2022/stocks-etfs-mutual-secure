@@ -677,11 +677,23 @@ function safeUrl(str) {
         .card-more-menu .add-btn:hover, .card-more-menu .add-btn:focus { background:var(--bg-tertiary) !important; outline:none; }
         .stock-card:has(.card-more-menu.open), .fund-card:has(.card-more-menu.open) { overflow:visible !important; z-index:5; }
 
-        /* ── Features & Tools: grouped ── */
-        #stToolbarRow:not([style*="none"]) { display:block !important; }
-        .st-group + .st-group { margin-top:12px; }
-        .st-group-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:6px; }
-        @media (max-width:480px) { .st-group-grid { grid-template-columns:1fr 1fr; } }
+        /* ── Features & Tools: 4 dropdown menus on one row ── */
+        #stToolbarRow { position:relative; }
+        #stToolbarRow:not([style*="none"]) { display:grid !important; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px; }
+        @media (max-width:600px) { #stToolbarRow:not([style*="none"]) { grid-template-columns:1fr 1fr; } }
+        .st-group { position:static; }
+        .st-dd-btn { width:100%; padding:10px 12px; border-radius:999px; border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary);
+            font-size:0.86rem; font-weight:700; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:40px; }
+        .st-dd-btn[aria-expanded="true"] { border-color:var(--accent-primary, #7c3aed); background:color-mix(in srgb, var(--accent-primary, #7c3aed) 12%, var(--bg-secondary)); }
+        .st-dd-caret { display:inline-block; transition:transform 0.15s; }
+        .st-dd-btn[aria-expanded="true"] .st-dd-caret { transform:rotate(180deg); }
+        /* The open menu drops down full-width under the whole row, so it never runs off the screen edge */
+        .st-dd-menu { display:none !important; position:absolute; left:16px; right:16px; top:calc(100% + 4px); z-index:70;
+            grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:6px; padding:12px;
+            background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:12px; box-shadow:0 14px 32px rgba(0,0,0,0.28); }
+        .st-dd-menu.open { display:grid !important; }
+        .st-dd-title { grid-column:1 / -1; margin-bottom:2px; }
+        @media (max-width:480px) { .st-dd-menu { left:8px; right:8px; grid-template-columns:1fr 1fr; } }
         #headerLockBtn { padding:6px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); font-size:0.82rem; font-weight:600; cursor:pointer; margin-right:6px; }
 
         /* Group-header trend icons: drawn as SVG so every device shows the same color
@@ -3794,8 +3806,9 @@ document.addEventListener("DOMContentLoaded", function(){
 </div>
 <div id="stToolbarRow" style="padding:8px 16px 4px;">
   <div class="st-group">
-    <div class="ut-title">📊 Performance &amp; Analysis</div>
-    <div class="st-group-grid">
+    <button type="button" class="st-dd-btn" aria-haspopup="true" aria-expanded="false" onclick="window.toggleStDropdown(this)">📊 Performance <span class="st-dd-caret">▾</span></button>
+    <div class="st-group-grid st-dd-menu" role="menu">
+      <div class="ut-title st-dd-title">📊 Performance &amp; Analysis</div>
       <button class="st-toolbar-btn" data-st-panel="snapshot">📊 Snapshot</button>
       <button class="st-toolbar-btn" data-st-panel="benchmark">🏁 Benchmark</button>
       <button class="st-toolbar-btn" data-st-panel="perfstats">📉 Perf Stats</button>
@@ -3804,8 +3817,9 @@ document.addEventListener("DOMContentLoaded", function(){
     </div>
   </div>
   <div class="st-group">
-    <div class="ut-title">💵 Income &amp; Taxes</div>
-    <div class="st-group-grid">
+    <button type="button" class="st-dd-btn" aria-haspopup="true" aria-expanded="false" onclick="window.toggleStDropdown(this)">💵 Income &amp; Tax <span class="st-dd-caret">▾</span></button>
+    <div class="st-group-grid st-dd-menu" role="menu">
+      <div class="ut-title st-dd-title">💵 Income &amp; Taxes</div>
       <button class="st-toolbar-btn" data-st-panel="divcal">💰 Div Calendar</button>
       <button class="st-toolbar-btn" data-st-panel="divwaterfall">💧 Div Waterfall</button>
       <button class="st-toolbar-btn" data-st-panel="tax">🧾 Tax Summary</button>
@@ -3813,8 +3827,9 @@ document.addEventListener("DOMContentLoaded", function(){
     </div>
   </div>
   <div class="st-group">
-    <div class="ut-title">🎯 Strategy &amp; Planning</div>
-    <div class="st-group-grid">
+    <button type="button" class="st-dd-btn" aria-haspopup="true" aria-expanded="false" onclick="window.toggleStDropdown(this)">🎯 Strategy <span class="st-dd-caret">▾</span></button>
+    <div class="st-group-grid st-dd-menu" role="menu">
+      <div class="ut-title st-dd-title">🎯 Strategy &amp; Planning</div>
       <button class="st-toolbar-btn" data-st-panel="goal">🎯 Goal</button>
       <button class="st-toolbar-btn" data-st-panel="whatif">🔮 What-If</button>
       <button class="st-toolbar-btn" data-st-panel="rebal">⚖️ Rebalance</button>
@@ -3824,8 +3839,9 @@ document.addEventListener("DOMContentLoaded", function(){
     </div>
   </div>
   <div class="st-group">
-    <div class="ut-title">🤖 Deep Insights &amp; AI</div>
-    <div class="st-group-grid">
+    <button type="button" class="st-dd-btn" aria-haspopup="true" aria-expanded="false" onclick="window.toggleStDropdown(this)">🤖 AI &amp; Deep Scan <span class="st-dd-caret">▾</span></button>
+    <div class="st-group-grid st-dd-menu" role="menu">
+      <div class="ut-title st-dd-title">🤖 Deep Insights &amp; AI</div>
       <button class="st-toolbar-btn" data-st-panel="aidoctor">🩺 AI Doctor</button>
       <button class="st-toolbar-btn" data-st-panel="askai">💬 Ask Portfolio</button>
       <button class="st-toolbar-btn" data-st-panel="anomaly">🚨 Anomaly</button>
@@ -22959,6 +22975,31 @@ window.sendSecureBackupToTelegram = async function() {
   }, true);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCardMenus(); });
   window.addEventListener('scroll', function () { closeCardMenus(); }, { passive: true });
+
+  // Features & Tools dropdowns: one open at a time; closes on outside tap or after picking a tool
+  function closeStDropdowns(except) {
+    document.querySelectorAll('.st-dd-menu.open').forEach(function (m) {
+      if (m === except) return;
+      m.classList.remove('open');
+      var b = m.parentNode && m.parentNode.querySelector('.st-dd-btn');
+      if (b) b.setAttribute('aria-expanded', 'false');
+    });
+  }
+  window.toggleStDropdown = function (btn) {
+    var menu = btn.parentNode.querySelector('.st-dd-menu');
+    if (!menu) return;
+    var opening = !menu.classList.contains('open');
+    closeStDropdowns(menu);
+    menu.classList.toggle('open', opening);
+    btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  };
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t.closest && t.closest('.st-dd-btn')) return;
+    if (t.closest && t.closest('.st-dd-menu')) { if (t.closest('[data-st-panel]')) setTimeout(closeStDropdowns, 0); return; }
+    closeStDropdowns();
+  }, true);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeStDropdowns(); });
 
   function init() { paintToggle(); initSticky(); guardClearAll(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
