@@ -781,6 +781,7 @@ function safeUrl(str) {
             box-shadow:0 6px 18px rgba(0,0,0,0.35);
         }
         body:not(.dark-mode) .portfolio-controls.pc-floating { background:rgba(255,255,255,0.88); }
+        .portfolio-controls.pc-floating.pc-under-strip { padding-top:8px; border-radius:12px; border:1px solid var(--border-color); }
         @media (max-width: 480px) {
             .portfolio-controls.pc-floating { display:grid !important; grid-template-columns:1fr 1fr; gap:6px !important; }
             .portfolio-controls.pc-floating .input-wrapper,
@@ -788,6 +789,9 @@ function safeUrl(str) {
             .portfolio-controls.pc-floating select,
             .portfolio-controls.pc-floating .search-input { padding:7px 10px !important; font-size:0.8rem !important; }
             .portfolio-controls.pc-floating .view-toggle button { padding:6px 10px; }
+            /* keep the pinned bar short on phones: search + 3 filters only */
+            .portfolio-controls.pc-floating .quick-pills,
+            .portfolio-controls.pc-floating .view-toggle { display:none !important; }
         }
 
         .tab-content { display: none; }
@@ -3345,8 +3349,9 @@ body.dark-mode .modal-content {
 /* Settings modal mobile overrides — scoped, must come last */
 @media (max-width: 480px) {
     #settingsModal .modal-content {
-        max-height: 85dvh !important;
         max-height: 85vh !important;
+        max-height: 85dvh !important;
+        padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px)) !important;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
         padding-bottom: 32px !important;
@@ -3518,6 +3523,18 @@ body:not(.dark-mode) #chart-summary-panel .summary-pill{
   border-color:#dbe1e8 !important;
   box-shadow:none !important;
 }
+
+/* ═══ Phone fixes ═══
+   - Inputs at 16px+ : iPhone Safari zooms the whole page when you tap a field smaller than 16px,
+     and the page then stays zoomed and slides left/right. This stops that without disabling zoom.
+   - overflow-x: clip : nothing can make the page wider than the screen (clip, not hidden, so
+     scrolling and the sticky bar keep working).
+   - Floating buttons step aside while a pop-up is open so they don't cover Save buttons. */
+html, body { overflow-x: clip !important; max-width: 100%; }
+@media (max-width: 768px) {
+  body :where(input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea):not(#__nz) { font-size: 16px !important; }
+}
+body.pc-modal-open #_ssBtn { display: none !important; }
 </style>
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 
@@ -22874,7 +22891,7 @@ window.sendSecureBackupToTelegram = async function() {
   // Sticky filter bar. CSS "position: sticky" can't be used because the bar
   // lives in a different section than the card grid, so JS pins it instead.
   function initSticky() {
-    const bar = document.querySelector('#stocks-tab .portfolio-controls');
+    const bar = document.querySelector('.portfolio-controls');
     if (!bar || bar._pcSticky) return;
     bar._pcSticky = true;
     const ph = document.createElement('div');
@@ -22882,8 +22899,9 @@ window.sendSecureBackupToTelegram = async function() {
     bar.parentNode.insertBefore(ph, bar);
     let floating = false;
     function update() {
-      const tab = document.getElementById('stocks-tab');
-      const active = tab && tab.classList.contains('active') && tab.offsetParent !== null;
+      const t = window.stockTracker;
+      const active = (!t || t.currentTab === 'stocks' || t.currentTab === 'funds') && ph.offsetParent !== null
+                     && !document.body.classList.contains('pc-modal-open');
       const r = ph.getBoundingClientRect();
       const should = active && r.top < 0;
       if (should !== floating) {
@@ -22902,6 +22920,21 @@ window.sendSecureBackupToTelegram = async function() {
         const c = ph.getBoundingClientRect();
         bar.style.left = c.left + 'px';
         bar.style.width = c.width + 'px';
+        // Sit just below the app's own pinned strips (Today/1W/1M pill + mini P/L bar)
+        let top = 0;
+        ['chart-summary-panel', 'sticky-mini-bar'].forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const cs = getComputedStyle(el);
+          if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) return;
+          const r = el.getBoundingClientRect();
+          if (r.height > 0 && r.top < 120 && r.bottom > 0) top = Math.max(top, r.bottom);
+        });
+        bar.style.top = (top ? top + 4 : 0) + 'px';
+        bar.classList.toggle('pc-under-strip', top > 0);
+      } else {
+        bar.style.top = '';
+        bar.classList.remove('pc-under-strip');
       }
     }
     window.addEventListener('scroll', update, { passive: true });
@@ -23001,7 +23034,21 @@ window.sendSecureBackupToTelegram = async function() {
   }, true);
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeStDropdowns(); });
 
-  function init() { paintToggle(); initSticky(); guardClearAll(); }
+  function watchModals() {
+    if (window._pcModalWatch) return; window._pcModalWatch = true;
+    let queued = false;
+    const check = () => {
+      queued = false;
+      const open = [...document.querySelectorAll('.modal, .dbm-overlay, #concentrationModal')]
+        .some(m => getComputedStyle(m).display !== 'none' && m.getBoundingClientRect().height > 0);
+      document.body.classList.toggle('pc-modal-open', open);
+    };
+    const schedule = () => { if (!queued) { queued = true; requestAnimationFrame(check); } };
+    new MutationObserver(schedule).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'class'] });
+    check();
+  }
+
+  function init() { paintToggle(); initSticky(); guardClearAll(); watchModals(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   window.addEventListener('load', init);
 })();
