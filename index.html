@@ -782,6 +782,13 @@ function safeUrl(str) {
         }
         body:not(.dark-mode) .portfolio-controls.pc-floating { background:rgba(255,255,255,0.88); }
         .portfolio-controls.pc-floating.pc-under-strip { padding-top:8px; border-radius:12px; border:1px solid var(--border-color); }
+        .pc-filter-toggle { display:none; align-items:center; gap:4px; padding:0 12px; min-height:40px; border-radius:var(--radius-sm);
+            border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); font-size:0.85rem; font-weight:700; white-space:nowrap; cursor:pointer; }
+        .pc-filter-toggle .pc-dot { width:7px; height:7px; border-radius:50%; background:#f59e0b; display:none; }
+        .pc-filter-toggle.has-filters .pc-dot { display:inline-block; }
+        /* Slides out of the way while you scroll down, comes back when you scroll up */
+        .portfolio-controls.pc-floating { transition:transform 0.22s ease, opacity 0.22s ease; }
+        .portfolio-controls.pc-floating.pc-autohide { transform:translateY(calc(-100% - 120px)); opacity:0; pointer-events:none; }
         @media (max-width: 480px) {
             .portfolio-controls.pc-floating { display:grid !important; grid-template-columns:1fr 1fr; gap:6px !important; }
             .portfolio-controls.pc-floating .input-wrapper,
@@ -789,9 +796,15 @@ function safeUrl(str) {
             .portfolio-controls.pc-floating select,
             .portfolio-controls.pc-floating .search-input { padding:7px 10px !important; font-size:0.8rem !important; }
             .portfolio-controls.pc-floating .view-toggle button { padding:6px 10px; }
-            /* keep the pinned bar short on phones: search + 3 filters only */
+            /* Phones: pinned bar is ONE slim row — search + a Filters button.
+               The dropdowns only appear when you tap Filters. */
             .portfolio-controls.pc-floating .quick-pills,
             .portfolio-controls.pc-floating .view-toggle { display:none !important; }
+            .portfolio-controls.pc-floating { grid-template-columns:1fr auto !important; padding:6px 8px !important; }
+            .portfolio-controls.pc-floating .input-wrapper { grid-column:auto !important; }
+            .portfolio-controls.pc-floating:not(.pc-expanded) select { display:none !important; }
+            .portfolio-controls.pc-floating.pc-expanded select { grid-column:1 / -1; }
+            .portfolio-controls.pc-floating .pc-filter-toggle { display:inline-flex !important; }
         }
 
         .tab-content { display: none; }
@@ -22898,6 +22911,31 @@ window.sendSecureBackupToTelegram = async function() {
     ph.className = 'pc-placeholder';
     bar.parentNode.insertBefore(ph, bar);
     let floating = false;
+    let lastY = window.scrollY;
+    const isPhone = () => window.matchMedia('(max-width: 480px)').matches;
+
+    // "Filters" button (only visible while pinned on a phone)
+    const fbtn = document.createElement('button');
+    fbtn.type = 'button';
+    fbtn.className = 'pc-filter-toggle';
+    fbtn.innerHTML = '<span class="pc-dot"></span>Filters ▾';
+    fbtn.addEventListener('click', function () {
+      const open = !bar.classList.contains('pc-expanded');
+      bar.classList.toggle('pc-expanded', open);
+      fbtn.innerHTML = '<span class="pc-dot"></span>' + (open ? 'Filters ▴' : 'Filters ▾');
+      markFilters();
+    });
+    const inputWrap = bar.querySelector('.input-wrapper');
+    if (inputWrap && inputWrap.nextSibling) bar.insertBefore(fbtn, inputWrap.nextSibling); else bar.appendChild(fbtn);
+    // amber dot when any filter is not at its default, so you know the list is filtered
+    function markFilters() {
+      const acct = document.getElementById('platformFilter');
+      const sels = [...bar.querySelectorAll('select')];
+      const filtered = (acct && acct.value && acct.value !== 'All Platforms') ||
+        sels.some(el => el.id !== 'platformFilter' && el.id !== 'portfolioSort' && el.value && el.value !== 'all');
+      fbtn.classList.toggle('has-filters', !!filtered);
+    }
+    bar.addEventListener('change', markFilters);
     function update() {
       const t = window.stockTracker;
       const active = (!t || t.currentTab === 'stocks' || t.currentTab === 'funds') && ph.offsetParent !== null
@@ -22912,10 +22950,23 @@ window.sendSecureBackupToTelegram = async function() {
           bar.classList.add('pc-floating');
         } else {
           ph.style.height = '0px';
-          bar.classList.remove('pc-floating');
+          bar.classList.remove('pc-floating', 'pc-expanded', 'pc-autohide');
           bar.style.left = ''; bar.style.width = '';
+          fbtn.innerHTML = '<span class="pc-dot"></span>Filters ▾';
         }
       }
+      // Phones: hide while scrolling down, show again on scroll up
+      // (stays put while the Filters panel is open or you're typing in search)
+      const y = window.scrollY;
+      if (floating && isPhone()) {
+        const ae = document.activeElement;
+        const busy = bar.classList.contains('pc-expanded') || (bar.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName));
+        if (busy || y < lastY - 6) bar.classList.remove('pc-autohide');
+        else if (y > lastY + 6) bar.classList.add('pc-autohide');
+      } else {
+        bar.classList.remove('pc-autohide');
+      }
+      if (Math.abs(y - lastY) > 6) lastY = y;
       if (floating) {
         const c = ph.getBoundingClientRect();
         bar.style.left = c.left + 'px';
@@ -22940,6 +22991,7 @@ window.sendSecureBackupToTelegram = async function() {
     window.addEventListener('scroll', update, { passive: true });
     window.addEventListener('resize', update);
     document.addEventListener('click', function () { setTimeout(update, 60); });
+    markFilters();
     update();
   }
 
