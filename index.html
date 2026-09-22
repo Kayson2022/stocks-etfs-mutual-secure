@@ -21,6 +21,7 @@
 
 
 
+
 <!DOCTYPE html>
 
 <html lang="en">
@@ -4040,7 +4041,8 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <option value="alphabetical">Sort Alphabetical (A-Z)</option>
 <option value="value">Sort by Total Value</option>
 <option value="pl_overall">Sort by Overall P/L ($)</option>
-<option value="platform">Group by Broker</option>
+<option value="broker">Group by Broker (accounts combined)</option>
+<option value="platform">Group by Account</option>
 <option value="assetType">Sort by Asset Type</option>
 </select>
 <div class="view-toggle" role="group" aria-label="View mode">
@@ -7667,6 +7669,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         });
                     }
 
+                    case 'broker':
                     case 'platform':
                         // This case is handled by grouping, but we'll sort within groups by performance.
                         return items.sort((a, b) => (b.changePercent || 0) - (a.changePercent || 0));
@@ -7817,13 +7820,13 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 this.todaysLossesTotal = 0;
 
                 if (type === 'stock' || type === 'fund') {
-                    const isGrouping = sortBy === 'platform' && (this.elements.platformFilter ? this.elements.platformFilter.value : 'All Platforms') === 'All Platforms'; // unchanged: visual grouping only, independent of the filter fix above
+                    const isGrouping = (sortBy === 'platform' || sortBy === 'broker') && (this.elements.platformFilter ? this.elements.platformFilter.value : 'All Platforms') === 'All Platforms'; // unchanged: visual grouping only, independent of the filter fix above
                     let _viewMode = 'card';
                     try { _viewMode = localStorage.getItem('secureViewMode') || 'card'; } catch (e) {}
                     if (_viewMode === 'table') {
-                        this.renderTable(sortedItems, grid, type, isGrouping);
+                        this.renderTable(sortedItems, grid, type, isGrouping ? sortBy : false);
                     } else if (isGrouping) {
-                        this.renderGroupedByPlatform(sortedItems, grid, type);
+                        this.renderGroupedByPlatform(sortedItems, grid, type, sortBy === 'broker');
                     } else if (sortBy === 'performance') {
                         this.renderGroupedStocks(sortedItems, grid, type);
                     } else {
@@ -7837,7 +7840,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 try {
                     const _sb = this.elements.portfolioSort ? this.elements.portfolioSort.value : '';
                     const _term = this.elements.portfolioFilter ? this.elements.portfolioFilter.value.trim() : '';
-                    if (_sb === 'platform' && _term && sortedItems.length > 0) {
+                    if ((_sb === 'platform' || _sb === 'broker') && _term && sortedItems.length > 0) {
                         setTimeout(() => {
                             const first = sortedItems[0];
                             if (!first) return;
@@ -9104,7 +9107,9 @@ renderPortfolioSummary() {
                     items.forEach(stock => {
                         const split = {};
                         (stock.transactions || []).forEach(tx => {
-                            const b = tx.platform || 'Uncategorized';
+                            const b = groupByBroker === 'broker' && window.brokerOf
+                                ? window.brokerOf(tx.platform)
+                                : (tx.platform || 'Uncategorized');
                             (split[b] = split[b] || []).push(tx);
                         });
                         for (const b in split) (byBroker[b] = byBroker[b] || []).push({ ...stock, transactions: split[b] });
@@ -9128,7 +9133,7 @@ renderPortfolioSummary() {
                 container.appendChild(wrap);
             }
 
-            renderGroupedByPlatform(items, container, type) {
+            renderGroupedByPlatform(items, container, type, combineByBroker) {
                 if (items.length === 0) { 
                     if (container.classList.contains('group-content')) return;
                     container.innerHTML = `<div class="loading" style="grid-column: 1 / -1;">Your portfolio is empty.</div>`; 
@@ -9140,7 +9145,9 @@ renderPortfolioSummary() {
                 items.forEach(stock => {
                     const stockPlatforms = {};
                     (stock.transactions || []).forEach(tx => {
-                        const platform = tx.platform || 'Uncategorized';
+                        const platform = combineByBroker
+                            ? (window.brokerOf ? window.brokerOf(tx.platform) : (tx.platform || 'Uncategorized'))
+                            : (tx.platform || 'Uncategorized');
                         if (!stockPlatforms[platform]) {
                             stockPlatforms[platform] = [];
                         }
@@ -22467,6 +22474,28 @@ window.sendSecureBackupToTelegram = async function() {
 
 <script>
 /* ═══ Secure app: view toggle + sticky filter bar ═══ */
+// Broker name from an account label, so "Fidelity Brokerage" and
+// "Fidelity Roth IRA" both group under "Fidelity".
+window.brokerOf = function (platform) {
+  const raw = String(platform || '').trim();
+  if (!raw) return 'Uncategorized';
+  const p = raw.toLowerCase();
+  const known = [
+    ['fidelity', 'Fidelity'], ['vanguard', 'Vanguard'], ['schwab', 'Charles Schwab'],
+    ['merrill', 'Merrill Edge'], ['robinhood', 'Robinhood'], ['e*trade', 'E*TRADE'],
+    ['etrade', 'E*TRADE'], ['webull', 'Webull'], ['interactive brokers', 'Interactive Brokers'],
+    ['ibkr', 'Interactive Brokers'], ['sofi', 'SoFi'], ['ally', 'Ally Invest'],
+    ['tastytrade', 'tastytrade'], ['td ameritrade', 'TD Ameritrade'], ['m1', 'M1 Finance'],
+    ['wells fargo', 'Wells Fargo'], ['chase', 'J.P. Morgan'], ['j.p. morgan', 'J.P. Morgan'],
+    ['jpmorgan', 'J.P. Morgan'], ['public', 'Public'], ['firstrade', 'Firstrade']
+  ];
+  for (const [key, name] of known) if (p.includes(key)) return name;
+  // Unknown broker: strip account-type words and keep the rest
+  const stripped = raw
+    .replace(/\b(roth|traditional|rollover|sep|simple|ira|401\s*\(?k\)?|403\s*\(?b\)?|hsa|529|brokerage|individual|joint|taxable|retirement|account|acct)\b/gi, '')
+    .replace(/[-–—_()|/]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return stripped || raw;
+};
 (function () {
   function getMode() { try { return localStorage.getItem('secureViewMode') || 'card'; } catch (e) { return 'card'; } }
   function paintToggle() {
