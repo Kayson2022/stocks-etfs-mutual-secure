@@ -8499,9 +8499,14 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
 
                 items.forEach(item => {
                     const stats = this.calculateTransactionStats(item.transactions, item.price);
-                    totalRealizedPL += stats.realizedPL;
 
                     if (stats.totalSharesOwned > 0.0001) {
+                        // Active position: count everything including realized P/L
+                        // from partial sells. Closed positions (0 shares) are excluded
+                        // from the headline total so it matches the 401k app and
+                        // your brokerage statements — realized P/L is shown separately
+                        // in the badge below the Combined Total.
+                        totalRealizedPL += stats.realizedPL;
                         activeCount++;
                         totalCurrentValue += stats.currentValue;
                         totalUnrealizedPL += stats.unrealizedPL;
