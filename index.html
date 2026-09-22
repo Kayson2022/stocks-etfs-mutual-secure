@@ -677,6 +677,17 @@ function safeUrl(str) {
         .card-more-menu .add-btn:hover, .card-more-menu .add-btn:focus { background:var(--bg-tertiary) !important; outline:none; }
         .stock-card:has(.card-more-menu.open), .fund-card:has(.card-more-menu.open) { overflow:visible !important; z-index:5; }
 
+        /* ── Features & Tools: grouped ── */
+        #stToolbarRow:not([style*="none"]) { display:block !important; }
+        .st-group + .st-group { margin-top:12px; }
+        .st-group-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:6px; }
+        @media (max-width:480px) { .st-group-grid { grid-template-columns:1fr 1fr; } }
+        #headerLockBtn { padding:6px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); font-size:0.82rem; font-weight:600; cursor:pointer; margin-right:6px; }
+
+        /* Group-header trend icons: drawn as SVG so every device shows the same color
+           (phone emoji fonts draw 📈 in red on some Android skins) */
+        .grp-icon { width:1.05em; height:1.05em; vertical-align:-0.15em; margin-right:4px; }
+
         /* ── Tools & Actions: grouped ── */
         #utilityButtonsGrid:not([style*="none"]) { display:block !important; }
         .ut-group + .ut-group { margin-top:14px; }
@@ -3720,6 +3731,7 @@ document.addEventListener("DOMContentLoaded", function(){
 <div class="header-controls">
 <div id="user-info" style="display: none;">
 <span id="user-name"></span>
+<button id="headerLockBtn" onclick="alLockNow()" title="Lock app" aria-label="Lock app">🔒 Lock</button>
 <button id="sign-out-btn">Sign Out</button>
 </div>
 <div id="currency-selector-wrap" style="display:none;align-items:center;gap:6px;">
@@ -3780,29 +3792,47 @@ document.addEventListener("DOMContentLoaded", function(){
     try { localStorage.setItem('toolbarRowCollapsed', collapsed ? 'false' : 'true'); } catch(e){}
   })()" id="toggleToolbarBtnInner" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);font-size:0.78rem;padding:6px 16px;border-radius:6px;cursor:pointer;width:100%;">📊 Features & Tools ▼</button>
 </div>
-<div id="stToolbarRow" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;padding:8px 16px 4px;">
-  <button class="st-toolbar-btn" data-st-panel="snapshot">📊 Snapshot</button>
-  <button class="st-toolbar-btn" data-st-panel="tax">🧾 Tax Summary</button>
-  <button class="st-toolbar-btn" data-st-panel="cal">📅 Calendar</button>
-  <button class="st-toolbar-btn" data-st-panel="whatif">🔮 What-If</button>
-  <button class="st-toolbar-btn" data-st-panel="goal">🎯 Goal</button>
-  <button class="st-toolbar-btn" data-st-panel="rebal">⚖️ Rebalance</button>
-  <button class="st-toolbar-btn" data-st-panel="recur">🔁 Recurring</button>
-  <button class="st-toolbar-btn" data-st-panel="alerts">🔔 Smart Alerts</button>
-  <button class="st-toolbar-btn" onclick="alLockNow()" title="Lock App">🔒 Lock</button>
-  <button class="st-toolbar-btn" data-st-panel="benchmark">📊 Benchmark</button>
-  <button class="st-toolbar-btn" data-st-panel="journal">📓 Trade Journal</button>
-  <button class="st-toolbar-btn" data-st-panel="divcal">💰 Div Calendar</button>
-  <button class="st-toolbar-btn" data-st-panel="perfstats">📉 Perf Stats</button>
-  <button class="st-toolbar-btn" data-st-panel="var">📐 VaR Stress</button>
-  <button class="st-toolbar-btn" data-st-panel="divwaterfall">💧 Div Waterfall</button>
-  <button class="st-toolbar-btn" data-st-panel="anomaly">🚨 Anomaly</button>
-  <button class="st-toolbar-btn" data-st-panel="askai">💬 Ask Portfolio</button>
-  <button class="st-toolbar-btn" data-st-panel="exposure">🔬 True Exposure</button>
-  <button class="st-toolbar-btn" data-st-panel="overlap">🔍 ETF Overlap</button>
-  <button class="st-toolbar-btn" data-st-panel="aidoctor">🩺 AI Doctor</button>
-  <button class="st-toolbar-btn" data-st-panel="schedd">📄 Schedule D</button>
-  <button class="st-toolbar-btn" data-st-panel="compact" id="stCompactBtn">⊞ Compact</button>
+<div id="stToolbarRow" style="padding:8px 16px 4px;">
+  <div class="st-group">
+    <div class="ut-title">📊 Performance &amp; Analysis</div>
+    <div class="st-group-grid">
+      <button class="st-toolbar-btn" data-st-panel="snapshot">📊 Snapshot</button>
+      <button class="st-toolbar-btn" data-st-panel="benchmark">🏁 Benchmark</button>
+      <button class="st-toolbar-btn" data-st-panel="perfstats">📉 Perf Stats</button>
+      <button class="st-toolbar-btn" data-st-panel="var">📐 VaR Stress</button>
+      <button class="st-toolbar-btn" data-st-panel="journal">📓 Trade Journal</button>
+    </div>
+  </div>
+  <div class="st-group">
+    <div class="ut-title">💵 Income &amp; Taxes</div>
+    <div class="st-group-grid">
+      <button class="st-toolbar-btn" data-st-panel="divcal">💰 Div Calendar</button>
+      <button class="st-toolbar-btn" data-st-panel="divwaterfall">💧 Div Waterfall</button>
+      <button class="st-toolbar-btn" data-st-panel="tax">🧾 Tax Summary</button>
+      <button class="st-toolbar-btn" data-st-panel="schedd">📄 Schedule D</button>
+    </div>
+  </div>
+  <div class="st-group">
+    <div class="ut-title">🎯 Strategy &amp; Planning</div>
+    <div class="st-group-grid">
+      <button class="st-toolbar-btn" data-st-panel="goal">🎯 Goal</button>
+      <button class="st-toolbar-btn" data-st-panel="whatif">🔮 What-If</button>
+      <button class="st-toolbar-btn" data-st-panel="rebal">⚖️ Rebalance</button>
+      <button class="st-toolbar-btn" data-st-panel="recur">🔁 Recurring</button>
+      <button class="st-toolbar-btn" data-st-panel="alerts">🔔 Smart Alerts</button>
+      <button class="st-toolbar-btn" data-st-panel="cal">📅 Activity Calendar</button>
+    </div>
+  </div>
+  <div class="st-group">
+    <div class="ut-title">🤖 Deep Insights &amp; AI</div>
+    <div class="st-group-grid">
+      <button class="st-toolbar-btn" data-st-panel="aidoctor">🩺 AI Doctor</button>
+      <button class="st-toolbar-btn" data-st-panel="askai">💬 Ask Portfolio</button>
+      <button class="st-toolbar-btn" data-st-panel="anomaly">🚨 Anomaly</button>
+      <button class="st-toolbar-btn" data-st-panel="exposure">🔬 True Exposure</button>
+      <button class="st-toolbar-btn" data-st-panel="overlap">🔍 ETF Overlap</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -4133,6 +4163,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
       <button class="add-btn" id="expandCollapseAllBtn" onclick="window.toggleExpandCollapseAll()">↕ Collapse All</button>
       <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
       <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
+      <button class="add-btn" data-st-panel="compact" id="stCompactBtn" onclick="window.toggleCompact && window.toggleCompact()" title="Tighter card spacing, hides card charts">⊞ Compact: Off</button>
     </div>
   </div>
   <div class="ut-group">
@@ -9499,7 +9530,10 @@ renderPortfolioSummary() {
 
                 const header = document.createElement('div');
                 header.className = `group-header ${headerClass}`;
-                header.innerHTML = `<span>${title} (${itemList.length})</span><span class="toggle-icon">▼</span>`;
+                const _up   = '<svg class="grp-icon" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>';
+                const _down = '<svg class="grp-icon" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 7 9 13 13 9 21 17"/><polyline points="15 17 21 17 21 11"/></svg>';
+                const _shownTitle = String(title).replace(/^📈\s*/, _up).replace(/^📉\s*/, _down);
+                header.innerHTML = `<span>${_shownTitle} (${itemList.length})</span><span class="toggle-icon">▼</span>`;
 
                 const content = document.createElement('div');
                 content.className = `group-content ${headerClass.replace('-header', '')}-content`;
