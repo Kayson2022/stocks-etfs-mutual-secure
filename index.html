@@ -663,6 +663,40 @@ function safeUrl(str) {
             color: var(--accent-primary);
             border-bottom-color: var(--accent-primary);
         }
+        /* ── Tools & Actions: grouped ── */
+        #utilityButtonsGrid:not([style*="none"]) { display:block !important; }
+        .ut-group + .ut-group { margin-top:14px; }
+        .ut-title { font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-secondary); margin:0 0 8px 2px; }
+        .ut-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:8px; }
+        @media (max-width:480px) { .ut-grid { grid-template-columns:1fr 1fr; } }
+
+        /* ── Data & Backup Manager modal ── */
+        .dbm-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:10000; align-items:center; justify-content:center; padding:16px; }
+        .dbm-box { background:var(--bg-secondary); color:var(--text-primary); width:100%; max-width:620px; max-height:88vh; overflow:auto; border-radius:14px; padding:20px; border:1px solid var(--border-color); box-shadow:0 20px 50px rgba(0,0,0,0.35); }
+        .dbm-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+        .dbm-head h3 { margin:0; font-size:1.1rem; }
+        .dbm-close { background:none; border:none; color:var(--text-secondary); font-size:26px; line-height:1; cursor:pointer; }
+        .dbm-section { padding:14px; border:1px solid var(--border-color); border-radius:10px; background:var(--bg-tertiary); }
+        .dbm-section + .dbm-section { margin-top:12px; }
+        .dbm-box .add-btn, .dbm-box label.add-btn { margin:0; padding:10px 8px; font-size:0.85rem; font-weight:600; text-align:center; background:var(--bg-secondary); color:var(--text-primary); border:1px solid var(--border-color); border-radius:var(--radius-sm); width:100%; box-sizing:border-box; cursor:pointer; box-shadow:none; }
+        .dbm-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; font-size:0.85rem; color:var(--text-secondary); }
+        .dbm-row .add-btn { width:auto; min-width:170px; }
+        .dbm-danger { border-color:rgba(225,29,72,0.45); background:rgba(225,29,72,0.06); }
+        .dbm-danger .ut-title { color:#e11d48; }
+        .dbm-danger p { font-size:0.8rem; color:var(--text-secondary); margin:0 0 10px; }
+        .dbm-box #clearAllBtn { background:transparent !important; color:#e11d48 !important; border:1px solid #fda4af !important; }
+        .dbm-box #clearAllBtn:hover { background:#e11d48 !important; color:#fff !important; }
+
+        /* ── Quick filter pills ── */
+        .quick-pills { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+        .quick-pill { background:transparent; border:1px solid var(--border-color); color:var(--text-secondary); border-radius:999px; padding:6px 12px; font-size:0.8rem; font-weight:600; cursor:pointer; white-space:nowrap; }
+        .quick-pill.active { background:var(--accent-primary, #7c3aed); border-color:transparent; color:#fff; }
+        @media (max-width:480px) {
+            .quick-pills { width:100%; }
+            .quick-pill { flex:1; padding:6px 8px; font-size:0.75rem; }
+            .portfolio-controls.pc-floating .quick-pills { grid-column:1 / -1; }
+        }
+
         /* ── Coast FIRE: include-401(k) toggle ── */
         .coast-401k-row { display:flex; gap:6px; margin-top:6px; align-items:center; }
         .coast-401k-row button { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.22); color:#cbd5e1; border-radius:999px; font-size:0.62rem; font-weight:600; padding:2px 10px; cursor:pointer; line-height:1.5; }
@@ -3436,12 +3470,12 @@ body:not(.dark-mode) #portfolio-summary .summary-badge{
 }
 
 /* Gentle pulse on the live-update pills */
-@keyframes lmPulsePos{ 0%,100%{ background:#ffffff; } 45%{ background:rgba(4,120,87,0.12); } }
-@keyframes lmPulseNeg{ 0%,100%{ background:#ffffff; } 45%{ background:rgba(185,28,28,0.10); } }
-@keyframes lmPulseNeu{ 0%,100%{ background:#ffffff; } 45%{ background:rgba(71,85,105,0.10); } }
-body:not(.dark-mode) #chart-summary-panel .summary-pill.pulse-positive{ animation: lmPulsePos 700ms ease-out both !important; transform:none !important; }
-body:not(.dark-mode) #chart-summary-panel .summary-pill.pulse-negative{ animation: lmPulseNeg 700ms ease-out both !important; transform:none !important; }
-body:not(.dark-mode) #chart-summary-panel .summary-pill.pulse-neutral { animation: lmPulseNeu 700ms ease-out both !important; transform:none !important; }
+@keyframes lmPulsePos{ 0%,100%{ background:#ffffff; } 25%{ background:rgba(4,120,87,0.15); } }
+@keyframes lmPulseNeg{ 0%,100%{ background:#ffffff; } 25%{ background:rgba(185,28,28,0.15); } }
+@keyframes lmPulseNeu{ 0%,100%{ background:#ffffff; } 25%{ background:rgba(71,85,105,0.12); } }
+body:not(.dark-mode) #chart-summary-panel .summary-pill.pulse-positive{ animation: lmPulsePos 1200ms ease-out both !important; transform:none !important; }
+body:not(.dark-mode) #chart-summary-panel .summary-pill.pulse-negative{ animation: lmPulseNeg 1200ms ease-out both !important; transform:none !important; }
+body:not(.dark-mode) #chart-summary-panel .summary-pill.pulse-neutral { animation: lmPulseNeu 1200ms ease-out both !important; transform:none !important; }
 body:not(.dark-mode) #chart-summary-panel .summary-pill{
   background:#ffffff !important;
   border-color:#dbe1e8 !important;
@@ -4077,42 +4111,45 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
   })()" id="toggleUtilityBtnInner" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.6);font-size:0.78rem;padding:6px 16px;border-radius:6px;cursor:pointer;width:100%;">🔧 Tools &amp; Actions ▼</button>
 </div>
 <div class="utility-buttons-grid" id="utilityButtonsGrid" style="display:none;">
-<button class="add-btn" id="liveUpdateBtn">🔄 Live Update</button>
-<button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
-<button class="add-btn" id="dataHealthBtn" onclick="window.runDataHealthCheck()">🩺 Data Health Check</button>
-<button class="add-btn" id="concentrationBtn" onclick="window.showConcentration()">📊 Concentration</button>
-<button class="add-btn" id="erCalBtn" onclick="window.showErCalendar()">📅 Earnings Calendar</button>
-<div class="import-wrapper">
-<button class="add-btn" id="exportBtn">📥 Export Data</button>
-<button class="add-btn" id="telegramBackupBtn" onclick="window.sendSecureBackupToTelegram()">📲 Backup to Telegram</button>
-<button class="add-btn" id="autoBackupSecureBtn" onclick="window.toggleAutoBackupSecure()">⏸️ Pause Auto-Backup</button>
-<button class="add-btn" onclick="window.openReconcile()" style="background:rgba(251,191,36,0.1);border-color:rgba(251,191,36,0.3);color:#fbbf24;">⚖️ Reconcile Shares</button>
-<button class="add-btn" onclick="window.openPlatformAudit()" style="background:rgba(167,139,250,0.1);border-color:rgba(167,139,250,0.3);color:#a78bfa;">🏦 Platform Audit</button>
-<label class="add-btn" for="importFile" style="cursor: pointer;">📤 Import Data</label>
-<input accept=".json" id="importFile" style="display: none;" type="file"/>
-<button class="add-btn" onclick="openCSVImportModal()" style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;">📊 Import from CSV Tool</button>
-</div>
-<button class="add-btn" id="settingsBtn">⚙️ Settings</button>
-<button class="add-btn" onclick="window.stockTracker.openSplitModal()" style="background:#00bcd4;color:#000;">✂️ Stock Split</button>
-<button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
-<button class="add-btn" onclick="window.stockTracker.sendBackupEmail(true)" style="background:linear-gradient(135deg,#00b894,#00cec9);color:#fff;border:none;">📧 Backup Now</button>
-<button class="add-btn" id="toggleBackupBtn" onclick="window.stockTracker.toggleAutoBackup()">⏸️ Pause Auto-Backup</button>
-<button class="add-btn" onclick="document.getElementById('secureRestorePanel').style.display=document.getElementById('secureRestorePanel').style.display==='none'?'block':'none'" style="background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;border:none;">📥 Restore Backup</button>
-<button class="add-btn" id="listAllBtn">📋 List All Stocks</button>
-<button class="add-btn" onclick="window.stockTracker.collapseAllCards()">🗜️ Collapse All</button>
-<button class="add-btn" onclick="window.stockTracker.expandAllCards()">📂 Expand All</button>
-<button class="add-btn" onclick="window.stockTracker.openDividendTracker()" style="background:linear-gradient(135deg,#f39c12,#e67e22);color:#fff;border:none;">💰 Dividend Tracker</button>
-<button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
-<button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
-<button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
-<button class="add-btn" id="aboutBtn" onclick="window.showAppVersion()">ℹ️ About / Version</button>
+  <div class="ut-group">
+    <div class="ut-title">⚡ Quick Controls</div>
+    <div class="ut-grid">
+      <button class="add-btn" id="liveUpdateBtn" title="Fetch fresh prices right now">🔄 Refresh Now</button>
+      <button class="add-btn" id="toggleLiveUpdateBtn">⏸️ Pause Live Update</button>
+      <button class="add-btn" id="expandCollapseAllBtn" onclick="window.toggleExpandCollapseAll()">↕ Collapse All</button>
+      <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
+      <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
+    </div>
+  </div>
+  <div class="ut-group">
+    <div class="ut-title">📊 Analysis</div>
+    <div class="ut-grid">
+      <button class="add-btn" id="concentrationBtn" onclick="window.showConcentration()">📊 Concentration</button>
+      <button class="add-btn" onclick="window.stockTracker.openDividendTracker()">💰 Dividend Tracker</button>
+      <button class="add-btn" id="erCalBtn" onclick="window.showErCalendar()">📅 Earnings Calendar</button>
+      <button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
+      <button class="add-btn" id="listAllBtn">📋 List All Stocks</button>
+    </div>
+  </div>
+  <div class="ut-group">
+    <div class="ut-title">🧮 Checks &amp; Operations</div>
+    <div class="ut-grid">
+      <button class="add-btn" id="dataHealthBtn" onclick="window.runDataHealthCheck()">🩺 Data Health Check</button>
+      <button class="add-btn" onclick="window.openReconcile()">⚖️ Reconcile Shares</button>
+      <button class="add-btn" onclick="window.openPlatformAudit()">🏦 Platform Audit</button>
+      <button class="add-btn" onclick="window.stockTracker.openSplitModal()">✂️ Stock Split</button>
+    </div>
+  </div>
+  <div class="ut-group">
+    <div class="ut-title">⚙️ System</div>
+    <div class="ut-grid">
+      <button class="add-btn" id="dataManagerBtn" onclick="window.openDataManager()">🗄️ Data &amp; Backup Manager</button>
+      <button class="add-btn" id="settingsBtn">⚙️ Settings</button>
+      <button class="add-btn" id="aboutBtn" onclick="window.showAppVersion()">ℹ️ About / Version</button>
+    </div>
+  </div>
 </div>
 <span id="secureBackupBadge" class="backup-status-badge"></span>
-<div id="secureRestorePanel" style="display:none;margin-top:10px;width:100%;">
-  <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:6px;">Paste backup JSON from your email, then click Restore:</p>
-  <textarea id="secureRestoreInput" rows="5" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:0.78rem;resize:vertical;" placeholder='Paste JSON here...'></textarea>
-  <button class="add-btn" onclick="window.stockTracker.restoreFromBackup(document.getElementById('secureRestoreInput').value)" style="margin-top:6px;background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;border:none;">✅ Restore Now</button>
-</div>
 </div>
 </div><!-- end portfolio-summary -->
 <div class="search-section">
@@ -4143,6 +4180,10 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <option value="platform">Group by Account</option>
 <option value="assetType">Sort by Asset Type</option>
 </select>
+<div class="quick-pills" role="group" aria-label="Quick filters">
+<button type="button" class="quick-pill" data-pill="near-high" onclick="window.setQuickPill('near-high')" title="Within 3% of the 52-week high">🔝 Near 52W High</button>
+<button type="button" class="quick-pill" data-pill="deep-dip" onclick="window.setQuickPill('deep-dip')" title="15% or more below the 52-week high">🔻 Deep Dip (≥15% off high)</button>
+</div>
 <div class="view-toggle" role="group" aria-label="View mode">
 <button type="button" data-view="card" onclick="window.setSecureViewMode('card')">▦ Cards</button>
 <button type="button" data-view="table" onclick="window.setSecureViewMode('table')">☰ Table</button>
@@ -7959,6 +8000,16 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     }
                 }
 
+                // Quick pills: Near 52W High (within 3%) / Deep Dip (15%+ below high)
+                const _qp = window._secureQuickPill;
+                if (_qp && (type === 'stock' || type === 'fund')) {
+                    filteredItems = filteredItems.filter(item => {
+                        const hi = item.fiftyTwoWeekHigh, p = item.price;
+                        if (!hi || !p) return false;
+                        return _qp === 'near-high' ? p >= hi * 0.97 : p <= hi * 0.85;
+                    });
+                }
+
                 // Hide closed positions everywhere except the performance sort,
                 // which has its own dedicated 🔒 Closed Positions group.
                 const activeFilteredItems = sortBy === 'performance'
@@ -8828,7 +8879,7 @@ renderPortfolioSummary() {
                             tBtn.textContent = _inc401 ? '✓ Including 401(k): ' + fc0(_k401) : '＋ Include 401(k)';
                         }
                         if (eBtn) eBtn.style.display = _k401 > 0 ? '' : 'none';
-                        if (scope) scope.textContent = _add401 ? '· incl. 401(k)' : (_inc401 ? '· 401(k) off while filtered' : '· Brokerage only');
+                        if (scope) scope.textContent = _add401 ? '· Combined with 401(k)' : (_inc401 ? '· 401(k) off while filtered' : '· Brokerage only — liquid milestone');
                     }
                     const _g  = parseFloat((this.config&&this.config.retirementGoal)||localStorage.getItem('coastFireGoal')||0);
                     const _y  = parseFloat((this.config&&this.config.yearsToRetirement)||localStorage.getItem('coastFireYears')||25);
@@ -8841,10 +8892,10 @@ renderPortfolioSummary() {
                     const coastNum = _g / Math.pow(1 + _r, _y);
                     const pct = Math.min(200, (_cv/coastNum)*100);
                     const reached = pct >= 100;
-                    if (cBar) { cBar.style.width=Math.min(100,pct).toFixed(1)+'%'; cBar.style.background=_add401?'linear-gradient(90deg,#2dd4bf,#0d9488)':reached?'#27ae60':pct>=75?'#f39c12':'#3498db'; }
+                    if (cBar) { cBar.style.width=Math.min(100,pct).toFixed(1)+'%'; cBar.style.background=_add401?'linear-gradient(90deg,#34d399,#10b981)':reached?'#27ae60':'#f59e0b'; }
                     if (cPct) { cPct.textContent=pct.toFixed(0)+'%'; cPct.style.color=reached?'#27ae60':'rgba(255,255,255,0.9)'; }
                     if (cDet) {
-                        if (reached) { cDet.innerHTML='🎉 <strong>Coast FIRE reached!</strong> Your '+(_add401 ? fc(_cv)+' ('+fc(_brk)+' + '+fc(_k401)+' 401(k))' : fc(_cv))+' will compound to '+fc(_g)+' in '+_y+' yrs @ '+(_r*100).toFixed(1)+'%/yr — zero new contributions needed.'; cDet.style.color='#27ae60'; }
+                        if (reached) { cDet.innerHTML=(_add401 ? '🎉 <strong>Goal exceeded</strong> · Combined with '+fc(_k401)+' 401(k). ' : '🎉 <strong>Coast FIRE reached!</strong> ')+'Your '+(_add401 ? fc(_cv)+' ('+fc(_brk)+' + '+fc(_k401)+' 401(k))' : fc(_cv))+' will compound to '+fc(_g)+' in '+_y+' yrs @ '+(_r*100).toFixed(1)+'%/yr — zero new contributions needed.'; cDet.style.color='#27ae60'; }
                         else { cDet.innerHTML='Target: '+fc(_g)+' | Growth: '+(_r*100).toFixed(1)+'%/yr | Horizon: '+_y+' yrs → <strong>Coast Number: '+fc(coastNum)+'</strong><br>You have '+(_add401 ? fc(_brk)+' + '+fc(_k401)+' 401(k) = '+fc(_cv) : fc(_cv))+' — need '+fc(Math.max(0,coastNum-_cv))+' more.'; cDet.style.color='#cbd5e1'; }
                     }
                 }
@@ -22685,6 +22736,47 @@ window.sendSecureBackupToTelegram = async function() {
 </script>
 </script>
 
+
+<div id="dataManagerModal" class="dbm-overlay" style="display:none;" onclick="if(event.target===this)window.closeDataManager()">
+  <div class="dbm-box" role="dialog" aria-label="Data and Backup Manager">
+    <div class="dbm-head">
+      <h3>🗄️ Data &amp; Backup Manager</h3>
+      <button type="button" class="dbm-close" onclick="window.closeDataManager()" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="dbm-section">
+      <div class="ut-title">💾 Backup</div>
+      <div class="ut-grid">
+        <button class="add-btn" onclick="window.stockTracker.sendBackupEmail(true)">📧 Email Backup Now</button>
+        <button class="add-btn" id="telegramBackupBtn" onclick="window.sendSecureBackupToTelegram()">📲 Telegram Backup Now</button>
+      </div>
+      <div class="dbm-row"><span>Email auto-backup</span><button class="add-btn" id="toggleBackupBtn" onclick="window.stockTracker.toggleAutoBackup()">⏸️ Pause Auto-Backup</button></div>
+      <div class="dbm-row"><span>Telegram auto-backup (daily)</span><button class="add-btn" id="autoBackupSecureBtn" onclick="window.toggleAutoBackupSecure()">⏸️ Pause Auto-Backup</button></div>
+    </div>
+
+    <div class="dbm-section">
+      <div class="ut-title">⇅ Import / Export</div>
+      <div class="ut-grid">
+        <button class="add-btn" id="exportBtn">📥 Export Data</button>
+        <label class="add-btn" for="importFile" style="cursor:pointer;">📤 Import Data</label>
+        <input accept=".json" id="importFile" style="display:none;" type="file"/>
+        <button class="add-btn" onclick="window.closeDataManager();openCSVImportModal()">📊 Import from CSV Tool</button>
+        <button class="add-btn" onclick="var p=document.getElementById('secureRestorePanel');p.style.display=p.style.display==='none'?'block':'none'">📥 Restore Backup</button>
+      </div>
+      <div id="secureRestorePanel" style="display:none;margin-top:10px;width:100%;">
+        <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:6px;">Paste backup JSON from your email, then click Restore:</p>
+        <textarea id="secureRestoreInput" rows="5" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:0.78rem;resize:vertical;" placeholder='Paste JSON here...'></textarea>
+        <button class="add-btn" onclick="window.stockTracker.restoreFromBackup(document.getElementById('secureRestoreInput').value)" style="margin-top:6px;">✅ Restore Now</button>
+      </div>
+    </div>
+
+    <div class="dbm-section dbm-danger">
+      <div class="ut-title">⚠️ Danger Zone</div>
+      <p>Permanently erases every stock, fund, and transaction. Export a backup first.</p>
+      <button class="add-btn" id="clearAllBtn">🗑️ Clear All Data</button>
+    </div>
+  </div>
+</div>
 <script>
 /* ═══ Secure app: view toggle + sticky filter bar ═══ */
 (function () {
@@ -22749,7 +22841,46 @@ window.sendSecureBackupToTelegram = async function() {
     update();
   }
 
-  function init() { paintToggle(); initSticky(); }
+  // Data & Backup Manager
+  window.openDataManager  = function () { var m = document.getElementById('dataManagerModal'); if (m) m.style.display = 'flex'; };
+  window.closeDataManager = function () { var m = document.getElementById('dataManagerModal'); if (m) m.style.display = 'none'; };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') window.closeDataManager(); });
+
+  // One Expand/Collapse button instead of two
+  window.toggleExpandCollapseAll = function () {
+    var t = window.stockTracker; if (!t) return;
+    var btn = document.getElementById('expandCollapseAllBtn');
+    var collapse = !window._allCollapsed;
+    if (collapse && t.collapseAllCards) t.collapseAllCards();
+    if (!collapse && t.expandAllCards) t.expandAllCards();
+    window._allCollapsed = collapse;
+    if (btn) btn.textContent = collapse ? '↕ Expand All' : '↕ Collapse All';
+  };
+
+  // Clear All Data: step 1 = type DELETE, step 2 = the app's own Confirm Delete dialog
+  function guardClearAll() {
+    var btn = document.getElementById('clearAllBtn');
+    if (!btn || btn._guarded) return;
+    btn._guarded = true;
+    btn.addEventListener('click', function (e) {
+      if (btn._armed) { btn._armed = false; window.closeDataManager(); return; }
+      e.stopImmediatePropagation(); e.preventDefault();
+      var typed = prompt('This erases ALL portfolio data.\n\nType DELETE to continue:');
+      if (typed === 'DELETE') { btn._armed = true; btn.click(); }
+      else if (typed !== null) alert('Not deleted — you must type DELETE exactly.');
+    }, true);
+  }
+
+  // Quick filter pills (in-memory; reset on reload so the list never looks mysteriously empty)
+  window.setQuickPill = function (mode) {
+    window._secureQuickPill = (window._secureQuickPill === mode) ? null : mode;
+    document.querySelectorAll('.quick-pill').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.pill === window._secureQuickPill);
+    });
+    if (window.stockTracker && window.stockTracker.renderContent) window.stockTracker.renderContent();
+  };
+
+  function init() { paintToggle(); initSticky(); guardClearAll(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   window.addEventListener('load', init);
 })();
