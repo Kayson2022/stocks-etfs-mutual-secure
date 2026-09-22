@@ -663,6 +663,14 @@ function safeUrl(str) {
             color: var(--accent-primary);
             border-bottom-color: var(--accent-primary);
         }
+        /* ── Coast FIRE: include-401(k) toggle ── */
+        .coast-401k-row { display:flex; gap:6px; margin-top:6px; align-items:center; }
+        .coast-401k-row button { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.22); color:#cbd5e1; border-radius:999px; font-size:0.62rem; font-weight:600; padding:2px 10px; cursor:pointer; line-height:1.5; }
+        .coast-401k-row button.on { background:rgba(39,174,96,0.22); border-color:#27ae60; color:#d1fae5; }
+        body:not(.dark-mode) .coast-401k-row button { background:rgba(0,0,0,0.04); border-color:rgba(0,0,0,0.2); color:#334155; }
+        body:not(.dark-mode) .coast-401k-row button.on { background:rgba(39,174,96,0.15); color:#166534; }
+        body:not(.dark-mode) #coast-scope { color:#475569 !important; }
+
         /* ── View toggle ── */
         .view-toggle { display:inline-flex; border:1px solid var(--border-color); border-radius:var(--radius-sm); overflow:hidden; margin-left:auto; align-self:stretch; }
         .view-toggle button { background:transparent; color:var(--text-secondary); border:none; padding:8px 14px; font-size:0.85rem; font-weight:600; cursor:pointer; white-space:nowrap; }
@@ -3942,7 +3950,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
   <!-- COAST FIRE -->
   <div style="position:relative;padding:10px 14px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
-      <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">🏖 Coast FIRE Progress</div>
+      <div style="font-size:0.58rem;color:rgba(255,255,255,0.6);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">🏖 Coast FIRE Progress <span id="coast-scope" style="text-transform:none;font-weight:600;color:#cbd5e1;"></span></div>
       <button onclick="document.getElementById('coast-info').style.display=document.getElementById('coast-info').style.display==='none'?'block':'none'"
         style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:999px;color:rgba(255,255,255,0.7);font-size:0.6rem;padding:1px 6px;cursor:pointer;line-height:1.4;flex-shrink:0;">ℹ️ How it works</button>
     </div>
@@ -3965,6 +3973,10 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
       <span id="coast-pct" style="font-size:0.8rem;font-weight:800;color:rgba(255,255,255,0.9);min-width:38px;text-align:right;">--%</span>
     </div>
     <div id="coast-detail" style="font-size:0.62rem;color:#cbd5e1;">Set goal in ⚙️ Settings</div>
+    <div class="coast-401k-row">
+      <button type="button" id="coast-401k-toggle" onclick="window.stockTracker && window.stockTracker.toggleCoast401k()">＋ Include 401(k)</button>
+      <button type="button" id="coast-401k-edit" title="Edit 401(k) balance" onclick="window.stockTracker && window.stockTracker.editCoast401k()">✎</button>
+    </div>
   </div>
 
 </div>
@@ -7042,6 +7054,8 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                 this.config.retirementGoal = parseFloat(localStorage.getItem('coastFireGoal')) || 0;
                 this.config.yearsToRetirement = parseFloat(localStorage.getItem('coastFireYears')) || 25;
                 this.config.coastGrowthRate = parseFloat(localStorage.getItem('coastFireRate')) || 9;
+                this.config.coast401kBalance = parseFloat(localStorage.getItem('coast401kBalance')) || 0;
+                this.config.coastInclude401k = localStorage.getItem('coastInclude401k') === '1';
                 this.setupEventListeners();
                 this.applyTheme();
                 this.applyPrivacyMode();
@@ -7176,6 +7190,16 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                             localStorage.setItem('coastFireGoal',  cf.goal);
                             localStorage.setItem('coastFireYears', cf.years || 25);
                             localStorage.setItem('coastFireRate',  cf.rate  || 9);
+                        }
+
+                        // External 401(k) for Coast FIRE (synced across devices)
+                        if (typeof cf.k401Balance === 'number') {
+                            this.config.coast401kBalance = cf.k401Balance;
+                            localStorage.setItem('coast401kBalance', cf.k401Balance);
+                        }
+                        if (typeof cf.include401k === 'boolean') {
+                            this.config.coastInclude401k = cf.include401k;
+                            localStorage.setItem('coastInclude401k', cf.include401k ? '1' : '0');
                         }
 
                         // Update Settings modal inputs if available
@@ -8699,7 +8723,27 @@ renderPortfolioSummary() {
                     const cBar = document.getElementById('coast-bar');
                     const cPct = document.getElementById('coast-pct');
                     const cDet = document.getElementById('coast-detail');
-                    const _cv = combinedMetrics.totalCurrentValue || 0;
+                    const _brk = combinedMetrics.totalCurrentValue || 0;
+                    // Optional external 401(k): only added on the unfiltered view,
+                    // so a single-broker or ETF-only view isn't padded with it.
+                    const _k401 = (this.config && this.config.coast401kBalance) || 0;
+                    const _noFilter = (platformFilterTerm === 'All Platforms' || !platformFilterTerm)
+                        && (!assetTypeTerm || assetTypeTerm === 'all');
+                    const _inc401 = !!(this.config && this.config.coastInclude401k) && _k401 > 0;
+                    const _add401 = _inc401 && _noFilter;
+                    const _cv = _brk + (_add401 ? _k401 : 0);
+                    {
+                        const fc0 = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
+                        const tBtn = document.getElementById('coast-401k-toggle');
+                        const eBtn = document.getElementById('coast-401k-edit');
+                        const scope = document.getElementById('coast-scope');
+                        if (tBtn) {
+                            tBtn.classList.toggle('on', _inc401);
+                            tBtn.textContent = _inc401 ? '✓ Including 401(k): ' + fc0(_k401) : '＋ Include 401(k)';
+                        }
+                        if (eBtn) eBtn.style.display = _k401 > 0 ? '' : 'none';
+                        if (scope) scope.textContent = _add401 ? '· incl. 401(k)' : (_inc401 ? '· 401(k) off while filtered' : '· Brokerage only');
+                    }
                     const _g  = parseFloat((this.config&&this.config.retirementGoal)||localStorage.getItem('coastFireGoal')||0);
                     const _y  = parseFloat((this.config&&this.config.yearsToRetirement)||localStorage.getItem('coastFireYears')||25);
                     const fc  = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
@@ -8714,9 +8758,42 @@ renderPortfolioSummary() {
                     if (cBar) { cBar.style.width=Math.min(100,pct).toFixed(1)+'%'; cBar.style.background=reached?'#27ae60':pct>=75?'#f39c12':'#3498db'; }
                     if (cPct) { cPct.textContent=pct.toFixed(0)+'%'; cPct.style.color=reached?'#27ae60':'rgba(255,255,255,0.9)'; }
                     if (cDet) {
-                        if (reached) { cDet.innerHTML='🎉 <strong>Coast FIRE reached!</strong> Your '+fc(_cv)+' will compound to '+fc(_g)+' in '+_y+' yrs @ '+(_r*100).toFixed(1)+'%/yr — zero new contributions needed.'; cDet.style.color='#27ae60'; }
-                        else { cDet.innerHTML='Target: '+fc(_g)+' | Growth: '+(_r*100).toFixed(1)+'%/yr | Horizon: '+_y+' yrs → <strong>Coast Number: '+fc(coastNum)+'</strong><br>You have '+fc(_cv)+' — need '+fc(Math.max(0,coastNum-_cv))+' more.'; cDet.style.color='#cbd5e1'; }
+                        if (reached) { cDet.innerHTML='🎉 <strong>Coast FIRE reached!</strong> Your '+(_add401 ? fc(_cv)+' ('+fc(_brk)+' + '+fc(_k401)+' 401(k))' : fc(_cv))+' will compound to '+fc(_g)+' in '+_y+' yrs @ '+(_r*100).toFixed(1)+'%/yr — zero new contributions needed.'; cDet.style.color='#27ae60'; }
+                        else { cDet.innerHTML='Target: '+fc(_g)+' | Growth: '+(_r*100).toFixed(1)+'%/yr | Horizon: '+_y+' yrs → <strong>Coast Number: '+fc(coastNum)+'</strong><br>You have '+(_add401 ? fc(_brk)+' + '+fc(_k401)+' 401(k) = '+fc(_cv) : fc(_cv))+' — need '+fc(Math.max(0,coastNum-_cv))+' more.'; cDet.style.color='#cbd5e1'; }
                     }
+                }
+            }
+
+            // ── External 401(k) for Coast FIRE ──
+            editCoast401k() {
+                const cur = (this.config && this.config.coast401kBalance) || 0;
+                const raw = prompt('401(k) balance ($) — update it every few weeks from NetBenefits:', cur ? Math.round(cur) : '');
+                if (raw === null) return false;
+                const val = parseFloat(String(raw).replace(/[$,\s]/g, ''));
+                if (isNaN(val) || val < 0) { alert('Please enter a number, e.g. 1000000'); return false; }
+                this.config.coast401kBalance = val;
+                if (val === 0) this.config.coastInclude401k = false;
+                this.saveCoast401k();
+                return true;
+            }
+            toggleCoast401k() {
+                if (!this.config.coastInclude401k && !(this.config.coast401kBalance > 0)) {
+                    if (!this.editCoast401k() || !(this.config.coast401kBalance > 0)) return;
+                }
+                this.config.coastInclude401k = !this.config.coastInclude401k;
+                this.saveCoast401k();
+            }
+            saveCoast401k() {
+                localStorage.setItem('coast401kBalance', this.config.coast401kBalance || 0);
+                localStorage.setItem('coastInclude401k', this.config.coastInclude401k ? '1' : '0');
+                this.renderPortfolioSummary();
+                if (db && this.userId) {
+                    setDoc(doc(db, "users", this.userId), {
+                        coastFire: {
+                            k401Balance: this.config.coast401kBalance || 0,
+                            include401k: !!this.config.coastInclude401k
+                        }
+                    }, { merge: true }).catch(e => console.warn('[Coast 401k] sync failed:', e));
                 }
             }
 
