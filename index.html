@@ -8398,6 +8398,12 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         item.transactions = [];
                         migrationNeeded = true;
                     }
+                    // Date fix: a bare "YYYY-MM-DD" (from imports) is read as UTC midnight and shows one
+                    // day EARLY in US time zones. Store it like manual entries do: local noon ISO.
+                    item.transactions.forEach(t => {
+                        const m = typeof t.date === 'string' && t.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                        if (m) { t.date = new Date(+m[1], +m[2] - 1, +m[3], 12, 0, 0).toISOString(); migrationNeeded = true; }
+                    });
                     if (!item.dividends) { // Ensure funds have dividends array
                         item.dividends = [];
                         migrationNeeded = true;
@@ -21337,8 +21343,30 @@ document.addEventListener('click', function(e) {
         let duplicateCount = 0, possibleCount = 0;
         const seenInBatch = [];
 
+        // Pre-pass: broker splits one order into pieces (e.g. 280 + 0.102 shares, or 1 + 0.143)
+        // but you entered it once. If the pieces add up to one existing entry, flag them together.
+        const preGroups = {};
+        newTransactions.forEach(t => { const k = t.symbol + '|' + t.type + '|' + t.date; (preGroups[k] = preGroups[k] || []).push(t); });
+        Object.values(preGroups).forEach(g => {
+            if (g.length < 2) return;
+            const sumSh = g.reduce((a, t) => a + t.shares, 0);
+            const pool = bySymbol[g[0].symbol] || [];
+            const exactOne = g.some(t => pool.some(e => e.tx.type === t.type && e.tx.date === t.date && sameShares(e.tx.shares, t.shares)));
+            if (exactOne) return;   // one piece matches exactly — let the normal checks handle it
+            const e = pool.find(x => !x.used && x.tx.type === g[0].type && dayGap(x.tx.date, g[0].date) <= 3 &&
+                Math.abs(x.tx.shares - sumSh) <= Math.max(0.011, sumSh * 0.02));
+            if (!e) return;
+            e.used = true;
+            g.forEach(t => { t._combined = `these ${g.length} rows add up to your single entry: ${e.tx.date} · ${+e.tx.shares} sh`; });
+        });
+
         for (const transaction of newTransactions) {
             const pool = bySymbol[transaction.symbol] || [];
+            if (transaction._combined) {
+                transaction.status = 'possible'; transaction.selected = false; possibleCount++;
+                transaction.dupNote = transaction._combined; delete transaction._combined;
+                seenInBatch.push(transaction); merged.push(transaction); continue;
+            }
             const core = e => !e.used && e.tx.type === transaction.type &&
                               sameShares(e.tx.shares, transaction.shares) && samePrice(e.tx.price, transaction.price);
             let hit = pool.find(e => core(e) && e.tx.date === transaction.date);
@@ -21740,21 +21768,37 @@ document.addEventListener('click', function(e) {
                 
                 // Add to stocks
                 const tr = window.stockTracker;
-                Object.entries(transactionsBySymbol).forEach(([symbol, transactions]) => {
-                    // look in BOTH lists, so a fund you already track isn't added again as a "stock"
-                    let stock = tr.stocks.find(s => s.symbol === symbol) || (tr.mutualFunds || []).find(s => s.symbol === symbol);
+                // The app keeps ONE card per symbol PER ACCOUNT (e.g. GEV in Roth and GEV in Regular).
+                // Put each imported trade on the card for ITS account, never on another account's card.
+                const cardAccount = it => {
+                    const counts = {};
+                    (it.transactions || []).forEach(x => { if (x.platform) counts[x.platform] = (counts[x.platform] || 0) + 1; });
+                    const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+                    return top || null;
+                };
+                const byKey = {};
+                chosen.forEach(t => {
+                    const k = (t.symbol || 'UNKNOWN') + '||' + (t.platform || 'Imported');
+                    (byKey[k] = byKey[k] || []).push(t);
+                });
+                Object.values(byKey).forEach(transactions => {
+                    const symbol = transactions[0].symbol || 'UNKNOWN';
+                    const platform = transactions[0].platform || 'Imported';
+                    const sameSym = [...tr.stocks, ...(tr.mutualFunds || [])].filter(s => s.symbol === symbol);
+                    // Prefer a card whose trades are mainly this account; otherwise use the existing card
+                    // for the symbol (one card can hold trades from several accounts — each trade keeps
+                    // its own account). A new card is only created if the symbol isn't tracked at all.
+                    let stock = (sameSym.length > 1 && sameSym.find(s => cardAccount(s) === platform)) || sameSym[0];
                     
                     if (!stock) {
-                        const firstTx = transactions[0];
+                        const template = sameSym[0];
                         stock = {
                             id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
                             symbol: symbol,
-                            name: symbol,
-                            price: firstTx.price || 0,
+                            name: template ? template.name : symbol,
+                            price: template ? template.price : (transactions[0].price || 0),
                             transactions: [],
-                            industry: 'Unknown',
-                            platform: firstTx.platform,
-                            accountType: firstTx.accountType
+                            industry: template ? template.industry : 'Unknown'
                         };
                         const isFund = typeof tr.isMutualFund === 'function' ? tr.isMutualFund(symbol) : (symbol.length === 5 && symbol.endsWith('X'));
                         (isFund ? tr.mutualFunds : tr.stocks).push(stock);
@@ -21764,7 +21808,9 @@ document.addEventListener('click', function(e) {
                     transactions.forEach(t => {
                         stock.transactions.push({
                             type: t.type,                 // 'buy' / 'sell' / 'dividend' — lowercase like the rest of the app
-                            date: t.date,
+                            // local noon, same as manual entries (a bare date shows a day early in US time zones)
+                            date: (function (d) { const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                                return m ? new Date(+m[1], +m[2] - 1, +m[3], 12, 0, 0).toISOString() : d; })(t.date),
                             shares: t.shares,
                             price: t.price,
                             platform: t.platform || 'Imported',
