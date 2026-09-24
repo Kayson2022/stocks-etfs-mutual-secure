@@ -8356,6 +8356,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     return;
                 }
                 if (confirm(`Restore ${(data.stocks||[]).length} stocks and ${(data.mutualFunds||[]).length} funds from backup dated ${data.exportedAt || 'unknown'}? This will OVERWRITE current data.`)) {
+                    this.createSnapshot('Before Restore from Email Backup');
                     this.stocks      = data.stocks      || this.stocks;
                     this.mutualFunds = data.mutualFunds || this.mutualFunds;
                     this.watchlist   = data.watchlist   || this.watchlist;
@@ -9001,6 +9002,88 @@ renderPortfolioSummary() {
                 }
             }
 
+            // ══ Snapshots: automatic copy of your data before any risky change, with Undo ══
+            // Stored at users/{uid}/snapshots/slot0..slot9 (+ an _index doc) — free-tier friendly.
+            // Falls back to this browser's storage if the cloud write is refused or too big.
+            _snapCounts(d) {
+                const tx = [...(d.stocks || []), ...(d.mutualFunds || [])].reduce((n, it) => n + ((it.transactions || []).length), 0);
+                return { stocks: (d.stocks || []).length, funds: (d.mutualFunds || []).length, tx };
+            }
+            async _snapIndex() {
+                let idx = null;
+                if (db && this.userId) {
+                    try { const r = await getDoc(doc(db, 'users', this.userId, 'snapshots', '_index')); if (r.exists()) idx = r.data(); } catch (e) { console.warn('[Snapshots] index read failed', e); }
+                }
+                if (!idx) { try { idx = JSON.parse(localStorage.getItem('snap_index') || 'null'); } catch (e) {} }
+                if (!idx || !Array.isArray(idx.list)) idx = { list: [] };
+                return idx;
+            }
+            async _snapSaveIndex(idx) {
+                try { localStorage.setItem('snap_index', JSON.stringify(idx)); } catch (e) {}
+                if (db && this.userId) { try { await setDoc(doc(db, 'users', this.userId, 'snapshots', '_index'), idx); } catch (e) { console.warn('[Snapshots] index write failed', e); } }
+            }
+            async createSnapshot(label) {
+                if (!this.userId || window._demoModeActive) return null;
+                try {
+                    const data = {
+                        stocks: this.stocks || [], mutualFunds: this.mutualFunds || [],
+                        watchlist: this.watchlist || [], priceAlerts: this.priceAlerts || []
+                    };
+                    const payload = JSON.stringify(data);
+                    const idx = await this._snapIndex();
+                    const MAX = 10;
+                    // reuse the oldest slot once all 10 are used
+                    let slot;
+                    if (idx.list.length < MAX) {
+                        const used = new Set(idx.list.map(x => x.slot));
+                        slot = [...Array(MAX).keys()].find(i => !used.has(i));
+                    } else {
+                        slot = idx.list.slice().sort((a, b) => a.at - b.at)[0].slot;
+                        idx.list = idx.list.filter(x => x.slot !== slot);
+                    }
+                    const meta = { slot, label: String(label || 'Snapshot'), at: Date.now(), counts: this._snapCounts(data), where: 'cloud' };
+                    let savedCloud = false;
+                    if (db && payload.length < 900000) {
+                        try {
+                            await setDoc(doc(db, 'users', this.userId, 'snapshots', 'slot' + slot), { at: meta.at, label: meta.label, payload });
+                            savedCloud = true;
+                        } catch (e) { console.warn('[Snapshots] cloud write failed — using this device', e); }
+                    }
+                    if (!savedCloud) {
+                        try { localStorage.setItem('snap_slot' + slot, payload); meta.where = 'device'; }
+                        catch (e) { console.error('[Snapshots] could not save anywhere', e); return null; }
+                    }
+                    idx.list.push(meta);
+                    await this._snapSaveIndex(idx);
+                    return meta;
+                } catch (e) { console.error('[Snapshots] failed', e); return null; }
+            }
+            async listSnapshots() {
+                const idx = await this._snapIndex();
+                return idx.list.slice().sort((a, b) => b.at - a.at);
+            }
+            async restoreSnapshot(slot) {
+                const idx = await this._snapIndex();
+                const meta = idx.list.find(x => x.slot === slot);
+                if (!meta) { alert('Snapshot not found.'); return false; }
+                let payload = null;
+                if (meta.where === 'cloud' && db) {
+                    try { const r = await getDoc(doc(db, 'users', this.userId, 'snapshots', 'slot' + slot)); if (r.exists()) payload = r.data().payload; } catch (e) { console.warn(e); }
+                }
+                if (!payload) payload = localStorage.getItem('snap_slot' + slot);
+                if (!payload) { alert('This snapshot\'s data could not be loaded.'); return false; }
+                const data = JSON.parse(payload);
+                // Undo is itself undoable
+                await this.createSnapshot('Before restoring "' + meta.label + '"');
+                this.stocks = data.stocks || [];
+                this.mutualFunds = data.mutualFunds || [];
+                this.watchlist = data.watchlist || [];
+                this.priceAlerts = data.priceAlerts || [];
+                await this.saveData();
+                this.renderContent();
+                return true;
+            }
+
             // ── External 401(k) for Coast FIRE ──
             editCoast401k() {
                 const cur = (this.config && this.config.coast401kBalance) || 0;
@@ -9090,7 +9173,8 @@ renderPortfolioSummary() {
                 });
             }
             clearAllItems(type) {
-                this.openConfirmModal(`Are you sure you want to clear all ${type}s? This cannot be undone.`, async () => {
+                this.openConfirmModal(`Are you sure you want to clear all ${type}s? (A snapshot is saved first — you can Undo in Data & Backup Manager.)`, async () => {
+                    await this.createSnapshot('Before Clear All ' + type + 's');
                     if (type === 'stock') this.stocks = [];
                     else if (type === 'fund') this.mutualFunds = [];
                     else if (type === 'watchlist') this.watchlist = [];
@@ -10399,6 +10483,7 @@ getOldestTransactionDate(item) {
                 reader.onload = async (event) => {
                     try {
                         const data = JSON.parse(event.target.result);
+                        await this.createSnapshot('Before Import Data (' + file.name + ')');
                         this.stocks = data.stocks || this.stocks;
                         this.mutualFunds = data.mutualFunds || this.mutualFunds;
                         this.watchlist = data.watchlist || this.watchlist;
@@ -11291,6 +11376,7 @@ getOldestTransactionDate(item) {
 
                 const picked = this.splitCandidates().find(s => s.id == stockId);
                 if (!picked) return;
+                await this.createSnapshot('Before stock split: ' + picked.symbol);
 
                 // A split applies to every share of the symbol, wherever it is
                 // held. This app stores one entry per symbol per account, so
@@ -21123,32 +21209,149 @@ document.addEventListener('click', function(e) {
         return transactions;
     }
     
-    // Smart merge: detect duplicates
-    function smartMerge(newTransactions, existingTransactions) {
-        const merged = [];
-        let duplicateCount = 0;
-        
-        for (const transaction of newTransactions) {
-            const isDuplicate = existingTransactions.some(existing => {
-                // Match by date, shares, price (symbol already grouped)
-                return existing.date === transaction.date &&
-                       Math.abs((existing.shares || 0) - (transaction.shares || 0)) < 0.0001 &&
-                       Math.abs((existing.price || 0) - (transaction.price || 0)) < 0.01 &&
-                       (existing.type === transaction.type || existing.transactionType === transaction.type);
+    // ── Broker CSV parser (Fidelity, Schwab, Vanguard, Robinhood) ──────────
+    function splitCSVLine(line) {
+        const out = []; let cur = '', q = false;
+        for (let i = 0; i < line.length; i++) {
+            const c = line[i];
+            if (q) { if (c === '"') { if (line[i+1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+            else if (c === '"') q = true;
+            else if (c === ',') { out.push(cur); cur = ''; }
+            else cur += c;
+        }
+        out.push(cur);
+        return out.map(x => x.trim());
+    }
+    function parseBrokerCSV(text, fileName) {
+        const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+        // Header row = first line that has a symbol column and an action/type column (Fidelity puts notes above it)
+        let hi = lines.findIndex(l => /symbol|instrument/i.test(l) && /action|transaction type|trans code|type/i.test(l));
+        if (hi < 0) return [];
+        const head = splitCSVLine(lines[hi]).map(h => h.toLowerCase().replace(/\s+/g, ' ').trim());
+        const col = (...names) => head.findIndex(h => names.some(n => h === n || h.startsWith(n)));
+        const iDate = col('run date', 'trade date', 'activity date', 'date');
+        const iAct  = col('action', 'transaction type', 'trans code', 'type');
+        const iSym  = col('symbol', 'instrument');
+        const iQty  = col('quantity', 'shares');
+        const iPx   = col('price', 'share price');
+        const iAcct = col('account');
+        const headTxt = head.join('|');
+        const broker = /run date/.test(headTxt) ? 'Fidelity'
+                     : /trans code/.test(headTxt) ? 'Robinhood'
+                     : /share price/.test(headTxt) ? 'Vanguard'
+                     : /fees & comm/.test(headTxt) ? 'Charles Schwab'
+                     : (/fidelity/i.test(fileName) ? 'Fidelity' : /schwab/i.test(fileName) ? 'Charles Schwab'
+                        : /vanguard/i.test(fileName) ? 'Vanguard' : /robinhood/i.test(fileName) ? 'Robinhood' : 'Imported');
+        const rows = [];
+        for (let r = hi + 1; r < lines.length; r++) {
+            if (!lines[r].trim()) continue;
+            const c = splitCSVLine(lines[r]);
+            const act = String(c[iAct] || '').toLowerCase();
+            let type = null;
+            if (/\bsold\b|\bsell\b/.test(act)) type = 'sell';
+            else if (/\bbought\b|\bbuy\b|reinvest/.test(act)) type = 'buy';     // dividend reinvestment = a buy
+            if (!type) continue;                                                   // skip cash dividends, transfers, fees…
+            const sym = String(c[iSym] || '').replace(/[^A-Za-z0-9.\-]/g, '').toUpperCase();
+            const qty = Math.abs(parseFloat(String(c[iQty] || '').replace(/[$,()]/g, '')) || 0);
+            const px  = Math.abs(parseFloat(String(c[iPx] || '').replace(/[$,()]/g, '')) || 0);
+            if (!sym || !qty) continue;
+            const acct = iAcct >= 0 ? String(c[iAcct] || '') : '';
+            const isRoth = /roth/i.test(acct) || /roth/i.test(fileName);
+            let platform = broker;
+            if (broker === 'Fidelity') platform = isRoth ? 'Fidelity Roth IRA' : 'Fidelity Regular Brokerage';
+            rows.push({
+                type, symbol: sym, date: c[iDate], shares: qty, price: px,
+                platform,
+                accountType: isRoth ? 'Roth IRA' : 'Regular Brokerage',
+                source: 'csv-import-' + fileName
             });
-            
-            if (isDuplicate) {
-                transaction.status = 'duplicate';
-                duplicateCount++;
+        }
+        return rows;
+    }
+
+    // ── Normalization ──────────────────────────────────────────────
+    // Why re-imports created duplicates before:
+    //  1. Imported rows were saved as 'BUY'/'SELL' but the app stores 'buy'/'sell', so the
+    //     duplicate check never matched (and those rows weren't even counted in share totals).
+    //  2. Dates weren't normalized ('Sep-17-2026', '09/17/2026', ISO with time…).
+    //  3. The check ignored the symbol and used an exact-cent price match.
+    const MONTHS = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+    function normDate(d) {
+        if (!d) return '';
+        let t = String(d).trim();
+        let m;
+        if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+        if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/))) { let y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`; }
+        if ((m = t.match(/^([A-Za-z]{3})[a-z]*[-\s](\d{1,2}),?[-\s](\d{4})/))) { const mo = MONTHS[m[1].toLowerCase()]; if (mo) return `${m[3]}-${String(mo).padStart(2,'0')}-${m[2].padStart(2,'0')}`; }
+        const dt = new Date(t);
+        return isNaN(dt) ? t : dt.toISOString().slice(0, 10);
+    }
+    function normType(t) {
+        const x = String(t || '').toLowerCase();
+        if (x.includes('sell') || x.includes('sold')) return 'sell';
+        if (x.includes('div')) return 'dividend';
+        return 'buy';
+    }
+    function normTx(t) {
+        return Object.assign({}, t, {
+            symbol: String(t.symbol || '').trim().toUpperCase(),
+            type: normType(t.type || t.transactionType || t.action),
+            date: normDate(t.date || t.tradeDate || t.settlementDate),
+            shares: Math.abs(parseFloat(t.shares) || 0),
+            price: Math.abs(parseFloat(String(t.price == null ? '' : t.price).replace(/[$,]/g, '')) || 0)
+        });
+    }
+    function dayGap(a, b) { return Math.abs((new Date(a) - new Date(b)) / 86400000); }
+    function samePrice(a, b) { return Math.abs(a - b) <= Math.max(0.02, Math.max(a, b) * 0.005); }   // within 0.5% (rounding)
+    function sameShares(a, b) { return Math.abs(a - b) < 0.001; }
+
+    // Smart merge: each existing transaction can only "absorb" one incoming row, so two real
+    // identical trades aren't collapsed into one. Statuses:
+    //   duplicate — same symbol, type, date, shares, price  → skipped
+    //   possible  — same except date within 3 days (trade vs settlement date) → unticked, you decide
+    //   new       — imported
+    function smartMerge(newTransactions, existingTransactions) {
+        const bySymbol = {};
+        existingTransactions.forEach(e => {
+            const n = normTx(e);
+            (bySymbol[n.symbol] = bySymbol[n.symbol] || []).push({ tx: n, used: false });
+        });
+        const merged = [];
+        let duplicateCount = 0, possibleCount = 0;
+        const seenInBatch = [];
+
+        for (const transaction of newTransactions) {
+            const pool = bySymbol[transaction.symbol] || [];
+            const core = e => !e.used && e.tx.type === transaction.type &&
+                              sameShares(e.tx.shares, transaction.shares) && samePrice(e.tx.price, transaction.price);
+            let hit = pool.find(e => core(e) && e.tx.date === transaction.date);
+            if (hit) { hit.used = true; transaction.status = 'duplicate'; duplicateCount++; continue; }
+
+            // same row appearing in two overlapping export files
+            const dupInBatch = seenInBatch.find(b => b.symbol === transaction.symbol && b.type === transaction.type &&
+                b.date === transaction.date && sameShares(b.shares, transaction.shares) &&
+                samePrice(b.price, transaction.price) && b.source !== transaction.source);
+            if (dupInBatch) { transaction.status = 'duplicate'; transaction.dupNote = 'also in ' + String(dupInBatch.source || '').replace('csv-import-', ''); duplicateCount++; continue; }
+
+            hit = pool.find(e => core(e) && dayGap(e.tx.date, transaction.date) <= 3);
+            if (hit) {
+                hit.used = true;
+                transaction.status = 'possible';
+                transaction.dupNote = 'matches ' + hit.tx.date + ' entry';
+                transaction.selected = false;
+                possibleCount++;
             } else {
                 transaction.status = 'new';
-                merged.push(transaction);
+                transaction.selected = true;
             }
+            seenInBatch.push(transaction);
+            merged.push(transaction);
         }
-        
+
         return {
-            newTransactions: merged,
+            newTransactions: merged,            // 'new' + 'possible' (possible start unticked)
             duplicateCount: duplicateCount,
+            possibleCount: possibleCount,
             totalProcessed: newTransactions.length
         };
     }
@@ -21162,7 +21365,7 @@ document.addEventListener('click', function(e) {
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px 30px; border-radius: 16px 16px 0 0; display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <h2 style="margin: 0; font-size: 24px; font-weight: 700;">📊 Import from CSV Tool</h2>
-                            <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Upload the JSON file exported from CSV Importer Pro</p>
+                            <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Broker CSV exports (Fidelity, Schwab, Vanguard, Robinhood) or CSV Importer Pro JSON — duplicates are detected automatically</p>
                         </div>
                         <button onclick="closeCSVImportModal()" style="background: rgba(255,255,255,0.2); border: none; color: white; font-size: 28px; cursor: pointer; width: 40px; height: 40px; border-radius: 50%; line-height: 1; transition: all 0.2s;">&times;</button>
                     </div>
@@ -21173,9 +21376,9 @@ document.addEventListener('click', function(e) {
                         <div id="csvUploadSection">
                             <div style="border: 3px dashed #667eea; border-radius: 12px; padding: 50px 20px; text-align: center; background: #f8f9ff; margin-bottom: 20px; cursor: pointer; transition: all 0.3s;" id="csvDropZone">
                                 <div style="font-size: 48px; margin-bottom: 15px;">📁</div>
-                                <h3 style="color: #667eea; margin-bottom: 10px; font-size: 20px;">Drop JSON file here or click to browse</h3>
-                                <p style="color: #666; font-size: 14px;">Select the JSON file exported from CSV Importer Pro</p>
-                                <input type="file" id="csvMultiFileInput" accept=".json" style="display: none;">
+                                <h3 style="color: #667eea; margin-bottom: 10px; font-size: 20px;">Drop CSV / JSON files here or click to browse</h3>
+                                <p style="color: #666; font-size: 14px;">You can select several files at once — overlapping date ranges are fine, repeats are skipped</p>
+                                <input type="file" id="csvMultiFileInput" accept=".json,.csv" multiple style="display: none;">
                             </div>
                             
                             <div id="csvFileListDisplay" style="display: none; margin-bottom: 20px;"></div>
@@ -21214,6 +21417,10 @@ document.addEventListener('click', function(e) {
                                         <div style="color: #666; font-size: 13px; margin-bottom: 5px;">⚠️ Duplicates</div>
                                         <div style="color: #f59e0b; font-size: 24px; font-weight: 700;" id="csvStatDuplicates">0</div>
                                     </div>
+                                    <div>
+                                        <div style="color: #666; font-size: 13px; margin-bottom: 5px;">🤔 Possible (you decide)</div>
+                                        <div style="color: #6366f1; font-size: 24px; font-weight: 700;" id="csvStatPossible">0</div>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -21221,6 +21428,7 @@ document.addEventListener('click', function(e) {
                                 <table style="width: 100%; border-collapse: collapse;">
                                     <thead style="background: #eef1ff; position: sticky; top: 0; z-index: 10;">
                                         <tr>
+                                            <th style="padding: 12px; text-align: center; border-bottom: 2px solid #667eea; font-size: 13px;">Import</th>
                                             <th style="padding: 12px; text-align: left; border-bottom: 2px solid #667eea; font-size: 13px;">Status</th>
                                             <th style="padding: 12px; text-align: left; border-bottom: 2px solid #667eea; font-size: 13px;">Date</th>
                                             <th style="padding: 12px; text-align: left; border-bottom: 2px solid #667eea; font-size: 13px;">Type</th>
@@ -21288,16 +21496,11 @@ document.addEventListener('click', function(e) {
     
     // Handle file selection
     function handleCSVFiles(files) {
-        uploadedCSVFiles = Array.from(files).filter(f => f.name.endsWith('.json'));
+        uploadedCSVFiles = Array.from(files).filter(f => /\.(json|csv)$/i.test(f.name));
         
         if (uploadedCSVFiles.length === 0) {
-            alert('Please select a JSON file exported from CSV Importer Pro');
+            alert('Please select broker CSV export(s) or a CSV Importer Pro JSON file');
             return;
-        }
-        
-        if (uploadedCSVFiles.length > 1) {
-            alert('Please select only one JSON file at a time');
-            uploadedCSVFiles = [uploadedCSVFiles[0]];
         }
         
         displayFileList();
@@ -21341,18 +21544,27 @@ document.addEventListener('click', function(e) {
         parsedTransactions = [];
         
         try {
-            const file = uploadedCSVFiles[0];
-            const text = await file.text();
-            const jsonData = JSON.parse(text);
-            
-            // Extract transactions from JSON (format from CSV Importer Pro)
-            if (jsonData.transactions && Array.isArray(jsonData.transactions)) {
-                parsedTransactions = jsonData.transactions;
-                console.log(`✅ Loaded ${parsedTransactions.length} transactions from JSON file`);
-            } else {
-                alert('Invalid JSON format. Please use a file exported from CSV Importer Pro.');
-                return;
+            // every selected file (overlapping exports are caught as duplicates below)
+            for (const file of uploadedCSVFiles) {
+                const text = await file.text();
+                if (/\.csv$/i.test(file.name)) {
+                    const rows = parseBrokerCSV(text, file.name);
+                    if (!rows.length) { alert('No buy/sell rows found in ' + file.name + '. Is it a transaction-history export?'); return; }
+                    parsedTransactions.push(...rows.map(normTx).filter(t => t.symbol && t.shares > 0));
+                    continue;
+                }
+                const jsonData = JSON.parse(text);
+                // Extract transactions from JSON (format from CSV Importer Pro)
+                if (jsonData.transactions && Array.isArray(jsonData.transactions)) {
+                    parsedTransactions.push(...jsonData.transactions
+                        .map(t => normTx(Object.assign({}, t, { source: t.source || ('csv-import-' + file.name) })))
+                        .filter(t => t.symbol && (t.type === 'dividend' || t.shares > 0)));
+                } else {
+                    alert('Invalid JSON format in ' + file.name + '. Please use a file exported from CSV Importer Pro.');
+                    return;
+                }
             }
+            console.log(`✅ Loaded ${parsedTransactions.length} transactions from ${uploadedCSVFiles.length} file(s)`);
         } catch (err) {
             console.error('Error parsing JSON:', err);
             alert('Error reading JSON file: ' + err.message);
@@ -21364,9 +21576,7 @@ document.addEventListener('click', function(e) {
         if (window.stockTracker) {
             const allItems = [...window.stockTracker.stocks, ...window.stockTracker.mutualFunds];
             allItems.forEach(item => {
-                if (item.transactions) {
-                    existingTransactions.push(...item.transactions);
-                }
+                (item.transactions || []).forEach(t => existingTransactions.push(Object.assign({}, t, { symbol: item.symbol })));
             });
         }
         
@@ -21385,8 +21595,10 @@ document.addEventListener('click', function(e) {
         // Update stats
         document.getElementById('csvStatFiles').textContent = uploadedCSVFiles.length;
         document.getElementById('csvStatTotal').textContent = mergeResult.totalProcessed;
-        document.getElementById('csvStatNew').textContent = mergeResult.newTransactions.length;
+        document.getElementById('csvStatNew').textContent = mergeResult.newTransactions.length - mergeResult.possibleCount;
         document.getElementById('csvStatDuplicates').textContent = mergeResult.duplicateCount;
+        const posEl = document.getElementById('csvStatPossible');
+        if (posEl) posEl.textContent = mergeResult.possibleCount;
         
         // Update table
         const tbody = document.getElementById('csvPreviewTableBody');
@@ -21397,44 +21609,64 @@ document.addEventListener('click', function(e) {
         
         allForPreview.forEach(t => {
             const row = document.createElement('tr');
-            row.style.cssText = t.status === 'new' 
-                ? 'background: #d1fae5;' 
+            row.style.cssText = t.status === 'new' ? 'background: #d1fae5;'
+                : t.status === 'possible' ? 'background: #e0e7ff;'
                 : 'background: #fef3c7; opacity: 0.6;';
             
-            const badge = t.status === 'new'
-                ? '<span style="background: #10b981; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;">NEW</span>'
-                : '<span style="background: #f59e0b; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;">DUPLICATE</span>';
+            const pill = (bg, txt) => `<span style="background:${bg};color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:700;">${txt}</span>`;
+            const badge = t.status === 'new' ? pill('#10b981', 'NEW')
+                : t.status === 'possible' ? pill('#6366f1', 'POSSIBLE DUP')
+                : pill('#f59e0b', 'DUPLICATE');
+            const note = t.dupNote ? `<div style="font-size:10px;color:#555;margin-top:3px;">${t.dupNote}</div>` : '';
             
-            const type = t.type || 'BUY';
+            const type = String(t.type || 'buy').toUpperCase();
+            const box = t.status === 'duplicate' ? '' :
+                `<input type="checkbox" ${t.selected ? 'checked' : ''} style="width:18px;height:18px;cursor:pointer;" onchange="window._csvToggleRow(${parsedTransactions.indexOf(t)}, this.checked)">`;
             
             row.innerHTML = `
-                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">${badge}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align:center;">${box}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">${badge}${note}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px;">${t.date}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px;"><strong>${type}</strong></td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px;"><strong>${t.symbol || '-'}</strong></td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px;">${(t.shares || 0).toFixed(4)}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px;">$${(t.price || 0).toFixed(2)}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 11px; color: #666;">${t.source.replace('csv-import-', '')}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; font-size: 11px; color: #666;">${String(t.source || '').replace('csv-import-', '')}</td>
             `;
             tbody.appendChild(row);
         });
+        updateImportButton();
+    }
+    window._csvToggleRow = function (i, on) {
+        const t = parsedTransactions[i];
+        if (t) t.selected = on;
+        updateImportButton();
+    };
+    function updateImportButton() {
+        const btn = document.getElementById('csvImportBtn');
+        if (!btn || !mergeResult) return;
+        const n = mergeResult.newTransactions.filter(t => t.selected).length;
+        btn.textContent = n ? `✅ Import ${n} transaction${n === 1 ? '' : 's'}` : 'Nothing selected';
+        btn.disabled = !n;
+        btn.style.opacity = n ? '1' : '0.5';
     }
     
     // Import transactions
     async function importTransactions() {
-        if (!mergeResult || mergeResult.newTransactions.length === 0) {
-            alert('No new transactions to import!');
+        const chosen = mergeResult ? mergeResult.newTransactions.filter(t => t.selected) : [];
+        if (!chosen.length) {
+            alert('No transactions selected to import.');
             return;
         }
-        
-        const confirmMsg = `Import ${mergeResult.newTransactions.length} new transaction(s)?\\n\\n${mergeResult.duplicateCount} duplicate(s) will be skipped.`;
-        if (!confirm(confirmMsg)) return;
+        const skipped = mergeResult.totalProcessed - chosen.length;
+        if (!confirm(`Import ${chosen.length} transaction(s)?\n\n${skipped} duplicate/unticked row(s) will be skipped.`)) return;
         
         try {
             if (window.stockTracker) {
+                if (window.stockTracker.createSnapshot) await window.stockTracker.createSnapshot('Before importing ' + chosen.length + ' transaction(s)');
                 // Group transactions by symbol
                 const transactionsBySymbol = {};
-                mergeResult.newTransactions.forEach(t => {
+                chosen.forEach(t => {
                     const symbol = t.symbol || 'UNKNOWN';
                     if (!transactionsBySymbol[symbol]) {
                         transactionsBySymbol[symbol] = [];
@@ -21443,13 +21675,15 @@ document.addEventListener('click', function(e) {
                 });
                 
                 // Add to stocks
+                const tr = window.stockTracker;
                 Object.entries(transactionsBySymbol).forEach(([symbol, transactions]) => {
-                    let stock = window.stockTracker.stocks.find(s => s.symbol === symbol);
+                    // look in BOTH lists, so a fund you already track isn't added again as a "stock"
+                    let stock = tr.stocks.find(s => s.symbol === symbol) || (tr.mutualFunds || []).find(s => s.symbol === symbol);
                     
                     if (!stock) {
-                        // Create new stock entry
                         const firstTx = transactions[0];
                         stock = {
+                            id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
                             symbol: symbol,
                             name: symbol,
                             price: firstTx.price || 0,
@@ -21458,16 +21692,28 @@ document.addEventListener('click', function(e) {
                             platform: firstTx.platform,
                             accountType: firstTx.accountType
                         };
-                        window.stockTracker.stocks.push(stock);
+                        const isFund = typeof tr.isMutualFund === 'function' ? tr.isMutualFund(symbol) : (symbol.length === 5 && symbol.endsWith('X'));
+                        (isFund ? tr.mutualFunds : tr.stocks).push(stock);
                     }
                     
                     if (!stock.transactions) stock.transactions = [];
-                    stock.transactions.push(...transactions);
+                    transactions.forEach(t => {
+                        stock.transactions.push({
+                            type: t.type,                 // 'buy' / 'sell' / 'dividend' — lowercase like the rest of the app
+                            date: t.date,
+                            shares: t.shares,
+                            price: t.price,
+                            platform: t.platform || 'Imported',
+                            accountType: t.accountType || 'Regular Brokerage',
+                            dividend: t.dividend || 0,
+                            source: t.source
+                        });
+                    });
                 });
                 
                 await window.stockTracker.saveData();
                 window.stockTracker.renderContent();
-                alert(`✅ Successfully imported ${mergeResult.newTransactions.length} transaction(s)!`);
+                alert(`✅ Successfully imported ${chosen.length} transaction(s)!`);
             }
             
             closeCSVImportModal();
@@ -22868,7 +23114,8 @@ window.sendSecureBackupToTelegram = async function() {
         <button class="add-btn" id="exportBtn">📥 Export Data</button>
         <label class="add-btn" for="importFile" style="cursor:pointer;">📤 Import Data</label>
         <input accept=".json" id="importFile" style="display:none;" type="file"/>
-        <button class="add-btn" onclick="window.closeDataManager();openCSVImportModal()">📊 Import from CSV Tool</button>
+        <button class="add-btn" onclick="window.closeDataManager();openCSVImportModal()">📊 Import Broker CSV</button>
+        <button class="add-btn" onclick="window.closeDataManager();window.openDupFinder()">🔍 Find Duplicates</button>
         <button class="add-btn" onclick="var p=document.getElementById('secureRestorePanel');p.style.display=p.style.display==='none'?'block':'none'">📥 Restore Backup</button>
       </div>
       <div id="secureRestorePanel" style="display:none;margin-top:10px;width:100%;">
@@ -22876,6 +23123,16 @@ window.sendSecureBackupToTelegram = async function() {
         <textarea id="secureRestoreInput" rows="5" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-family:monospace;font-size:0.78rem;resize:vertical;" placeholder='Paste JSON here...'></textarea>
         <button class="add-btn" onclick="window.stockTracker.restoreFromBackup(document.getElementById('secureRestoreInput').value)" style="margin-top:6px;">✅ Restore Now</button>
       </div>
+    </div>
+
+    <div class="dbm-section">
+      <div class="ut-title">↩️ Undo &amp; Snapshots</div>
+      <p style="font-size:0.8rem;color:var(--text-secondary);margin:0 0 8px;">A copy of your data is saved automatically before imports, duplicate clean-up, stock splits, restores and Clear All (last 10 kept).</p>
+      <div class="ut-grid">
+        <button class="add-btn" id="snapUndoBtn" onclick="window.snapUndoLast()">↩️ Undo last change</button>
+        <button class="add-btn" onclick="window.snapTakeNow()">📸 Save snapshot now</button>
+      </div>
+      <div id="snapList" style="margin-top:10px;font-size:0.82rem;"></div>
     </div>
 
     <div class="dbm-section dbm-danger">
@@ -23005,7 +23262,41 @@ window.sendSecureBackupToTelegram = async function() {
   }
 
   // Data & Backup Manager
-  window.openDataManager  = function () { var m = document.getElementById('dataManagerModal'); if (m) m.style.display = 'flex'; };
+  window.openDataManager  = function () { var m = document.getElementById('dataManagerModal'); if (m) m.style.display = 'flex'; window.renderSnapList(); };
+  function snapAgo(t) {
+    const m = Math.round((Date.now() - t) / 60000);
+    if (m < 1) return 'just now'; if (m < 60) return m + ' min ago';
+    const h = Math.round(m / 60); if (h < 24) return h + ' h ago';
+    return new Date(t).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+  window.renderSnapList = async function () {
+    const box = document.getElementById('snapList'), tr = window.stockTracker;
+    if (!box || !tr || !tr.listSnapshots) return;
+    box.innerHTML = '<span style="color:var(--text-secondary);">Loading snapshots…</span>';
+    const list = await tr.listSnapshots();
+    const undo = document.getElementById('snapUndoBtn');
+    if (undo) { undo.disabled = !list.length; undo.style.opacity = list.length ? '1' : '0.5'; }
+    if (!list.length) { box.innerHTML = '<span style="color:var(--text-secondary);">No snapshots yet — one is made automatically before your next risky change.</span>'; return; }
+    const esc = v => String(v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    box.innerHTML = list.map(x => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--border-color);">
+        <span><b>${esc(x.label)}</b><br><span style="color:var(--text-secondary);">${snapAgo(x.at)} · ${x.counts.stocks} stocks · ${x.counts.funds} funds · ${x.counts.tx} txns${x.where === 'device' ? ' · this device only' : ''}</span></span>
+        <button type="button" class="add-btn" style="width:auto !important;min-width:0;padding:6px 12px;" onclick="window.snapRestore(${x.slot})">Restore</button></div>`).join('');
+  };
+  window.snapRestore = async function (slot) {
+    const tr = window.stockTracker; const list = await tr.listSnapshots(); const x = list.find(s => s.slot === slot);
+    if (!x || !confirm(`Restore "${x.label}" (${snapAgo(x.at)})?\n\nYour current data is snapshotted first, so this can be undone too.`)) return;
+    if (await tr.restoreSnapshot(slot)) { alert('✅ Restored.'); window.renderSnapList(); }
+  };
+  window.snapUndoLast = async function () {
+    const tr = window.stockTracker; const list = await tr.listSnapshots();
+    const last = list.find(s => !/^Before restoring/.test(s.label)) || list[0];
+    if (last) window.snapRestore(last.slot);
+  };
+  window.snapTakeNow = async function () {
+    const m = await window.stockTracker.createSnapshot('Manual snapshot');
+    alert(m ? '📸 Snapshot saved' + (m.where === 'device' ? ' (this device only)' : '') + '.' : 'Could not save a snapshot.');
+    window.renderSnapList();
+  };
   window.closeDataManager = function () { var m = document.getElementById('dataManagerModal'); if (m) m.style.display = 'none'; };
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') window.closeDataManager(); });
 
@@ -23136,6 +23427,88 @@ window.sendSecureBackupToTelegram = async function() {
     if (e.key !== 'Escape' || document.body.classList.contains('pc-modal-open')) return;
     if (document.querySelector('.st-panel.open')) window.closeStPanels();
   });
+
+  // ── Find duplicate transactions already saved (e.g. from earlier imports) ──
+  window.openDupFinder = function () {
+    const tr = window.stockTracker;
+    if (!tr) { alert('App not ready yet'); return; }
+    const nd = d => { const t = String(d || '').trim(); let m;
+      if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return m[1] + '-' + m[2].padStart(2,'0') + '-' + m[3].padStart(2,'0');
+      if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/))) return (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + m[1].padStart(2,'0') + '-' + m[2].padStart(2,'0');
+      const x = new Date(t); return isNaN(x) ? t : x.toISOString().slice(0,10); };
+    const nt = t => { const x = String(t || '').toLowerCase(); return x.includes('sell') || x.includes('sold') ? 'sell' : x.includes('div') ? 'dividend' : 'buy'; };
+    const items = [...(tr.stocks || []), ...(tr.mutualFunds || [])];
+    const groups = [];   // {item, rows:[{idx, tx}]}
+    let capsCount = 0;
+    items.forEach(item => {
+      const txs = item.transactions || [];
+      txs.forEach(t => { if (t.type === 'BUY' || t.type === 'SELL') capsCount++; });
+      const used = new Set();
+      txs.forEach((a, i) => {
+        if (used.has(i) || nt(a.type) === 'dividend') return;
+        const grp = [{ idx: i, tx: a }];
+        txs.forEach((b, j) => {
+          if (j <= i || used.has(j)) return;
+          const pa = +a.price || 0, pb = +b.price || 0;
+          if (nt(a.type) === nt(b.type) && nd(a.date) === nd(b.date) &&
+              Math.abs((+a.shares || 0) - (+b.shares || 0)) < 0.001 &&
+              Math.abs(pa - pb) <= Math.max(0.02, Math.max(pa, pb) * 0.005)) { grp.push({ idx: j, tx: b }); used.add(j); }
+        });
+        if (grp.length > 1) { used.add(i); groups.push({ item, rows: grp }); }
+      });
+    });
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    let html = '';
+    if (!groups.length) html += '<p style="margin:8px 0;">✅ No duplicate transactions found.</p>';
+    else {
+      html += `<p style="font-size:0.85rem;color:var(--text-secondary);margin:0 0 10px;">Found <b>${groups.length}</b> set(s) of identical transactions (same symbol, type, date, shares, price). The first copy of each is kept; extra copies are ticked for removal. Untick any that are genuinely separate trades.</p>`;
+      groups.forEach((g, gi) => {
+        // keep a lowercase (counted) copy if there is one
+        const keep = g.rows.findIndex(r => r.tx.type === 'buy' || r.tx.type === 'sell');
+        const k = keep >= 0 ? keep : 0;
+        html += `<div style="border:1px solid var(--border-color);border-radius:8px;padding:8px 10px;margin-bottom:8px;"><b>${esc(g.item.symbol)}</b>`;
+        g.rows.forEach((r, ri) => {
+          const t = r.tx;
+          html += `<label style="display:flex;gap:8px;align-items:center;font-size:0.82rem;padding:4px 0;cursor:pointer;">
+            <input type="checkbox" class="dup-del" data-g="${gi}" data-i="${r.idx}" ${ri === k ? '' : 'checked'} style="width:18px;height:18px;">
+            <span>${ri === k ? '<b style="color:#10b981;">keep</b>' : '<b style="color:#e11d48;">remove</b>'} · ${esc(nt(t.type).toUpperCase())} ${esc(t.shares)} @ $${esc(t.price)} · ${esc(nd(t.date))} · ${esc(t.platform || '')}${t.type === 'BUY' || t.type === 'SELL' ? ' · <i>old import</i>' : ''}</span></label>`;
+        });
+        html += '</div>';
+      });
+    }
+    if (capsCount) html += `<div style="margin-top:12px;padding:10px;border:1px solid #f59e0b;border-radius:8px;background:rgba(245,158,11,0.08);font-size:0.82rem;">
+        ⚠️ <b>${capsCount}</b> transaction(s) from older imports are saved as "BUY"/"SELL" in capitals, so they are <b>not counted</b> in your share totals.
+        Remove duplicates above first, then use the button below if the remaining ones are real trades.
+        <br><button type="button" class="add-btn" id="dupFixCaps" style="margin-top:8px;">Count them (convert to buy/sell)</button></div>`;
+    let ov = document.getElementById('dupFinderModal');
+    if (!ov) { ov = document.createElement('div'); ov.id = 'dupFinderModal'; ov.className = 'dbm-overlay';
+      ov.addEventListener('click', e => { if (e.target === ov) ov.style.display = 'none'; }); document.body.appendChild(ov); }
+    ov.innerHTML = `<div class="dbm-box" role="dialog" aria-label="Find duplicates">
+      <div class="dbm-head"><h3>🔍 Duplicate Transactions</h3><button type="button" class="dbm-close" aria-label="Close" onclick="document.getElementById('dupFinderModal').style.display='none'">&times;</button></div>
+      ${html}
+      ${groups.length ? '<button type="button" class="add-btn" id="dupRemoveBtn" style="margin-top:10px;background:#e11d48 !important;color:#fff !important;">Remove ticked copies</button>' : ''}
+    </div>`;
+    ov.style.display = 'flex';
+    const save = async () => { await tr.saveData(); tr.renderContent(); };
+    const rb = document.getElementById('dupRemoveBtn');
+    if (rb) rb.onclick = async () => {
+      const ticks = [...ov.querySelectorAll('.dup-del:checked')];
+      if (!ticks.length) { alert('Nothing ticked.'); return; }
+      if (!confirm(`Remove ${ticks.length} duplicate transaction(s)? Tip: Export a backup first.`)) return;
+      const byItem = new Map();
+      ticks.forEach(c => { const g = groups[+c.dataset.g]; if (!byItem.has(g.item)) byItem.set(g.item, []); byItem.get(g.item).push(+c.dataset.i); });
+      if (tr.createSnapshot) await tr.createSnapshot('Before removing ' + ticks.length + ' duplicate(s)');
+      byItem.forEach((idxs, item) => { idxs.sort((a, b) => b - a).forEach(i => item.transactions.splice(i, 1)); });
+      await save(); alert(`✅ Removed ${ticks.length} duplicate(s).`); window.openDupFinder();
+    };
+    const fb = document.getElementById('dupFixCaps');
+    if (fb) fb.onclick = async () => {
+      if (!confirm(`Convert ${capsCount} old-import transaction(s) so they count?\n\nYour share totals will change to include them. Only do this after removing duplicates.`)) return;
+      if (tr.createSnapshot) await tr.createSnapshot('Before converting ' + capsCount + ' old-import row(s)');
+      items.forEach(it => (it.transactions || []).forEach(t => { if (t.type === 'BUY') t.type = 'buy'; else if (t.type === 'SELL') t.type = 'sell'; }));
+      await save(); alert('✅ Converted.'); window.openDupFinder();
+    };
+  };
 
   function init() { paintToggle(); initSticky(); guardClearAll(); watchModals(); addPanelCloseButtons(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
