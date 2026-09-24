@@ -21222,6 +21222,10 @@ document.addEventListener('click', function(e) {
         out.push(cur);
         return out.map(x => x.trim());
     }
+    // Accounts this app does NOT track (they live in the 401k app), and cash sweep funds
+    const SKIP_ACCOUNT_RE = /401\s*\(?k\)?|403\s*\(?b\)?|457|\b529\b|college|education|unique plan|hsa|health savings|pension|netbenefits|brokeragelink/i;
+    const CASH_SWEEP = new Set(['SPAXX','FDRXX','FZFXX','SPRXX','FCASH','CORE','SWVXX','SNVXX','SNSXX','VMFXX','VMRXX','VUSXX']);
+    let importSkipped = { retirement: 0, cash: 0, accounts: new Set() };
     function parseBrokerCSV(text, fileName) {
         const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
         // Header row = first line that has a symbol column and an action/type column (Fidelity puts notes above it)
@@ -21256,6 +21260,13 @@ document.addEventListener('click', function(e) {
             const px  = Math.abs(parseFloat(String(c[iPx] || '').replace(/[$,()]/g, '')) || 0);
             if (!sym || !qty) continue;
             const acct = iAcct >= 0 ? String(c[iAcct] || '') : '';
+            // skip 401k / 529 / HSA etc. — tracked in the 401k app, not here
+            if (SKIP_ACCOUNT_RE.test(acct) || (iAcct < 0 && SKIP_ACCOUNT_RE.test(fileName))) {
+                importSkipped.retirement++; importSkipped.accounts.add(acct.replace(/\s*[A-Z]?\d{5,}\s*/g, ' ').trim() || fileName);
+                continue;
+            }
+            // skip money-market "core" cash sweeps (they are cash, not holdings)
+            if (CASH_SWEEP.has(sym) || /money market|core position|cash reserves/i.test(c.join(' '))) { importSkipped.cash++; continue; }
             const isRoth = /roth/i.test(acct) || /roth/i.test(fileName);
             let platform = broker;
             if (broker === 'Fidelity') platform = isRoth ? 'Fidelity Roth IRA' : 'Fidelity Regular Brokerage';
@@ -21542,6 +21553,7 @@ document.addEventListener('click', function(e) {
     // Process JSON file from CSV Importer Pro
     async function processCSVFiles() {
         parsedTransactions = [];
+        importSkipped = { retirement: 0, cash: 0, accounts: new Set() };
         
         try {
             // every selected file (overlapping exports are caught as duplicates below)
@@ -21599,6 +21611,18 @@ document.addEventListener('click', function(e) {
         document.getElementById('csvStatDuplicates').textContent = mergeResult.duplicateCount;
         const posEl = document.getElementById('csvStatPossible');
         if (posEl) posEl.textContent = mergeResult.possibleCount;
+        let note = document.getElementById('csvSkipNote');
+        if (!note) {
+            note = document.createElement('div'); note.id = 'csvSkipNote';
+            note.style.cssText = 'margin:-8px 0 16px;padding:10px 12px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;font-size:13px;';
+            const tbl = document.getElementById('csvPreviewTableBody').closest('div');
+            tbl.parentNode.insertBefore(note, tbl);
+        }
+        const parts = [];
+        if (importSkipped.retirement) parts.push(`<b>${importSkipped.retirement}</b> row(s) from 401k / 529 / HSA accounts (${[...importSkipped.accounts].join(', ')}) — those belong in the 401k app`);
+        if (importSkipped.cash) parts.push(`<b>${importSkipped.cash}</b> cash-sweep / money-market row(s) (SPAXX etc.)`);
+        note.innerHTML = parts.length ? 'ℹ️ Skipped automatically: ' + parts.join('; ') + '.' : '';
+        note.style.display = parts.length ? '' : 'none';
         
         // Update table
         const tbody = document.getElementById('csvPreviewTableBody');
