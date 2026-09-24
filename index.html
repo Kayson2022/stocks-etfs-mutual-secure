@@ -677,6 +677,12 @@ function safeUrl(str) {
         .card-more-menu .add-btn:hover, .card-more-menu .add-btn:focus { background:var(--bg-tertiary) !important; outline:none; }
         .stock-card:has(.card-more-menu.open), .fund-card:has(.card-more-menu.open) { overflow:visible !important; z-index:5; }
 
+        /* ── CSV import preview: rows have light backgrounds, so force dark text (was white-on-green in dark mode) ── */
+        #csvImportModal #csvPreviewSection table th,
+        #csvImportModal #csvPreviewSection table td { color:#111827 !important; }
+        #csvImportModal #csvPreviewSection table td strong { color:#111827 !important; }
+        #csvImportModal #csvPreviewSection > div:first-child div { color:inherit; }
+
         /* ── Feature panels: × close button in the top-right corner ── */
         .st-panel { position:relative; }
         .st-panel-close { position:absolute; top:10px; right:10px; z-index:5; width:38px; height:38px; border-radius:50%;
@@ -21344,20 +21350,54 @@ document.addEventListener('click', function(e) {
                 samePrice(b.price, transaction.price) && b.source !== transaction.source);
             if (dupInBatch) { transaction.status = 'duplicate'; transaction.dupNote = 'also in ' + String(dupInBatch.source || '').replace('csv-import-', ''); duplicateCount++; continue; }
 
+            const fmtE = e => `${e.tx.date} · ${+e.tx.shares} sh @ $${(+e.tx.price).toFixed(2)}`;
             hit = pool.find(e => core(e) && dayGap(e.tx.date, transaction.date) <= 3);
+            // Looser: manual entries often round shares (0.42 vs 0.4220) or use a slightly different price/date
+            const amt = x => (+x.shares || 0) * (+x.price || 0);
+            const loose = e => !e.used && e.tx.type === transaction.type && dayGap(e.tx.date, transaction.date) <= 5 && (
+                Math.abs(e.tx.shares - transaction.shares) <= Math.max(0.011, transaction.shares * 0.02) ||
+                Math.abs(amt(e.tx) - amt(transaction)) <= Math.max(1, amt(transaction) * 0.02));
+            if (!hit) hit = pool.find(loose);
             if (hit) {
                 hit.used = true;
                 transaction.status = 'possible';
-                transaction.dupNote = 'matches ' + hit.tx.date + ' entry';
+                transaction.dupNote = 'close to your entry: ' + fmtE(hit);
                 transaction.selected = false;
                 possibleCount++;
             } else {
                 transaction.status = 'new';
                 transaction.selected = true;
+                // Show the nearest existing entry so it's clear why this didn't match
+                const near = pool.filter(e => e.tx.type === transaction.type)
+                    .map(e => ({ e, g: dayGap(e.tx.date, transaction.date) }))
+                    .filter(x => x.g <= 10).sort((a, b) => a.g - b.g)[0];
+                transaction.dupNote = near ? 'nearest in app: ' + fmtE(near.e) : 'no ' + transaction.type + ' of ' + transaction.symbol + ' within 10 days in app';
+                transaction._pool = pool;
             }
             seenInBatch.push(transaction);
             merged.push(transaction);
         }
+
+        // Several small broker rows entered by hand as ONE combined entry (same symbol, type, date ±3 days)
+        const groups = {};
+        merged.filter(t => t.status === 'new').forEach(t => {
+            const k = t.symbol + '|' + t.type + '|' + t.date;
+            (groups[k] = groups[k] || []).push(t);
+        });
+        Object.values(groups).forEach(g => {
+            if (g.length < 2) return;
+            const sumSh = g.reduce((a, t) => a + t.shares, 0);
+            const pool = g[0]._pool || [];
+            const e = pool.find(x => !x.used && x.tx.type === g[0].type && dayGap(x.tx.date, g[0].date) <= 3 &&
+                Math.abs(x.tx.shares - sumSh) <= Math.max(0.011, sumSh * 0.02));
+            if (!e) return;
+            e.used = true;
+            g.forEach(t => {
+                t.status = 'possible'; t.selected = false; possibleCount++;
+                t.dupNote = `these ${g.length} rows add up to your single entry: ${e.tx.date} · ${+e.tx.shares} sh`;
+            });
+        });
+        merged.forEach(t => { delete t._pool; });
 
         return {
             newTransactions: merged,            // 'new' + 'possible' (possible start unticked)
@@ -23136,7 +23176,7 @@ window.sendSecureBackupToTelegram = async function() {
       <div class="ut-title">⇅ Import / Export</div>
       <div class="ut-grid">
         <button class="add-btn" id="exportBtn">📥 Export Data</button>
-        <label class="add-btn" for="importFile" style="cursor:pointer;">📤 Import Data</label>
+        <label class="add-btn" for="importFile" style="cursor:pointer;" title="Restores a file made with Export Data">📤 Import Export File (.json)</label>
         <input accept=".json" id="importFile" style="display:none;" type="file"/>
         <button class="add-btn" onclick="window.closeDataManager();openCSVImportModal()">📊 Import Broker CSV</button>
         <button class="add-btn" onclick="window.closeDataManager();window.openDupFinder()">🔍 Find Duplicates</button>
