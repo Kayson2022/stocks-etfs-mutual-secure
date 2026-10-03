@@ -21,7 +21,6 @@
 
 
 
-
 <!DOCTYPE html>
 
 <html lang="en">
@@ -801,6 +800,13 @@ function safeUrl(str) {
         }
         body:not(.dark-mode) .portfolio-controls.pc-floating { background:rgba(255,255,255,0.88); }
         .portfolio-controls.pc-floating.pc-under-strip { padding-top:8px; border-radius:12px; border:1px solid var(--border-color); }
+        /* Pinned bar = one compact row: search + filters only (pills / Cards-Table stay in the page) */
+        .portfolio-controls.pc-floating { background:rgba(15,23,42,0.96) !important; flex-wrap:nowrap; gap:8px !important; padding-top:6px !important; padding-bottom:6px !important; }
+        body:not(.dark-mode) .portfolio-controls.pc-floating { background:rgba(255,255,255,0.97) !important; }
+        .portfolio-controls.pc-floating .quick-pills,
+        .portfolio-controls.pc-floating .view-toggle { display:none !important; }
+        .portfolio-controls.pc-floating .search-input,
+        .portfolio-controls.pc-floating select { padding-top:7px !important; padding-bottom:7px !important; }
         .pc-filter-toggle { display:none; align-items:center; gap:4px; padding:0 12px; min-height:40px; border-radius:var(--radius-sm);
             border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); font-size:0.85rem; font-weight:700; white-space:nowrap; cursor:pointer; }
         .pc-filter-toggle .pc-dot { width:7px; height:7px; border-radius:50%; background:#f59e0b; display:none; }
@@ -23338,10 +23344,10 @@ window.sendSecureBackupToTelegram = async function() {
           fbtn.innerHTML = '<span class="pc-dot"></span>Filters ▾';
         }
       }
-      // Phones: hide while scrolling down, show again on scroll up
+      // Hide while scrolling down (so card headers stay visible), show again on scroll up
       // (stays put while the Filters panel is open or you're typing in search)
       const y = window.scrollY;
-      if (floating && isPhone()) {
+      if (floating) {
         const ae = document.activeElement;
         const busy = bar.classList.contains('pc-expanded') || (bar.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName));
         if (busy || y < lastY - 6) bar.classList.remove('pc-autohide');
