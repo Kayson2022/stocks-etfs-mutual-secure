@@ -4424,6 +4424,8 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
       <div style="margin-left:auto;display:flex;align-items:center;gap:5px;">
         <span style="font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;color:#8ba3be;">Range:</span>
         <select id="fundBenchRange" onchange="window.renderFundBenchmarkChart()" style="font-size:12px;padding:4px 10px;border-radius:7px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#e8f0fc;cursor:pointer;outline:none;">
+          <option value="1d" title="Mutual funds price once a day: last close vs the close before">1D</option>
+          <option value="5d">1W</option>
           <option value="1mo">1M</option>
           <option value="3mo">3M</option>
           <option value="6mo" selected>6M</option>
@@ -22129,7 +22131,9 @@ document.addEventListener('click', function(e) {
         const canvas  = document.getElementById('fundBenchmarkChart');
         if (!canvas || !_lastFundsData || !_lastFundsData.length) return;
 
-        const range   = document.getElementById('fundBenchRange')?.value || '6mo';
+        const rangeSel = document.getElementById('fundBenchRange')?.value || '6mo';
+        // Mutual funds have ONE price per day (no intraday), so 1D = the last two daily closes
+        const range   = rangeSel === '1d' ? '5d' : rangeSel;
         const fundSel = document.getElementById('fundBenchSelect')?.value;
         const symbol  = fundSel || _lastFundsData.find(f => {
             const s = getFundStats(f); return s.totalSharesOwned > 0.0001;
@@ -22139,9 +22143,10 @@ document.addEventListener('click', function(e) {
         const statsEl = document.getElementById('fundBenchStats');
         if (statsEl) statsEl.innerHTML = '<span style="color:#8ba3be;font-size:11px;">Fetching data...</span>';
 
-        const interval = (range === 'max' || range === '5y') ? '1mo' : (range === '1mo' ? '1d' : '1wk');
+        const interval = (range === 'max' || range === '5y') ? '1mo' : (range === '1mo' || range === '5d') ? '1d' : '1wk';
         const longRange = ['1y', '3y', '5y', 'max'].includes(range);
-        const fmtDate = ts => new Date(ts * 1000).toLocaleDateString('en-US', longRange ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' });
+        const fmtDate = ts => new Date(ts * 1000).toLocaleDateString('en-US', longRange ? { month: 'short', year: '2-digit' }
+            : (range === '5d' ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' }));
         const fetchHistory = async (sym) => {
             try {
                 const url = YQ(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`);
@@ -22150,8 +22155,9 @@ document.addEventListener('click', function(e) {
                 const j = await r.json();
                 const res = j?.chart?.result?.[0];
                 const closes = res?.indicators?.adjclose?.[0]?.adjclose || res?.indicators?.quote?.[0]?.close || [];
-                return (res?.timestamp || []).map((ts,i) => ({ ts, date: fmtDate(ts), close: closes[i] }))
+                const pts = (res?.timestamp || []).map((ts,i) => ({ ts, date: fmtDate(ts), close: closes[i] }))
                     .filter(d => d.close != null);
+                return rangeSel === '1d' ? pts.slice(-2) : pts;
             } catch(e) { console.warn('[Benchmark]', sym, e); return []; }
         };
 
