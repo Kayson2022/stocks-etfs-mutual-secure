@@ -4427,8 +4427,11 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
           <option value="1mo">1M</option>
           <option value="3mo">3M</option>
           <option value="6mo" selected>6M</option>
+          <option value="ytd">YTD</option>
           <option value="1y">1Y</option>
           <option value="3y">3Y</option>
+          <option value="5y">5Y</option>
+          <option value="max">All</option>
         </select>
       </div>
     </div>
@@ -22136,24 +22139,38 @@ document.addEventListener('click', function(e) {
         const statsEl = document.getElementById('fundBenchStats');
         if (statsEl) statsEl.innerHTML = '<span style="color:#8ba3be;font-size:11px;">Fetching data...</span>';
 
+        const interval = (range === 'max' || range === '5y') ? '1mo' : (range === '1mo' ? '1d' : '1wk');
+        const longRange = ['1y', '3y', '5y', 'max'].includes(range);
+        const fmtDate = ts => new Date(ts * 1000).toLocaleDateString('en-US', longRange ? { month: 'short', year: '2-digit' } : { month: 'short', day: 'numeric' });
         const fetchHistory = async (sym) => {
             try {
-                const url = YQ(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1wk&range=${range}`);
+                const url = YQ(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`);
                 const r = await fetch(url, { cache:'no-store' });
                 if (!r.ok) return [];
                 const j = await r.json();
                 const res = j?.chart?.result?.[0];
-                return (res?.timestamp || []).map((ts,i) => ({
-                    date:  new Date(ts*1000).toLocaleDateString('en-US',{month:'short',day:'numeric'}),
-                    close: (res?.indicators?.quote?.[0]?.close || [])[i]
-                })).filter(d => d.close != null);
+                const closes = res?.indicators?.adjclose?.[0]?.adjclose || res?.indicators?.quote?.[0]?.close || [];
+                return (res?.timestamp || []).map((ts,i) => ({ ts, date: fmtDate(ts), close: closes[i] }))
+                    .filter(d => d.close != null);
             } catch(e) { console.warn('[Benchmark]', sym, e); return []; }
         };
 
         const normalize = data => {
             if (!data.length) return [];
             const base = data[0].close;
-            return data.map(d => ({ date:d.date, value:+((d.close-base)/base*100).toFixed(2) }));
+            return data.map(d => ({ date:d.date, ts:d.ts, value:+((d.close-base)/base*100).toFixed(2) }));
+        };
+        // Line each benchmark up with the fund BY DATE (mutual funds and ETFs don't share the
+        // same weekly timestamps, and an index-based match drifted or dropped points)
+        const alignTo = (fundPts, benchRaw) => {
+            if (!fundPts.length || !benchRaw.length) return [];
+            let j = 0, base = null;
+            return fundPts.map(p => {
+                while (j + 1 < benchRaw.length && benchRaw[j + 1].ts <= p.ts + 3 * 86400) j++;
+                const c = benchRaw[j].close;
+                if (base == null) base = c;
+                return +((c - base) / base * 100).toFixed(2);
+            });
         };
 
         // Always fetch all benchmarks so toggling is instant
@@ -22181,20 +22198,22 @@ document.addEventListener('click', function(e) {
                 pointRadius: 0,
                 fill: true,
                 tension: 0.3,
-                order: 0,
+                order: -2,   // fund line on top of everything
             },
             ...['SPY','QQQ','VTI']
                 .filter(b => _activeBenchmarks.has(b))
                 .map(b => ({
                     label: NAMES[b],
-                    data: normalize(benchDataMap[b]).slice(0, labels.length).map(d=>d.value),
+                    data: alignTo(fundData, benchDataMap[b]),
                     borderColor: COLORS[b],
                     backgroundColor: 'transparent',
                     borderWidth: 2,
-                    borderDash: [5,4],
+                    // different dash patterns so S&P 500 and Total Mkt stay visible when they overlap
+                    borderDash: b === 'SPY' ? [6,4] : b === 'QQQ' ? [2,3] : [12,4,2,4],
                     pointRadius: 0,
                     fill: false,
                     tension: 0.3,
+                    order: b === 'VTI' ? -1 : 1,   // draw Total Mkt on top (it hugs the S&P line)
                 }))
         ];
 
@@ -22258,11 +22277,19 @@ document.addEventListener('click', function(e) {
                     <span style="font-size:13px;font-weight:700;color:${col};">${ret>=0?'+':''}${ret.toFixed(2)}%</span>
                 </div>`;
             };
+            const pillFromSeries = (name, series, color) => {
+                if (!series.length) return '';
+                const ret = series[series.length - 1], col = ret >= 0 ? '#34d399' : '#f87171';
+                return `<div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 12px;">
+                    <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block;"></span>
+                    <span style="font-size:11px;color:#8ba3be;">${name}</span>
+                    <span style="font-size:13px;font-weight:700;color:${col};">${ret>=0?'+':''}${ret.toFixed(2)}%</span></div>`;
+            };
             statsEl.innerHTML =
                 makeStatPill(symbol, fundData, COLORS.fund) +
-                makeStatPill('S&P 500', spyData, COLORS.SPY) +
-                makeStatPill('NASDAQ', qqqData, COLORS.QQQ) +
-                makeStatPill('Total Mkt', vtiData, COLORS.VTI);
+                pillFromSeries('S&P 500', alignTo(fundData, spyData), COLORS.SPY) +
+                pillFromSeries('NASDAQ', alignTo(fundData, qqqData), COLORS.QQQ) +
+                pillFromSeries('Total Mkt', alignTo(fundData, vtiData), COLORS.VTI);
         }
     };
 
