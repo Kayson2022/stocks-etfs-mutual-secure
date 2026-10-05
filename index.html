@@ -23836,7 +23836,7 @@ function publish() {
   // Brokerage side (Regular + Roth): cash funds for the Secure summary + a total to check against
   const brk = holdings(['Regular Brokerage', 'Roth IRA']);
   const securePlatform = h => h.platform === 'Fidelity' ? (h.accountType === 'Roth IRA' ? 'Fidelity Roth IRA' : 'Fidelity Regular Brokerage') : h.platform;
-  const cash = brk.filter(h => h.isCash && h.value > 0.5).map(h => ({ symbol: h.symbol, platform: h.platform, accountType: h.accountType, securePlatform: securePlatform(h), value: h.value }));
+  const cash = brk.filter(h => h.isCash && h.value > 0.01).map(h => ({ symbol: h.symbol, platform: h.platform, accountType: h.accountType, securePlatform: securePlatform(h), value: h.value }));
   const brokerageTotal = brk.reduce((a, h) => a + h.value, 0);
   const brokerageByPlatform = {};
   brk.forEach(h => { const k = securePlatform(h); brokerageByPlatform[k] = (brokerageByPlatform[k] || 0) + h.value; });
