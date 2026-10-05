@@ -686,6 +686,17 @@ function safeUrl(str) {
         .transaction-info .tx-total { margin-left:6px; color:var(--text-primary); opacity:0.9; }
         .transaction-info .tx-total strong { font-weight:700; }
 
+        /* ── Summary: cash box, paired count box, match check ── */
+        #portfolio-summary .summary-item-pair { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+        #portfolio-summary .summary-item-pair .summary-item-label { white-space:nowrap; }
+        @media (max-width:520px){ #portfolio-summary .summary-item-pair { gap:4px; } #portfolio-summary .summary-item-pair .summary-item-label { font-size:0.68rem !important; } }
+        #portfolio-summary .summary-cash-detail { font-size:0.68rem; color:var(--text-secondary); margin-top:3px; line-height:1.35; }
+        #portfolio-summary .summary-cash-detail a { color:inherit; text-decoration:underline; }
+        #portfolio-summary .summary-match { font-size:0.72rem; font-weight:700; padding:3px 8px; border-radius:999px; align-self:center; }
+        #portfolio-summary .summary-match.ok { color:#10b981; border:1px solid rgba(16,185,129,0.4); }
+        #portfolio-summary .summary-match.off { color:#f59e0b; border:1px solid rgba(245,158,11,0.4); }
+        #portfolio-summary .summary-match:empty { display:none; }
+
         /* ── 401(k) & 529 read-only tab ── */
         .rt-card { background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:14px; padding:16px; margin-bottom:12px; }
         .rt-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-top:10px; }
@@ -4147,6 +4158,8 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-badge">Unrealized P/L: <span class="summary-value" id="total-pl-unrealized">$0.00</span></div>
 <div class="summary-badge">Realized P/L: <span class="summary-value" id="total-pl-realized">$0.00</span></div>
 <button class="summary-toggle" id="toggle-ah-btn" type="button">🌑 Show After-Hours</button>
+<button class="summary-toggle" id="toggle-cash-btn" type="button" onclick="window.toggleIncludeCash()" title="Add your SPAXX / VMFXX cash (read from the 401k app) to Combined Total">💵 Include cash: On</button>
+<span class="summary-match" id="cash-match-check"></span>
 </div>
 </div>
 <div class="summary-grid">
@@ -4158,6 +4171,11 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-item-label">Mutual Fund Value</div>
 <div class="summary-item-value"><span class="summary-value" id="mutual-fund-total-value">$0.00</span></div>
 </div>
+<div class="summary-item" id="cash-summary-item">
+<div class="summary-item-label">💵 Cash &amp; Money Market</div>
+<div class="summary-item-value"><span class="summary-value" id="cash-total-value">—</span></div>
+<div class="summary-cash-detail" id="cash-detail"></div>
+</div>
 <div class="summary-item">
 <div class="summary-item-label">Total Contributions</div>
 <div class="summary-item-value"><span class="summary-value" id="total-contributions">$0.00</span></div>
@@ -4166,13 +4184,11 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-item-label">Total Dividends</div>
 <div class="summary-item-value"><span class="summary-value" id="total-dividends">$0.00</span></div>
 </div>
-<div class="summary-item">
-<div class="summary-item-label">Active Stocks</div>
-<div class="summary-item-value"><span class="summary-value" id="stock-count-value">0</span></div>
-</div>
-<div class="summary-item">
-<div class="summary-item-label">Active Funds</div>
-<div class="summary-item-value"><span class="summary-value" id="fund-count-value">0</span></div>
+<div class="summary-item summary-item-pair">
+<div><div class="summary-item-label">Active Stocks</div>
+<div class="summary-item-value"><span class="summary-value" id="stock-count-value">0</span></div></div>
+<div><div class="summary-item-label">Active Funds</div>
+<div class="summary-item-value"><span class="summary-value" id="fund-count-value">0</span></div></div>
 </div>
 </div>
 </div>
@@ -8924,7 +8940,40 @@ renderPortfolioSummary() {
                 }
                 
                 // 💰 Update all summary labels
-                setElement(document.getElementById('combined-total-value'), combinedMetrics.totalCurrentValue);
+                // Cash (SPAXX / VMFXX) comes READ-ONLY from the 401k app. It is added to the Combined
+                // Total display only — Coast FIRE, P/L and Sleep-at-Night keep using invested assets.
+                let _cashShown = 0;
+                {
+                    const link = window._k401Link, includeCash = localStorage.getItem('secureIncludeCash') !== '0';
+                    const cashBox = document.getElementById('cash-total-value'), cashDet = document.getElementById('cash-detail');
+                    const btn = document.getElementById('toggle-cash-btn'), chk = document.getElementById('cash-match-check');
+                    if (btn) btn.textContent = '💵 Include cash: ' + (includeCash ? 'On' : 'Off');
+                    if (!link || !link.cash) {
+                        if (cashBox) { cashBox.textContent = '—'; cashBox.className = 'summary-value'; }
+                        if (cashDet) cashDet.innerHTML = '<a href="#" onclick="event.preventDefault();window.stockTracker.switchTab(\'retire\')">Connect 401k app</a>';
+                        if (chk) chk.textContent = '';
+                    } else {
+                        const typeAll = !assetTypeTerm || assetTypeTerm === 'all';
+                        const rows = link.cash.filter(c => typeAll && window.matchesAccountFilter({ platform: c.securePlatform, accountType: c.accountType }, platformFilterTerm));
+                        const cashTotal = rows.reduce((a, c) => a + c.value, 0);
+                        if (cashBox) { cashBox.textContent = this.formatCurrency(cashTotal); cashBox.className = 'summary-value'; }
+                        if (cashDet) cashDet.textContent = rows.map(c => `${c.symbol} ${c.securePlatform.replace('Fidelity ', 'Fid. ').replace('Regular Brokerage', 'Reg')} ${this.formatCurrency(c.value).replace(/\.\d\d$/, '')}`).join(' · ');
+                        if (includeCash) _cashShown = cashTotal;
+                        // Does Secure (holdings + cash) match the 401k app's brokerage + Roth total?
+                        if (chk) {
+                            const allView = (!platformFilterTerm || platformFilterTerm === 'All Platforms') && typeAll && includeCash;
+                            if (allView && link.brokerageTotal > 0) {
+                                const diff = (combinedMetrics.totalCurrentValue + cashTotal) - link.brokerageTotal;
+                                const ok = Math.abs(diff) <= Math.max(50, link.brokerageTotal * 0.002);
+                                chk.textContent = ok ? '✓ Matches 401k app' : `≠ 401k app by ${diff > 0 ? '+' : '−'}${this.formatCurrency(Math.abs(diff))}`;
+                                chk.className = 'summary-match ' + (ok ? 'ok' : 'off');
+                                chk.title = ok ? 'Secure (holdings + cash) equals the 401k app\'s Regular Brokerage + Roth IRA total (within 0.2%)'
+                                    : 'Usually timing (prices refreshed at different moments) or a trade entered in one app but not the other';
+                            } else chk.textContent = '';
+                        }
+                    }
+                }
+                setElement(document.getElementById('combined-total-value'), combinedMetrics.totalCurrentValue + _cashShown);
                 setElement(document.getElementById('stocks-total-value'), stockMetrics.totalCurrentValue);
                 setElement(document.getElementById('mutual-fund-total-value'), fundMetrics.totalCurrentValue);
 
@@ -23733,8 +23782,9 @@ const pct = n => (n >= 0 ? '+' : '') + (n || 0).toFixed(2) + '%';
 const col = n => (n >= 0 ? 'var(--color-positive,#10b981)' : 'var(--color-negative,#ef4444)');
 
 // Same math as the 401k app: FIFO lots per symbol/account/platform; manual price wins
-function holdings() {
-  const tx = [...((pd && pd.transactions) || [])].filter(t => ACCOUNTS.includes(t.accountType))
+function holdings(accounts) {
+  accounts = accounts || ACCOUNTS;
+  const tx = [...((pd && pd.transactions) || [])].filter(t => accounts.includes(t.accountType))
     .sort((a, b) => new Date(a.date) - new Date(b.date) || (a.id - b.id));
   const lots = {}, meta = {};
   tx.forEach(t => {
@@ -23758,8 +23808,9 @@ function holdings() {
     if (c.manualPrice != null && c.manualPrice >= 0) { price = +c.manualPrice; prev = c.manualPreviousClosePrice != null ? +c.manualPreviousClosePrice : null; stamp = c.manualPriceEntryTimestamp; }
     else if (c.currentPrice > 0) { price = +c.currentPrice; prev = c.previousClosePrice != null ? +c.previousClosePrice : null; stamp = c.timestamp || c.lastUpdated; }
     else if (pd && pd.manualPrices && pd.manualPrices[symbol]) { const m = pd.manualPrices[symbol]; price = +m.manualPrice; prev = m.manualPreviousClosePrice; stamp = m.manualPriceEntryTimestamp; }
-    if (price == null) price = cost / shares;
-    out.push({ symbol, accountType, platform, name: meta[k].name, shares, cost, price, prev, stamp,
+    const isCash = /cash|money\s*market/i.test(meta[k].type || '') || /^(SPAXX|FDRXX|FZFXX|SPRXX|FCASH|CORE|SWVXX|SNVXX|SNSXX|VMFXX|VMRXX|VUSXX)$/.test(symbol);
+    if (price == null) price = isCash ? 1 : cost / shares;
+    out.push({ symbol, accountType, platform, name: meta[k].name, shares, cost, price, prev, stamp, isCash,
                value: shares * price, today: prev ? shares * (price - prev) : 0 });
   });
   return out;
@@ -23779,7 +23830,12 @@ function summary() {
 function publish() {
   if (!pd) { window._k401Link = null; return; }
   const s = summary();
-  window._k401Link = { value401k: s['401(k)'].value, value529: s['529 College Saving'].value, updatedAt, summary: s };
+  // Brokerage side (Regular + Roth): cash funds for the Secure summary + a total to check against
+  const brk = holdings(['Regular Brokerage', 'Roth IRA']);
+  const securePlatform = h => h.platform === 'Fidelity' ? (h.accountType === 'Roth IRA' ? 'Fidelity Roth IRA' : 'Fidelity Regular Brokerage') : h.platform;
+  const cash = brk.filter(h => h.isCash && h.value > 0.5).map(h => ({ symbol: h.symbol, platform: h.platform, accountType: h.accountType, securePlatform: securePlatform(h), value: h.value }));
+  const brokerageTotal = brk.reduce((a, h) => a + h.value, 0);
+  window._k401Link = { value401k: s['401(k)'].value, value529: s['529 College Saving'].value, updatedAt, summary: s, cash, brokerageTotal };
   if (window.stockTracker && window.stockTracker.currentTab === 'stocks' && typeof window.stockTracker.renderPortfolioSummary === 'function') {
     try { window.stockTracker.renderPortfolioSummary(); } catch (e) {}
   }
@@ -23858,6 +23914,11 @@ window.k401Connect = async () => {
 };
 window.k401Disconnect = async () => { if (confirm('Disconnect the 401k app from this app? (Nothing is deleted anywhere.)')) await signOut(auth); };
 window.k401RenderTab = render;
+window.toggleIncludeCash = () => {
+  const on = localStorage.getItem('secureIncludeCash') !== '0';
+  localStorage.setItem('secureIncludeCash', on ? '0' : '1');
+  if (window.stockTracker && window.stockTracker.renderPortfolioSummary) window.stockTracker.renderPortfolioSummary();
+};
 </script>
 </body>
 <script>
