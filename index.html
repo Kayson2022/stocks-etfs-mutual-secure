@@ -696,6 +696,8 @@ function safeUrl(str) {
         #portfolio-summary .summary-match.ok { color:#10b981; border:1px solid rgba(16,185,129,0.4); }
         #portfolio-summary .summary-match.off { color:#f59e0b; border:1px solid rgba(245,158,11,0.4); }
         #portfolio-summary .summary-match:empty { display:none; }
+        #portfolio-summary .summary-zoom { background:none; border:none; padding:0 2px; margin-left:2px; cursor:pointer; font-size:0.85em; opacity:0.8; }
+        #portfolio-summary .summary-zoom:hover { opacity:1; }
 
         /* ── 401(k) & 529 read-only tab ── */
         .rt-card { background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:14px; padding:16px; margin-bottom:12px; }
@@ -4172,9 +4174,9 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-item-value"><span class="summary-value" id="mutual-fund-total-value">$0.00</span></div>
 </div>
 <div class="summary-item" id="cash-summary-item">
-<div class="summary-item-label">💵 Cash &amp; Money Market</div>
+<div class="summary-item-label">💵 Cash &amp; Money Market <button type="button" class="summary-zoom" onclick="window.showCashDetails()" title="Show where the cash is" aria-label="Cash details">🔍</button></div>
 <div class="summary-item-value"><span class="summary-value" id="cash-total-value">—</span></div>
-<div class="summary-cash-detail" id="cash-detail"></div>
+<div class="summary-cash-detail" id="cash-detail" style="display:none;"></div>
 </div>
 <div class="summary-item">
 <div class="summary-item-label">Total Contributions</div>
@@ -8950,14 +8952,14 @@ renderPortfolioSummary() {
                     if (btn) btn.textContent = '💵 Include cash: ' + (includeCash ? 'On' : 'Off');
                     if (!link || !link.cash) {
                         if (cashBox) { cashBox.textContent = '—'; cashBox.className = 'summary-value'; }
-                        if (cashDet) cashDet.innerHTML = '<a href="#" onclick="event.preventDefault();window.stockTracker.switchTab(\'retire\')">Connect 401k app</a>';
+                        window._cashRowsShown = null;
                         if (chk) chk.textContent = '';
                     } else {
                         const typeAll = !assetTypeTerm || assetTypeTerm === 'all';
                         const rows = link.cash.filter(c => typeAll && window.matchesAccountFilter({ platform: c.securePlatform, accountType: c.accountType }, platformFilterTerm));
                         const cashTotal = rows.reduce((a, c) => a + c.value, 0);
                         if (cashBox) { cashBox.textContent = this.formatCurrency(cashTotal); cashBox.className = 'summary-value'; }
-                        if (cashDet) cashDet.textContent = rows.map(c => `${c.symbol} ${c.securePlatform.replace('Fidelity ', 'Fid. ').replace('Regular Brokerage', 'Reg')} ${this.formatCurrency(c.value).replace(/\.\d\d$/, '')}`).join(' · ');
+                        window._cashRowsShown = rows;   // details live in the 🔍 pop-up
                         if (includeCash) _cashShown = cashTotal;
                         // Does Secure (holdings + cash) match the 401k app's brokerage + Roth total?
                         if (chk) {
@@ -8965,10 +8967,11 @@ renderPortfolioSummary() {
                             if (allView && link.brokerageTotal > 0) {
                                 const diff = (combinedMetrics.totalCurrentValue + cashTotal) - link.brokerageTotal;
                                 const ok = Math.abs(diff) <= Math.max(50, link.brokerageTotal * 0.002);
-                                chk.textContent = ok ? '✓ Matches 401k app' : `≠ 401k app by ${diff > 0 ? '+' : '−'}${this.formatCurrency(Math.abs(diff))}`;
+                                chk.innerHTML = (ok ? '✓ Matches 401k app' : `vs 401k app: ${diff > 0 ? '+' : '−'}${this.formatCurrency(Math.abs(diff))}`) + ' <span aria-hidden="true">🔍</span>';
+                                chk.onclick = () => window.showMatchDetails();
+                                chk.style.cursor = 'pointer';
                                 chk.className = 'summary-match ' + (ok ? 'ok' : 'off');
-                                chk.title = ok ? 'Secure (holdings + cash) equals the 401k app\'s Regular Brokerage + Roth IRA total (within 0.2%)'
-                                    : 'Usually timing (prices refreshed at different moments) or a trade entered in one app but not the other';
+                                chk.title = 'Tap to compare each account with the 401k app';
                             } else chk.textContent = '';
                         }
                     }
@@ -23835,7 +23838,9 @@ function publish() {
   const securePlatform = h => h.platform === 'Fidelity' ? (h.accountType === 'Roth IRA' ? 'Fidelity Roth IRA' : 'Fidelity Regular Brokerage') : h.platform;
   const cash = brk.filter(h => h.isCash && h.value > 0.5).map(h => ({ symbol: h.symbol, platform: h.platform, accountType: h.accountType, securePlatform: securePlatform(h), value: h.value }));
   const brokerageTotal = brk.reduce((a, h) => a + h.value, 0);
-  window._k401Link = { value401k: s['401(k)'].value, value529: s['529 College Saving'].value, updatedAt, summary: s, cash, brokerageTotal };
+  const brokerageByPlatform = {};
+  brk.forEach(h => { const k = securePlatform(h); brokerageByPlatform[k] = (brokerageByPlatform[k] || 0) + h.value; });
+  window._k401Link = { value401k: s['401(k)'].value, value529: s['529 College Saving'].value, updatedAt, summary: s, cash, brokerageTotal, brokerageByPlatform };
   if (window.stockTracker && window.stockTracker.currentTab === 'stocks' && typeof window.stockTracker.renderPortfolioSummary === 'function') {
     try { window.stockTracker.renderPortfolioSummary(); } catch (e) {}
   }
@@ -23914,6 +23919,60 @@ window.k401Connect = async () => {
 };
 window.k401Disconnect = async () => { if (confirm('Disconnect the 401k app from this app? (Nothing is deleted anywhere.)')) await signOut(auth); };
 window.k401RenderTab = render;
+// ── 🔍 pop-ups for the summary ──
+function popup(title, html) {
+  let ov = document.getElementById('sumPopup');
+  if (!ov) {
+    ov = document.createElement('div'); ov.id = 'sumPopup'; ov.className = 'dbm-overlay';
+    ov.addEventListener('click', e => { if (e.target === ov) ov.style.display = 'none'; });
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `<div class="dbm-box" style="max-width:560px;"><div class="dbm-head"><h3>${title}</h3>
+    <button type="button" class="dbm-close" aria-label="Close" onclick="document.getElementById('sumPopup').style.display='none'">&times;</button></div>${html}</div>`;
+  ov.style.display = 'flex';
+}
+const fmt$ = n => (n < 0 ? '−$' : '$') + Math.abs(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const tbl = (head, rows) => `<div style="overflow-x:auto;"><table class="rt-table"><thead><tr>${head.map((h, i) => `<th class="${i ? 'r' : ''}">${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+
+window.showCashDetails = () => {
+  const rows = window._cashRowsShown;
+  if (!rows) { popup('💵 Cash &amp; Money Market', `<p style="font-size:0.88rem;">Cash is read from your 401k app. Connect it first in the <b>🏦 401(k) &amp; 529</b> tab.</p>
+    <button class="rt-btn rt-primary" onclick="document.getElementById('sumPopup').style.display='none';window.stockTracker.switchTab('retire')">Go to 401(k) &amp; 529</button>`); return; }
+  const total = rows.reduce((a, c) => a + c.value, 0);
+  popup('💵 Cash &amp; Money Market', tbl(['Account', 'Fund', 'Value'],
+    rows.slice().sort((a, b) => b.value - a.value).map(c => `<tr><td>${esc(c.securePlatform)}</td><td class="r">${esc(c.symbol)}</td><td class="r">${fmt$(c.value)}</td></tr>`).join('') +
+    `<tr><td><b>Total</b></td><td></td><td class="r"><b>${fmt$(total)}</b></td></tr>`) +
+    `<p style="font-size:0.78rem;color:var(--text-secondary);margin-top:10px;">Read-only from the 401k app. Not counted in Coast FIRE or P/L.</p>`);
+};
+
+// Which account explains the difference between Secure and the 401k app?
+window.showMatchDetails = () => {
+  const link = window._k401Link, tr = window.stockTracker;
+  if (!link || !tr) return;
+  const sec = {};
+  [...(tr.stocks || []), ...(tr.mutualFunds || [])].forEach(it => {
+    const byP = {};
+    (it.transactions || []).forEach(t => { const p = t.platform || 'Uncategorized'; (byP[p] = byP[p] || []).push(t); });
+    Object.entries(byP).forEach(([p, txs]) => {
+      const st = tr.calculateTransactionStats(txs, it.price);
+      if (st && st.totalSharesOwned > 0.0001) sec[p] = (sec[p] || 0) + (st.currentValue || 0);
+    });
+  });
+  (link.cash || []).forEach(c => { sec[c.securePlatform] = (sec[c.securePlatform] || 0) + c.value; });
+  const k4 = link.brokerageByPlatform || {};
+  const names = [...new Set([...Object.keys(sec), ...Object.keys(k4)])].filter(n => Math.abs(sec[n] || 0) > 0.5 || Math.abs(k4[n] || 0) > 0.5).sort((a, b) => Math.abs((sec[b] || 0) - (k4[b] || 0)) - Math.abs((sec[a] || 0) - (k4[a] || 0)));
+  let tS = 0, tK = 0;
+  const rows = names.map(n => {
+    const a = sec[n] || 0, b = k4[n] || 0, d = a - b; tS += a; tK += b;
+    const flag = Math.abs(d) > Math.max(25, b * 0.002);
+    return `<tr><td>${esc(n)}</td><td class="r">${fmt$(a)}</td><td class="r">${fmt$(b)}</td><td class="r" style="color:${flag ? '#f59e0b' : 'var(--text-secondary)'};font-weight:${flag ? 700 : 400};">${d >= 0 ? '+' : ''}${fmt$(d)}</td></tr>`;
+  }).join('');
+  popup('🔍 Secure vs 401k app', `<p style="font-size:0.84rem;margin:0 0 10px;">Both apps' <b>Regular Brokerage + Roth IRA</b> value (holdings + cash), account by account. Amber = the account where they disagree.</p>` +
+    tbl(['Account', 'Secure', '401k app', 'Difference'], rows +
+      `<tr><td><b>Total</b></td><td class="r"><b>${fmt$(tS)}</b></td><td class="r"><b>${fmt$(tK)}</b></td><td class="r"><b>${tS - tK >= 0 ? '+' : ''}${fmt$(tS - tK)}</b></td></tr>`) +
+    `<p style="font-size:0.78rem;color:var(--text-secondary);margin-top:10px;">Small gaps are usually <b>timing</b> — each app refreshes prices at different moments. A big gap in one account usually means a trade was entered in one app but not the other: open that account in both apps and compare share counts.</p>`);
+};
+
 window.toggleIncludeCash = () => {
   const on = localStorage.getItem('secureIncludeCash') !== '0';
   localStorage.setItem('secureIncludeCash', on ? '0' : '1');
