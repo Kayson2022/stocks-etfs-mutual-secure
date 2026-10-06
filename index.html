@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v2: rejects history files) - 2026-10-05 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v4: import can tick only rows that close Compare gaps) - 2026-10-05 -->
 
 <html lang="en">
 <head>
@@ -21845,6 +21845,7 @@ document.addEventListener('click', function(e) {
         if (importSkipped.cash) parts.push(`<b>${importSkipped.cash}</b> cash-sweep / money-market row(s) (SPAXX etc.)`);
         note.innerHTML = parts.length ? 'ℹ️ Skipped automatically: ' + parts.join('; ') + '.' : '';
         note.style.display = parts.length ? '' : 'none';
+        renderFitPanel(note);
         
         // Update table
         const tbody = document.getElementById('csvPreviewTableBody');
@@ -21883,6 +21884,71 @@ document.addEventListener('click', function(e) {
         });
         updateImportButton();
     }
+    // ── Tick only the rows that close the gaps found by 🧮 Compare with broker positions ──
+    // Positions that already match keep all their rows unticked (importing them would double-count).
+    // For each position that differs, the rows whose shares add up to the missing amount are ticked:
+    // NEW rows first, POSSIBLE DUP rows only if NEW rows alone can't close it.
+    let fitReport = null;
+    function loadGaps() { try { return JSON.parse(localStorage.getItem('posCmpGaps') || 'null'); } catch (e) { return null; } }
+    function bestSubset(items, gap, tol) {
+        const n = items.length; if (!n) return null;
+        const total = items.reduce((a, x) => a + x.s, 0);
+        if (Math.abs(total - gap) <= tol) return items.slice();
+        if (n > 22) return null;
+        let best = null, sum = 0, cnt = 0; const on = new Array(n).fill(false);
+        for (let g = 1; g < (1 << n); g++) {            // Gray code: flip one row per step
+            const bit = 31 - Math.clz32(g & -g);
+            on[bit] = !on[bit]; sum += on[bit] ? items[bit].s : -items[bit].s; cnt += on[bit] ? 1 : -1;
+            const d = Math.abs(sum - gap);
+            if (d <= tol && (!best || d < best.d - 1e-9 || (Math.abs(d - best.d) <= 1e-9 && cnt < best.cnt))) best = { d, cnt, mask: on.slice() };
+        }
+        return best ? items.filter((x, i) => best.mask[i]) : null;
+    }
+    function fitToGaps() {
+        const G = loadGaps(); if (!G || !mergeResult) return;
+        const cand = mergeResult.newTransactions.filter(t => t.status === 'new' || t.status === 'possible');
+        const groups = {};
+        cand.forEach(t => {
+            if (!G.covered.includes(t.platform)) return;          // other brokers: leave as they are
+            t.selected = false;
+            const k = t.symbol + '|' + t.platform, g = G.gaps[k];
+            if (g == null || Math.abs(g) < 0.001 || (t.type !== 'buy' && t.type !== 'sell')) return;
+            (groups[k] = groups[k] || []).push({ t, s: (t.type === 'sell' ? -1 : 1) * (+t.shares || 0) });
+        });
+        fitReport = Object.entries(G.gaps).filter(([, g]) => Math.abs(g) >= 0.001).map(([k, g]) => {
+            const [sym, plat] = k.split('|'), items = groups[k] || [], tol = Math.max(0.002, Math.abs(g) * 0.0005);
+            const pick = bestSubset(items.filter(x => x.t.status === 'new'), g, tol) || bestSubset(items, g, tol);
+            if (pick) pick.forEach(x => { x.t.selected = true; });
+            return { sym, plat, gap: g, n: items.length, picked: pick ? pick.length : 0, sum: pick ? pick.reduce((a, x) => a + x.s, 0) : 0, ok: !!pick };
+        }).sort((a, b) => (a.ok - b.ok) || Math.abs(b.gap) - Math.abs(a.gap));
+        displayPreview();
+    }
+    window._csvFitToGaps = fitToGaps;
+    function renderFitPanel(anchor) {
+        let p = document.getElementById('csvFitPanel');
+        if (!p) { p = document.createElement('div'); p.id = 'csvFitPanel'; anchor.parentNode.insertBefore(p, anchor.nextSibling); }
+        const G = loadGaps();
+        if (!G) { p.style.display = 'none'; return; }
+        p.style.cssText = 'margin:0 0 16px;padding:12px;border-radius:8px;background:#f0fdf4;border:1px solid #86efac;color:#14532d;font-size:13px;';
+        const nGaps = Object.values(G.gaps).filter(g => Math.abs(g) >= 0.001).length;
+        const when = new Date(G.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const f = x => (+x).toLocaleString('en-US', { maximumFractionDigits: 4 });
+        let html = `🎯 Your last <b>Compare with broker positions</b> (${when}, ${G.covered.join(' + ')}) found <b>${nGaps}</b> position(s) that differ.
+            <br><button type="button" class="add-btn" style="margin-top:8px;" onclick="window._csvFitToGaps()">Tick only the rows that close those gaps</button>
+            <div style="font-size:12px;margin-top:6px;">Rows of positions that already match are unticked, so they can't be counted twice. Run Compare again after importing.</div>`;
+        if (fitReport) {
+            const ok = fitReport.filter(r => r.ok).length;
+            html += `<div style="margin-top:10px;font-weight:700;">${ok} of ${fitReport.length} gaps closed by the ticked rows.</div>
+              <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;"><thead><tr>
+              <th style="text-align:left;padding:4px;">Symbol</th><th style="text-align:left;padding:4px;">Account</th><th style="text-align:right;padding:4px;">Missing</th><th style="text-align:right;padding:4px;">Ticked</th><th style="text-align:left;padding:4px;">Result</th></tr></thead><tbody>` +
+              fitReport.map(r => `<tr><td style="padding:4px;"><b>${r.sym}</b></td><td style="padding:4px;">${r.plat}</td><td style="padding:4px;text-align:right;">${r.gap > 0 ? '+' : ''}${f(r.gap)} sh</td>
+                <td style="padding:4px;text-align:right;">${r.picked} row(s), ${r.sum > 0 ? '+' : ''}${f(r.sum)} sh</td>
+                <td style="padding:4px;">${r.ok ? '✅ closes the gap' : (r.n ? '⚠️ no combination of rows matches — check this one by hand' : '⚠️ no rows for it in this file — the trade is outside the file\'s dates, or entered differently')}</td></tr>`).join('') +
+              '</tbody></table></div>';
+        }
+        p.innerHTML = html; p.style.display = '';
+    }
+
     window._csvToggleRow = function (i, on) {
         const t = parsedTransactions[i];
         if (t) t.selected = on;
@@ -24115,9 +24181,14 @@ window.toggleIncludeCash = () => {
       .filter(r => Math.abs(r.a) > 0.0001 || Math.abs(r.b) > 0.0001)
       .sort((x, y) => Math.abs(y.d) - Math.abs(x.d) || x.sym.localeCompare(y.sym));
     const bad = rows.filter(r => Math.abs(r.d) >= 0.001);
+    // Remember the gaps (broker − app) so Import Broker CSV can tick only the rows that close them
+    try {
+      const gaps = {}; rows.forEach(r => { gaps[r.sym + '|' + r.plat] = +(r.b - r.a).toFixed(6); });
+      localStorage.setItem('posCmpGaps', JSON.stringify({ at: Date.now(), covered: res.covered, gaps }));
+    } catch (e) {}
     const box = document.getElementById('posCmpResult');
     const tr = r => `<tr><td><b>${esc(r.sym)}</b></td><td>${esc(r.plat)}</td><td class="r">${fmt(r.b)}</td><td class="r">${fmt(r.a)}</td>
-      <td class="r" style="color:${Math.abs(r.d) >= 0.001 ? '#f59e0b' : 'var(--text-secondary)'};font-weight:${Math.abs(r.d) >= 0.001 ? 700 : 400};">${r.d > 0 ? '+' : ''}${fmt(r.d)}</td></tr>`;
+      <td class="r" style="color:${Math.abs(r.d) >= 0.001 ? '#f59e0b' : 'var(--text-secondary)'};font-weight:${Math.abs(r.d) >= 0.001 ? 700 : 400};">${Math.abs(r.d) < 0.001 ? '0' : (r.d > 0 ? '+' : '') + fmt(r.d)}</td></tr>`;
     const showAll = document.getElementById('posCmpAll') && document.getElementById('posCmpAll').checked;
     box.innerHTML = `<p style="font-size:0.86rem;margin:10px 0;">${bad.length ? `⚠️ <b>${bad.length}</b> of ${rows.length} positions differ.` : `✅ All ${rows.length} positions match.`}
         ${res.skipped.length ? `<br><span style="color:var(--text-secondary);font-size:0.8rem;">Skipped accounts: ${esc(res.skipped.join(', '))}</span>` : ''}</p>
