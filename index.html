@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: cash threshold $0.01 (Roth SPAXX fix) - 2026-10-05 -->
+<!-- build: cash + vs-401k thresholds $0.01 (Roth SPAXX fix) - 2026-10-05 -->
 
 <html lang="en">
 <head>
@@ -23961,7 +23961,7 @@ window.showMatchDetails = () => {
   });
   (link.cash || []).forEach(c => { sec[c.securePlatform] = (sec[c.securePlatform] || 0) + c.value; });
   const k4 = link.brokerageByPlatform || {};
-  const names = [...new Set([...Object.keys(sec), ...Object.keys(k4)])].filter(n => Math.abs(sec[n] || 0) > 0.5 || Math.abs(k4[n] || 0) > 0.5).sort((a, b) => Math.abs((sec[b] || 0) - (k4[b] || 0)) - Math.abs((sec[a] || 0) - (k4[a] || 0)));
+  const names = [...new Set([...Object.keys(sec), ...Object.keys(k4)])].filter(n => Math.abs(sec[n] || 0) > 0.01 || Math.abs(k4[n] || 0) > 0.01).sort((a, b) => Math.abs((sec[b] || 0) - (k4[b] || 0)) - Math.abs((sec[a] || 0) - (k4[a] || 0)));
   let tS = 0, tK = 0;
   const rows = names.map(n => {
     const a = sec[n] || 0, b = k4[n] || 0, d = a - b; tS += a; tK += b;
