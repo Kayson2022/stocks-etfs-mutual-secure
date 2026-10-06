@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions - 2026-10-05 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v2: rejects history files) - 2026-10-05 -->
 
 <html lang="en">
 <head>
@@ -24084,8 +24084,11 @@ window.toggleIncludeCash = () => {
     const hi = rows.findIndex(r => r.some(c => /^symbol$/i.test(c)) && r.some(c => /quantity|^qty|shares/i.test(c)));
     if (hi < 0) throw new Error('Could not find a header row with "Symbol" and "Quantity" (or "Shares") columns. Download the Positions / Holdings file, not the transaction history.');
     const h = rows[hi];
+    if (h.some(c => /^(run date|trade date|date)$/i.test(c)) && h.some(c => /^action$/i.test(c)))
+      throw new Error('This is a transaction history (Activity) file — it lists trades by date. This check needs the Positions file, which lists what you hold today. On Fidelity: Accounts & Trade → Portfolio → Positions → Download.');
     const iSym = h.findIndex(c => /^symbol$/i.test(c));
-    const iQty = h.findIndex(c => /quantity|^qty|shares/i.test(c));
+    const iQtyExact = h.findIndex(c => /^(quantity|qty|shares|qty \(quantity\))$/i.test(c));
+    const iQty = iQtyExact >= 0 ? iQtyExact : h.findIndex(c => /quantity|^qty|shares/i.test(c) && !/exchange/i.test(c));
     const iAcct = h.findIndex(c => /^account name$/i.test(c)) >= 0 ? h.findIndex(c => /^account name$/i.test(c)) : h.findIndex(c => /^account( type)?$/i.test(c));
     const out = {}, skipped = new Set();
     rows.slice(hi + 1).forEach(r => {
@@ -24099,6 +24102,8 @@ window.toggleIncludeCash = () => {
       }
       const k = sym + '|' + plat; out[k] = (out[k] || 0) + q;
     });
+    if (!Object.keys(out).length)
+      throw new Error(`No positions could be read from this file (columns used: Symbol = "${h[iSym]}", Quantity = "${h[iQty] || 'not found'}"). Make sure it is the broker's Positions / Holdings download.`);
     return { out, skipped: [...skipped], covered: choice === '__fidelity__' ? ['Fidelity Regular Brokerage', 'Fidelity Roth IRA'] : [choice] };
   }
 
