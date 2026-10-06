@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v6: close-the-gaps also finds entries saved with wrong shares) - 2026-10-05 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v7: close-the-gaps handles recurring buys, Copy list) - 2026-10-05 -->
 
 <html lang="en">
 <head>
@@ -21905,6 +21905,20 @@ document.addEventListener('click', function(e) {
         }
         return best ? items.filter((x, i) => best.mask[i]) : null;
     }
+    function dayOf(d) { const t = String(d || ''); if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t; const x = new Date(t); return isNaN(x) ? t.slice(0, 10) : x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
+    function appEntries(sym, plat) {
+        const tr = window.stockTracker, out = [];
+        if (!tr) return out;
+        [...(tr.stocks || []), ...(tr.mutualFunds || [])].filter(it => String(it.symbol || '').toUpperCase() === sym)
+            .forEach(it => (it.transactions || []).forEach(t => { if ((t.platform || '') === plat && (t.type === 'buy' || t.type === 'sell')) out.push({ day: dayOf(t.date), type: t.type, shares: +t.shares || 0, price: +t.price || 0 }); }));
+        return out.sort((a, b) => a.day.localeCompare(b.day));
+    }
+    window._csvCopyGap = function (i) {
+        const r = fitReport && fitReport[i]; if (!r) return;
+        const done = () => alert('Copied the ' + r.sym + ' rows. Paste them into the chat.');
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(r.copy).then(done, () => window.prompt('Copy this text:', r.copy));
+        else window.prompt('Copy this text:', r.copy);
+    };
     function fitToGaps() {
         const G = loadGaps(); if (!G || !mergeResult) return;
         const cand = mergeResult.newTransactions.filter(t => t.status === 'new' || t.status === 'possible');
@@ -21932,8 +21946,28 @@ document.addEventListener('click', function(e) {
                     if (extra) { edit = { from: near, to: x.t }; pick = extra; break; }
                 }
             }
+            // Recurring buys (e.g. a weekly auto-invest) give too many rows to try every combination.
+            // The missing ones are usually the newest: rows dated after your latest entry for this
+            // position, or the most recent run of NEW rows.
+            const appTx = appEntries(sym, plat);
+            const lastDay = appTx.reduce((m, t) => t.day > m ? t.day : m, '');
+            let how = '';
+            if (!pick && !edit) {
+                const newRows = items.filter(x => x.t.status === 'new');
+                const after = newRows.filter(x => dayOf(x.t.date) > lastDay);
+                if (after.length && Math.abs(after.reduce((a, x) => a + x.s, 0) - g) <= tol) { pick = after; how = `rows dated after your latest entry (${lastDay})`; }
+                if (!pick && after.length && after.length <= 22) { pick = bestSubset(after, g, tol); if (pick) how = `rows dated after your latest entry (${lastDay})`; }
+                if (!pick) {
+                    const newest = newRows.slice().sort((a, b) => dayOf(b.t.date).localeCompare(dayOf(a.t.date)));
+                    let run = 0;
+                    for (let i = 0; i < newest.length; i++) { run += newest[i].s; if (Math.abs(run - g) <= tol) { pick = newest.slice(0, i + 1); how = `the ${i + 1} most recent NEW row(s)`; break; } }
+                }
+            }
             if (pick) pick.forEach(x => { x.t.selected = true; });
-            return { sym, plat, gap: g, n: items.length, picked: pick ? pick.length : 0, sum: pick ? pick.reduce((a, x) => a + x.s, 0) : 0, ok: !!pick, edit };
+            const copy = `${sym} · ${plat} · missing ${+g.toFixed(6)} sh (broker − app)\n\nROWS IN THE FILE (status, date, type, shares, price):\n` +
+                items.slice().sort((a, b) => dayOf(a.t.date).localeCompare(dayOf(b.t.date))).map(x => `${x.t.status.toUpperCase()}\t${dayOf(x.t.date)}\t${x.t.type}\t${x.t.shares}\t${x.t.price}${x.t._near ? `\t(close to app entry ${x.t._near.date} ${x.t._near.shares} @ ${x.t._near.price})` : ''}`).join('\n') +
+                `\n\nENTRIES IN THE APP (date, type, shares, price):\n` + appTx.map(t => `${t.day}\t${t.type}\t${t.shares}\t${t.price}`).join('\n');
+            return { sym, plat, gap: g, n: items.length, picked: pick ? pick.length : 0, sum: pick ? pick.reduce((a, x) => a + x.s, 0) : 0, ok: !!pick, edit, how, copy };
         }).sort((a, b) => (a.ok - b.ok) || Math.abs(b.gap) - Math.abs(a.gap));
         displayPreview();
     }
@@ -21957,7 +21991,8 @@ document.addEventListener('click', function(e) {
               <th style="text-align:left;padding:4px;">Symbol</th><th style="text-align:left;padding:4px;">Account</th><th style="text-align:right;padding:4px;">Missing</th><th style="text-align:right;padding:4px;">Ticked</th><th style="text-align:left;padding:4px;">Result</th></tr></thead><tbody>` +
               fitReport.map(r => `<tr><td style="padding:4px;"><b>${r.sym}</b></td><td style="padding:4px;">${r.plat}</td><td style="padding:4px;text-align:right;">${r.gap > 0 ? '+' : ''}${f(r.gap)} sh</td>
                 <td style="padding:4px;text-align:right;">${r.picked} row(s), ${r.sum > 0 ? '+' : ''}${f(r.sum)} sh</td>
-                <td style="padding:4px;">${r.edit ? `✏️ edit your entry <b>${(r.edit.from.type || '').toUpperCase()} ${f(r.edit.from.shares)} sh @ $${(+r.edit.from.price).toFixed(2)} on ${r.edit.from.date}</b> to <b>${f(r.edit.to.shares)} sh @ $${(+r.edit.to.price).toFixed(2)} on ${r.edit.to.date}</b>${r.picked ? ', and import the ticked row(s)' : ''} — this row is not imported` : r.ok ? '✅ closes the gap' : (r.n ? '⚠️ no combination of rows matches — check this one by hand' : '⚠️ no rows for it in this file — the trade is outside the file\'s dates, or entered differently')}</td></tr>`).join('') +
+                <td style="padding:4px;">${r.how && r.ok ? `✅ closes the gap — ${r.how}; check the dates look right` : ''}${r.how && r.ok ? '' : r.edit ? `✏️ edit your entry <b>${(r.edit.from.type || '').toUpperCase()} ${f(r.edit.from.shares)} sh @ $${(+r.edit.from.price).toFixed(2)} on ${r.edit.from.date}</b> to <b>${f(r.edit.to.shares)} sh @ $${(+r.edit.to.price).toFixed(2)} on ${r.edit.to.date}</b>${r.picked ? ', and import the ticked row(s)' : ''} — this row is not imported` : r.ok ? '✅ closes the gap' : (r.n ? '⚠️ no combination of rows matches — check this one by hand' : '⚠️ no rows for it in this file — the trade is outside the file\'s dates, or entered differently')}
+                ${r.ok && !r.how && !r.edit ? '' : `<button type="button" onclick="window._csvCopyGap(${fitReport.indexOf(r)})" style="margin-left:6px;padding:2px 8px;border:1px solid #15803d;border-radius:6px;background:#ffffff;color:#15803d;font-size:11px;cursor:pointer;">📋 Copy list</button>`}</td></tr>`).join('') +
               '</tbody></table></div>';
         }
         p.innerHTML = html; p.style.display = '';
