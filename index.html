@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v4: import can tick only rows that close Compare gaps) - 2026-10-05 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v5: import can tick only rows that close Compare gaps, visible button) - 2026-10-05 -->
 
 <html lang="en">
 <head>
@@ -21934,7 +21934,7 @@ document.addEventListener('click', function(e) {
         const when = new Date(G.at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
         const f = x => (+x).toLocaleString('en-US', { maximumFractionDigits: 4 });
         let html = `🎯 Your last <b>Compare with broker positions</b> (${when}, ${G.covered.join(' + ')}) found <b>${nGaps}</b> position(s) that differ.
-            <br><button type="button" class="add-btn" style="margin-top:8px;" onclick="window._csvFitToGaps()">Tick only the rows that close those gaps</button>
+            <br><button type="button" onclick="window._csvFitToGaps()" style="margin-top:8px;padding:10px 16px;border:none;border-radius:8px;background:#15803d;color:#ffffff;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,0.2);">🎯 Tick only the rows that close those gaps</button>
             <div style="font-size:12px;margin-top:6px;">Rows of positions that already match are unticked, so they can't be counted twice. Run Compare again after importing.</div>`;
         if (fitReport) {
             const ok = fitReport.filter(r => r.ok).length;
