@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v5: import can tick only rows that close Compare gaps, visible button) - 2026-10-05 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v6: close-the-gaps also finds entries saved with wrong shares) - 2026-10-05 -->
 
 <html lang="en">
 <head>
@@ -21543,6 +21543,7 @@ document.addEventListener('click', function(e) {
             if (hit) {
                 hit.used = true;
                 transaction.status = 'possible';
+                transaction._near = hit.tx;      // the app entry it resembles (used by "close the gaps")
                 transaction.dupNote = 'close to your entry: ' + fmtE(hit);
                 transaction.selected = false;
                 possibleCount++;
@@ -21917,9 +21918,22 @@ document.addEventListener('click', function(e) {
         });
         fitReport = Object.entries(G.gaps).filter(([, g]) => Math.abs(g) >= 0.001).map(([k, g]) => {
             const [sym, plat] = k.split('|'), items = groups[k] || [], tol = Math.max(0.002, Math.abs(g) * 0.0005);
-            const pick = bestSubset(items.filter(x => x.t.status === 'new'), g, tol) || bestSubset(items, g, tol);
+            let pick = bestSubset(items.filter(x => x.t.status === 'new'), g, tol) || bestSubset(items, g, tol);
+            // Not closable by adding rows? Then one of your entries was probably saved with the wrong shares
+            // (e.g. a broker's split order: the small piece of one day copied onto the next day).
+            // A POSSIBLE DUP row whose shares differ from the entry it resembles by the missing amount
+            // (plus, if needed, some NEW rows) means: edit that entry to the broker's numbers.
+            let edit = null;
+            if (!pick) {
+                for (const x of items.filter(x => x.t.status === 'possible' && x.t._near)) {
+                    const near = x.t._near, delta = x.s - (x.t.type === 'sell' ? -1 : 1) * (+near.shares || 0);
+                    const rest = g - delta;
+                    const extra = Math.abs(rest) <= tol ? [] : bestSubset(items.filter(y => y !== x && y.t.status === 'new'), rest, tol);
+                    if (extra) { edit = { from: near, to: x.t }; pick = extra; break; }
+                }
+            }
             if (pick) pick.forEach(x => { x.t.selected = true; });
-            return { sym, plat, gap: g, n: items.length, picked: pick ? pick.length : 0, sum: pick ? pick.reduce((a, x) => a + x.s, 0) : 0, ok: !!pick };
+            return { sym, plat, gap: g, n: items.length, picked: pick ? pick.length : 0, sum: pick ? pick.reduce((a, x) => a + x.s, 0) : 0, ok: !!pick, edit };
         }).sort((a, b) => (a.ok - b.ok) || Math.abs(b.gap) - Math.abs(a.gap));
         displayPreview();
     }
@@ -21937,13 +21951,13 @@ document.addEventListener('click', function(e) {
             <br><button type="button" onclick="window._csvFitToGaps()" style="margin-top:8px;padding:10px 16px;border:none;border-radius:8px;background:#15803d;color:#ffffff;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,0.2);">🎯 Tick only the rows that close those gaps</button>
             <div style="font-size:12px;margin-top:6px;">Rows of positions that already match are unticked, so they can't be counted twice. Run Compare again after importing.</div>`;
         if (fitReport) {
-            const ok = fitReport.filter(r => r.ok).length;
-            html += `<div style="margin-top:10px;font-weight:700;">${ok} of ${fitReport.length} gaps closed by the ticked rows.</div>
+            const ok = fitReport.filter(r => r.ok && !r.edit).length, ed = fitReport.filter(r => r.edit).length;
+            html += `<div style="margin-top:10px;font-weight:700;">${ok} of ${fitReport.length} gaps closed by the ticked rows${ed ? `; ${ed} need one entry edited (✏️ below — do that in the stock's transaction list)` : ''}.</div>
               <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;"><thead><tr>
               <th style="text-align:left;padding:4px;">Symbol</th><th style="text-align:left;padding:4px;">Account</th><th style="text-align:right;padding:4px;">Missing</th><th style="text-align:right;padding:4px;">Ticked</th><th style="text-align:left;padding:4px;">Result</th></tr></thead><tbody>` +
               fitReport.map(r => `<tr><td style="padding:4px;"><b>${r.sym}</b></td><td style="padding:4px;">${r.plat}</td><td style="padding:4px;text-align:right;">${r.gap > 0 ? '+' : ''}${f(r.gap)} sh</td>
                 <td style="padding:4px;text-align:right;">${r.picked} row(s), ${r.sum > 0 ? '+' : ''}${f(r.sum)} sh</td>
-                <td style="padding:4px;">${r.ok ? '✅ closes the gap' : (r.n ? '⚠️ no combination of rows matches — check this one by hand' : '⚠️ no rows for it in this file — the trade is outside the file\'s dates, or entered differently')}</td></tr>`).join('') +
+                <td style="padding:4px;">${r.edit ? `✏️ edit your entry <b>${(r.edit.from.type || '').toUpperCase()} ${f(r.edit.from.shares)} sh @ $${(+r.edit.from.price).toFixed(2)} on ${r.edit.from.date}</b> to <b>${f(r.edit.to.shares)} sh @ $${(+r.edit.to.price).toFixed(2)} on ${r.edit.to.date}</b>${r.picked ? ', and import the ticked row(s)' : ''} — this row is not imported` : r.ok ? '✅ closes the gap' : (r.n ? '⚠️ no combination of rows matches — check this one by hand' : '⚠️ no rows for it in this file — the trade is outside the file\'s dates, or entered differently')}</td></tr>`).join('') +
               '</tbody></table></div>';
         }
         p.innerHTML = html; p.style.display = '';
