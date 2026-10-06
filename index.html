@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: cash + vs-401k thresholds $0.01 (Roth SPAXX fix) - 2026-10-05 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions - 2026-10-05 -->
 
 <html lang="en">
 <head>
@@ -8493,6 +8493,60 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     }
 
                     this.priceAlerts = data.priceAlerts || [];
+
+                    // BUY/SELL capitalization fix (2026-10-05). The share math only counts lowercase
+                    // 'buy'/'sell', so "BUY"/"SELL" (older imports, 401k-style rows) were silently ignored
+                    // while the CSV import's duplicate check (case-insensitive) treated them as present.
+                    // Convert each one unless it duplicates a trade that is already counted (same type,
+                    // day, shares, price) — those stay as they are and are reported for Find Duplicates.
+                    try {
+                        const txType = t => {
+                            const raw = (t.type != null && t.type !== '') ? t.type : (t.transactionType || t.action);
+                            const x = String(raw || '').trim().toLowerCase();
+                            if (x === 'buy' || x === 'bought' || x === 'purchase') return 'buy';
+                            if (x === 'sell' || x === 'sold' || x === 'sale') return 'sell';
+                            return null;
+                        };
+                        const day = d => { const x = new Date(d); return isNaN(x) ? String(d || '').slice(0, 10) : x.getFullYear() + '-' + (x.getMonth() + 1) + '-' + x.getDate(); };
+                        const sameTrade = (a, b, ty) => a.type === ty && day(a.date) === day(b.date) &&
+                            Math.abs((+a.shares || 0) - (+b.shares || 0)) < 0.001 &&
+                            Math.abs((+a.price || 0) - (+b.price || 0)) <= Math.max(0.02, Math.max(+a.price || 0, +b.price || 0) * 0.005);
+                        const plan = [];
+                        [...this.stocks, ...this.mutualFunds].forEach(item => {
+                            const txs = item.transactions || [];
+                            txs.forEach(t => { const n = txType(t); if (n && t.type !== n) plan.push({ item, t, n }); });
+                        });
+                        if (plan.length && !window._demoModeActive) {
+                            // Decide first without changing anything (a converted row counts for the rows after it)
+                            const convert = [], leftAsDup = [], willCount = new Set();
+                            plan.forEach(p => {
+                                const counted = (p.item.transactions || []).filter(x => x !== p.t &&
+                                    (x.type === 'buy' || x.type === 'sell' || willCount.has(x)));
+                                const asCounted = x => willCount.has(x) ? Object.assign({}, x, { type: plan.find(q => q.t === x).n }) : x;
+                                if (counted.some(x => sameTrade(asCounted(x), p.t, p.n))) leftAsDup.push(p);
+                                else { convert.push(p); willCount.add(p.t); }
+                            });
+                            const fixed = {};
+                            if (convert.length) {
+                                await this.createSnapshot('Before counting ' + convert.length + ' BUY/SELL row(s) saved in capitals');
+                                convert.forEach(p => {
+                                    p.t.type = p.n;
+                                    const k = p.item.symbol + ' · ' + (p.t.platform || 'no platform');
+                                    fixed[k] = (fixed[k] || 0) + (p.n === 'buy' ? 1 : -1) * (+p.t.shares || 0);
+                                });
+                                migrationNeeded = true;
+                            }
+                            const nFixed = convert.length;
+                            window._typeFixReport = { fixed, leftAsDuplicates: leftAsDup.map(p => ({ symbol: p.item.symbol, platform: p.t.platform, type: p.t.type, shares: p.t.shares, price: p.t.price, date: p.t.date })) };
+                            console.log('[TypeFix] counted now:', fixed, '| left as likely duplicates:', window._typeFixReport.leftAsDuplicates);
+                            const lines = Object.entries(fixed).map(([k, v]) => `• ${k}: ${v >= 0 ? '+' : '−'}${Math.abs(+v.toFixed(4))} sh`);
+                            if (nFixed) setTimeout(() => alert(
+                                `Fixed ${nFixed} transaction(s) saved as BUY/SELL in capitals. They were not counted before, so share totals changed for:\n\n` +
+                                (lines.length ? lines.join('\n') : '(none)') +
+                                (leftAsDup.length ? `\n\n${leftAsDup.length} more look like copies of trades already counted and were left alone — review them in Data & Backup Manager → 🔍 Find Duplicates.` : '') +
+                                `\n\nA snapshot was saved first: Data & Backup Manager → ↩️ Undo last change restores the previous data.`), 1200);
+                        }
+                    } catch (e) { console.warn('[TypeFix] skipped', e); }
 
                     if (migrationNeeded) {
                         // console.log("Data migration performed. Saving updated structure.");
@@ -23354,6 +23408,7 @@ window.sendSecureBackupToTelegram = async function() {
         <input accept=".json" id="importFile" style="display:none;" type="file"/>
         <button class="add-btn" onclick="window.closeDataManager();openCSVImportModal()">📊 Import Broker CSV</button>
         <button class="add-btn" onclick="window.closeDataManager();window.openDupFinder()">🔍 Find Duplicates</button>
+        <button class="add-btn" onclick="window.closeDataManager();window.openPositionsCompare()">🧮 Compare with broker positions</button>
         <button class="add-btn" onclick="var p=document.getElementById('secureRestorePanel');p.style.display=p.style.display==='none'?'block':'none'">📥 Restore Backup</button>
       </div>
       <div id="secureRestorePanel" style="display:none;margin-top:10px;width:100%;">
@@ -23979,6 +24034,126 @@ window.toggleIncludeCash = () => {
   localStorage.setItem('secureIncludeCash', on ? '0' : '1');
   if (window.stockTracker && window.stockTracker.renderPortfolioSummary) window.stockTracker.renderPortfolioSummary();
 };
+</script>
+<script>
+/* ═══ Compare with broker Positions CSV (2026-10-05) ═══
+   Reads a Positions/Holdings CSV downloaded from a broker and compares the share count of every
+   symbol with what this app counts. Runs entirely in the browser: the file is never uploaded or saved.
+   Fidelity files are split into Regular Brokerage vs Roth IRA by the Account Name column. Cash funds
+   are skipped (this app does not hold them; they come from the 401k app). */
+(function () {
+  'use strict';
+  const CASH = /^(SPAXX|FDRXX|FZFXX|SPRXX|FCASH|CORE|SWVXX|SNVXX|SNSXX|VMFXX|VMRXX|VUSXX|CASH)$/;
+  const SKIP_ACCT = /401|529|hsa|health/i;
+  const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fmt = n => (+n || 0).toLocaleString('en-US', { maximumFractionDigits: 4 });
+
+  function parseCSV(text) {
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += c;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows.map(r => r.map(x => x.trim()));
+  }
+  const num = s => { let t = String(s || '').replace(/[$,\s]/g, ''); const neg = /^\(.*\)$/.test(t); t = t.replace(/[()]/g, ''); const v = parseFloat(t); return isNaN(v) ? null : (neg ? -v : v); };
+  const cleanSym = s => String(s || '').replace(/\*+/g, '').trim().toUpperCase();
+
+  // What this app counts, per symbol and platform (same rule as the share math: lowercase buy/sell)
+  function appShares() {
+    const tr = window.stockTracker, out = {};
+    [...(tr.stocks || []), ...(tr.mutualFunds || [])].forEach(it => (it.transactions || []).forEach(t => {
+      const sh = +t.shares || 0, p = t.platform || 'Uncategorized', k = cleanSym(it.symbol) + '|' + p;
+      if (t.type === 'buy') out[k] = (out[k] || 0) + sh; else if (t.type === 'sell') out[k] = (out[k] || 0) - sh;
+    }));
+    return out;
+  }
+  function platforms() {
+    const tr = window.stockTracker, s = new Set();
+    [...(tr.stocks || []), ...(tr.mutualFunds || [])].forEach(it => (it.transactions || []).forEach(t => t.platform && s.add(t.platform)));
+    return [...s].sort();
+  }
+
+  function readBroker(text, choice) {
+    const rows = parseCSV(text);
+    const hi = rows.findIndex(r => r.some(c => /^symbol$/i.test(c)) && r.some(c => /quantity|^qty|shares/i.test(c)));
+    if (hi < 0) throw new Error('Could not find a header row with "Symbol" and "Quantity" (or "Shares") columns. Download the Positions / Holdings file, not the transaction history.');
+    const h = rows[hi];
+    const iSym = h.findIndex(c => /^symbol$/i.test(c));
+    const iQty = h.findIndex(c => /quantity|^qty|shares/i.test(c));
+    const iAcct = h.findIndex(c => /^account name$/i.test(c)) >= 0 ? h.findIndex(c => /^account name$/i.test(c)) : h.findIndex(c => /^account( type)?$/i.test(c));
+    const out = {}, skipped = new Set();
+    rows.slice(hi + 1).forEach(r => {
+      const sym = cleanSym(r[iSym]), q = num(r[iQty]);
+      if (!sym || q == null || !/^[A-Z0-9.\-]{1,12}$/.test(sym) || CASH.test(sym)) return;
+      let plat = choice;
+      if (choice === '__fidelity__') {
+        const a = iAcct >= 0 ? r[iAcct] : '';
+        if (SKIP_ACCT.test(a)) { skipped.add(a); return; }
+        plat = /roth/i.test(a) ? 'Fidelity Roth IRA' : 'Fidelity Regular Brokerage';
+      }
+      const k = sym + '|' + plat; out[k] = (out[k] || 0) + q;
+    });
+    return { out, skipped: [...skipped], covered: choice === '__fidelity__' ? ['Fidelity Regular Brokerage', 'Fidelity Roth IRA'] : [choice] };
+  }
+
+  function render(res) {
+    const app = appShares(), keys = new Set();
+    Object.keys(res.out).forEach(k => keys.add(k));
+    Object.keys(app).forEach(k => { if (res.covered.includes(k.split('|')[1])) keys.add(k); });
+    const rows = [...keys].map(k => { const [sym, plat] = k.split('|'); const b = res.out[k] || 0, a = app[k] || 0; return { sym, plat, b, a, d: a - b }; })
+      .filter(r => Math.abs(r.a) > 0.0001 || Math.abs(r.b) > 0.0001)
+      .sort((x, y) => Math.abs(y.d) - Math.abs(x.d) || x.sym.localeCompare(y.sym));
+    const bad = rows.filter(r => Math.abs(r.d) >= 0.001);
+    const box = document.getElementById('posCmpResult');
+    const tr = r => `<tr><td><b>${esc(r.sym)}</b></td><td>${esc(r.plat)}</td><td class="r">${fmt(r.b)}</td><td class="r">${fmt(r.a)}</td>
+      <td class="r" style="color:${Math.abs(r.d) >= 0.001 ? '#f59e0b' : 'var(--text-secondary)'};font-weight:${Math.abs(r.d) >= 0.001 ? 700 : 400};">${r.d > 0 ? '+' : ''}${fmt(r.d)}</td></tr>`;
+    const showAll = document.getElementById('posCmpAll') && document.getElementById('posCmpAll').checked;
+    box.innerHTML = `<p style="font-size:0.86rem;margin:10px 0;">${bad.length ? `⚠️ <b>${bad.length}</b> of ${rows.length} positions differ.` : `✅ All ${rows.length} positions match.`}
+        ${res.skipped.length ? `<br><span style="color:var(--text-secondary);font-size:0.8rem;">Skipped accounts: ${esc(res.skipped.join(', '))}</span>` : ''}</p>
+      <label style="font-size:0.8rem;"><input type="checkbox" id="posCmpAll" ${showAll ? 'checked' : ''}> Show matching positions too</label>
+      <div style="overflow-x:auto;margin-top:8px;"><table class="rt-table"><thead><tr><th>Symbol</th><th>Account</th><th class="r">Broker</th><th class="r">This app</th><th class="r">App − broker</th></tr></thead>
+      <tbody>${(showAll ? rows : bad).map(tr).join('') || '<tr><td colspan="5">Nothing to show.</td></tr>'}</tbody></table></div>
+      <p style="font-size:0.78rem;color:var(--text-secondary);margin-top:8px;"><b>+</b> = the app has more shares than the broker (a duplicate entry, or a missing SELL). <b>−</b> = the app has fewer (a missing BUY).
+      Open that stock's transaction history and compare it with the broker's activity. Fix the same rows in the 401k app too.</p>`;
+    document.getElementById('posCmpAll').onchange = () => render(res);
+  }
+
+  window.openPositionsCompare = function () {
+    if (!window.stockTracker) { alert('App not ready yet'); return; }
+    let ov = document.getElementById('posCmpModal');
+    if (!ov) {
+      ov = document.createElement('div'); ov.id = 'posCmpModal'; ov.className = 'dbm-overlay';
+      ov.addEventListener('click', e => { if (e.target === ov) ov.style.display = 'none'; });
+      document.body.appendChild(ov);
+    }
+    const opts = platforms().filter(p => !/^Fidelity (Regular Brokerage|Roth IRA)$/.test(p)).map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+    ov.innerHTML = `<div class="dbm-box" style="max-width:720px;"><div class="dbm-head"><h3>🧮 Compare with broker positions</h3>
+        <button type="button" class="dbm-close" aria-label="Close" onclick="document.getElementById('posCmpModal').style.display='none'">&times;</button></div>
+      <p style="font-size:0.84rem;margin:0 0 10px;">Download the <b>Positions</b> (holdings) CSV from your broker and pick it below. The file is read on this device only — it is not uploaded or saved.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <select id="posCmpPlat" style="padding:8px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);">
+          <option value="__fidelity__">Fidelity (Regular + Roth, by Account Name)</option>${opts}</select>
+        <label class="add-btn" for="posCmpFile" style="cursor:pointer;margin:0;">📂 Choose Positions CSV</label>
+        <input type="file" id="posCmpFile" accept=".csv,text/csv" style="display:none;">
+      </div>
+      <div id="posCmpResult"></div></div>`;
+    ov.style.display = 'flex';
+    document.getElementById('posCmpFile').onchange = e => {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      const choice = document.getElementById('posCmpPlat').value;
+      const rd = new FileReader();
+      rd.onload = () => { try { render(readBroker(String(rd.result || ''), choice)); } catch (err) { document.getElementById('posCmpResult').innerHTML = `<p style="color:#ef4444;font-size:0.85rem;margin-top:10px;">${esc(err.message || err)}</p>`; } };
+      rd.readAsText(f);
+      e.target.value = '';
+    };
+  };
+})();
 </script>
 </body>
 <script>
