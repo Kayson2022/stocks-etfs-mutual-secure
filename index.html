@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v10: positions reader checks broker choice; stale gap table cleared) - 2026-10-06 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v11: reads Merrill Edge Positions files; stale gap table cleared) - 2026-10-06 -->
 
 <html lang="en">
 <head>
@@ -24199,6 +24199,26 @@ window.toggleIncludeCash = () => {
 
   function readBroker(text, choice) {
     const rows = parseCSV(text);
+    // Merrill Edge: the holdings table's first column is "Positions" and holds "AAPL APPLE INC"
+    // (symbol, then name). A file can list several accounts, each with its own table.
+    const isMerrillHdr = r => /^positions$/i.test(r[0] || '') && /^quantity$/i.test(r[1] || '');
+    if (rows.some(isMerrillHdr)) {
+      if (choice === '__fidelity__')
+        throw new Error('This looks like a Merrill Edge Positions file. Pick "Merrill Edge" in the list above, then choose the file again.');
+      const out = {}; let inTable = false;
+      rows.forEach(r => {
+        if (isMerrillHdr(r)) { inTable = true; return; }
+        if (!inTable) return;
+        if (r.every(c => c === '')) { inTable = false; return; }
+        const first = String(r[0] || '').trim().split(/\s+/)[0] || '';
+        if (/^total$/i.test(first) || /^\d+$/.test(first)) return;   // totals row; cash sweep ("92827 ML DIRECT DEPOSIT…")
+        const sym = cleanSym(first), q = num(r[1]);
+        if (!sym || q == null || !/^[A-Z0-9.\-]{1,12}$/.test(sym) || CASH.test(sym)) return;
+        const k = sym + '|' + choice; out[k] = (out[k] || 0) + q;
+      });
+      if (!Object.keys(out).length) throw new Error('No positions could be read from this Merrill Edge file.');
+      return { out, skipped: [], covered: [choice] };
+    }
     const hi = rows.findIndex(r => r.some(c => /^symbol$/i.test(c)) && r.some(c => /quantity|^qty|shares/i.test(c)));
     if (hi < 0) throw new Error('Could not find a header row with "Symbol" and "Quantity" (or "Shares") columns. Download the Positions / Holdings file, not the transaction history.');
     const h = rows[hi];
