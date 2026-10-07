@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v16: FIFO per account, tax reports, sector fix, share compare + fixes file for 401k app) - 2026-10-07 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v17: FIFO per account, tax reports, sector fix, 401k fixes file, Export for Yahoo Finance) - 2026-10-07 -->
 
 <html lang="en">
 <head>
@@ -4302,6 +4302,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
       <button class="add-btn" id="expandCollapseAllBtn" onclick="window.toggleExpandCollapseAll()">↕ Collapse All</button>
       <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
       <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
+      <button class="add-btn" onclick="window.exportYahooPortfolio()" title="Download a CSV to import into Yahoo Finance">📤 Yahoo Finance file</button>
       <button class="add-btn" data-st-panel="compact" id="stCompactBtn" onclick="window.toggleCompact && window.toggleCompact()" title="Tighter card spacing, hides card charts">⊞ Compact: Off</button>
     </div>
   </div>
@@ -23643,6 +23644,7 @@ window.sendSecureBackupToTelegram = async function() {
         <button class="add-btn" onclick="window.closeDataManager();openCSVImportModal()">📊 Import Broker CSV</button>
         <button class="add-btn" onclick="window.closeDataManager();window.openDupFinder()">🔍 Find Duplicates</button>
         <button class="add-btn" onclick="window.closeDataManager();window.openPositionsCompare()">🧮 Compare with broker positions</button>
+        <button class="add-btn" onclick="window.exportYahooPortfolio()" title="One row per symbol: total shares and average cost across all accounts">📤 Export for Yahoo Finance</button>
         <button class="add-btn" onclick="var p=document.getElementById('secureRestorePanel');p.style.display=p.style.display==='none'?'block':'none'">📥 Restore Backup</button>
       </div>
       <div id="secureRestorePanel" style="display:none;margin-top:10px;width:100%;">
@@ -24243,7 +24245,7 @@ window.showCashDetails = () => {
 // to the gap is exported (e.g. the newest reinvestments next to an old summary entry); if none
 // does, the position is listed for a manual fix.
 function k401Fixes(rows) {
-  const tr = window.stockTracker, dayOf = d => { const x = new Date(d); return isNaN(x) ? String(d || '').slice(0, 10)
+  const tr = window.stockTracker, dayOf = d => { if (/^\d{4}-\d{2}-\d{2}$/.test(String(d || ''))) return String(d); const x = new Date(d); return isNaN(x) ? String(d || '').slice(0, 10)
     : x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
   const gap = (a, b) => Math.abs((new Date(a) - new Date(b)) / 86400000);
   const secPlat = t => t.platform === 'Fidelity' ? (t.accountType === 'Roth IRA' ? 'Fidelity Roth IRA' : 'Fidelity Regular Brokerage') : t.platform;
@@ -24386,6 +24388,43 @@ window.toggleIncludeCash = () => {
 };
 </script>
 <script>
+/* ═══ Export for Yahoo Finance (v17, 2026-10-07) ═══
+   Yahoo Finance can't be updated by another app, but it imports a CSV (My Portfolio → Import a CSV,
+   desktop browser only). This writes Yahoo's own portfolio format: one row per symbol with the total
+   shares across all accounts and the average cost of the shares still held (FIFO per account). */
+window.exportYahooPortfolio = function () {
+  const tr = window.stockTracker;
+  if (!tr) { alert('App not ready yet'); return; }
+  const rows = [];
+  [...(tr.stocks || []), ...(tr.mutualFunds || [])].forEach(it => {
+    const st = tr.calculateTransactionStats(it.transactions || [], it.price || 0);
+    const sh = st.totalSharesOwned || 0;
+    if (sh <= 0.0001) return;
+    const sym = String(it.symbol || '').toUpperCase().trim();
+    if (!sym) return;
+    const buys = (it.transactions || []).filter(t => t.type === 'buy').map(t => new Date(t.date)).filter(d => !isNaN(d)).sort((a, b) => a - b);
+    const d = buys[0] || new Date();
+    const accts = [...new Set((it.transactions || []).map(t => t.platform).filter(Boolean))];
+    const ex = rows.find(r => r.sym === sym);               // same symbol on two cards → one row
+    if (ex) { ex.cost += st.costOfRemainingShares || 0; ex.sh += sh; if (d < ex.d) ex.d = d; accts.forEach(a => ex.accts.add(a)); return; }
+    rows.push({ sym, sh, cost: st.costOfRemainingShares || 0, d, price: +it.price || 0, accts: new Set(accts) });
+  });
+  if (!rows.length) { alert('No holdings to export.'); return; }
+  rows.sort((a, b) => a.sym.localeCompare(b.sym));
+  const ymd = d => d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+  const num = (v, n) => (+v).toFixed(n).replace(/\.?0+$/, '');
+  const q = v => /[",]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
+  const head = 'Symbol,Current Price,Date,Time,Change,Open,High,Low,Volume,Trade Date,Purchase Price,Quantity,Commission,High Limit,Low Limit,Comment';
+  const lines = rows.map(r => [r.sym, num(r.price, 4), '', '', '', '', '', '', '', ymd(r.d),
+    num(r.sh > 0 ? r.cost / r.sh : 0, 4), num(r.sh, 6), '', '', '', [...r.accts].join(' + ')].map(q).join(','));
+  const csv = head + '\n' + lines.join('\n') + '\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'MY_LIST.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => alert(`📤 MY_LIST.csv downloaded — ${rows.length} holdings.\n\nIn Yahoo Finance (desktop browser):\n1. My Portfolio → delete yesterday's MY_LIST (⋯ → Delete)\n2. My Portfolio → Import a CSV → Start Creating\n3. Pick MY_LIST.csv → Import`), 300);
+};
+
 /* ═══ Compare with broker Positions CSV (2026-10-05) ═══
    Reads a Positions/Holdings CSV downloaded from a broker and compares the share count of every
    symbol with what this app counts. Runs entirely in the browser: the file is never uploaded or saved.
