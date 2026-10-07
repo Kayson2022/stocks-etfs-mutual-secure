@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v11: reads Merrill Edge Positions files; stale gap table cleared) - 2026-10-06 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v13: reads Merrill Edge Positions + Activity files, reinvestment price from description) - 2026-10-06 -->
 
 <html lang="en">
 <head>
@@ -21393,7 +21393,11 @@ document.addEventListener('click', function(e) {
         const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
         // Header row = first line that has a symbol column and an action/type column (Fidelity puts notes above it)
         let hi = lines.findIndex(l => /symbol|instrument/i.test(l) && /action|transaction type|trans code|type/i.test(l));
-        if (hi < 0) return [];
+        if (hi < 0) {
+            if (/cumulative time weighted return|opening balance/i.test(text)) importSkipped.wrongFile = 'performance';
+            else if (/^"?positions"?\s*,\s*"?quantity/im.test(text)) importSkipped.wrongFile = 'positions';
+            return [];
+        }
         const head = splitCSVLine(lines[hi]).map(h => h.toLowerCase().replace(/\s+/g, ' ').trim());
         const col = (...names) => head.findIndex(h => names.some(n => h === n || h.startsWith(n)));
         const iDate = col('run date', 'trade date', 'activity date', 'date');
@@ -21402,6 +21406,8 @@ document.addEventListener('click', function(e) {
         const iQty  = col('quantity', 'shares');
         const iPx   = col('price', 'share price');
         const iAcct = col('account');
+        const iAmt  = col('amount');
+        const iDesc = head.map((h, i) => /^description/.test(h) ? i : -1).filter(i => i >= 0);
         const headTxt = head.join('|');
         const broker = /run date/.test(headTxt) ? 'Fidelity'
                      : /symbol\/cusip|account registration|account nickname/.test(headTxt) ? 'Merrill Edge'
@@ -21415,14 +21421,34 @@ document.addEventListener('click', function(e) {
         for (let r = hi + 1; r < lines.length; r++) {
             if (!lines[r].trim()) continue;
             const c = splitCSVLine(lines[r]);
-            const act = String(c[iAct] || '').toLowerCase();
+            // Merrill Edge puts the trade kind in "Description 1"/"Description 2" rather than "Type",
+            // so read every action-like column together.
+            const act = [iAct, ...iDesc].filter(i => i >= 0).map(i => String(c[i] || '')).join(' ').toLowerCase();
             let type = null;
-            if (/\bsold\b|\bsell\b|\bsale\b/.test(act)) type = 'sell';
+            if (/\bsold\b|\bsell\b|\bsale\b|\bredemption\b/.test(act)) type = 'sell';
             else if (/\bbought\b|\bbuy\b|\bpurchase\b|reinvest/.test(act)) type = 'buy';     // dividend reinvestment = a buy
+            const qtySigned = parseFloat(String(c[iQty] || '').replace(/[$,\s]/g, '').replace(/^\((.*)\)$/, '-$1'));
+            // Merrill: no buy/sell word but shares moved → a negative quantity is a sale, a positive one a purchase
+            if (!type && broker === 'Merrill Edge' && qtySigned && !/dividend(?!.*reinv)|interest|transfer|journal|fee/.test(act))
+                type = qtySigned < 0 ? 'sell' : 'buy';
             if (!type) continue;                                                   // skip cash dividends, transfers, fees…
-            const sym = String(c[iSym] || '').replace(/[^A-Za-z0-9.\-]/g, '').toUpperCase();
+            let symRaw = String(c[iSym] || '');
+            if (broker === 'Merrill Edge') symRaw = symRaw.trim().split(/\s+/)[0] || '';   // "AAPL" or "AAPL APPLE INC"
+            const sym = symRaw.replace(/[^A-Za-z0-9.\-]/g, '').toUpperCase();
+            if (/^\d/.test(sym)) continue;                                         // CUSIP-only rows (cash sweep, bank deposit)
             const qty = Math.abs(parseFloat(String(c[iQty] || '').replace(/[$,()]/g, '')) || 0);
-            const px  = Math.abs(parseFloat(String(c[iPx] || '').replace(/[$,()]/g, '')) || 0);
+            let px  = Math.abs(parseFloat(String(c[iPx] || '').replace(/[$,()]/g, '')) || 0);
+            if (!px) {
+                // Merrill leaves Price as "--" on reinvestments; the price is in the description:
+                // "... PRINCIPAL REINV AMT $56.53 REINV PRICE $225.44603 REINV SHRS .2507"
+                const txt = c.join(' ');
+                const m1 = txt.match(/REINV\s+PRICE\s+\$?\s*([\d,]*\.?\d+)/i);
+                const m2 = txt.match(/REINV\s+AMT\s+\$?\s*([\d,]*\.?\d+)/i);
+                const amt = Math.abs(parseFloat(String(c[iAmt] || '').replace(/[$,()]/g, '')) || 0);
+                if (m1) px = parseFloat(m1[1].replace(/,/g, '')) || 0;
+                else if (m2 && qty) px = (parseFloat(m2[1].replace(/,/g, '')) || 0) / qty;
+                else if (amt && qty) px = amt / qty;
+            }
             if (!sym || !qty) continue;
             const acct = iAcct >= 0 ? String(c[iAcct] || '') : '';
             // skip 401k / 529 / HSA etc. — tracked in the 401k app, not here
@@ -21431,7 +21457,7 @@ document.addEventListener('click', function(e) {
                 continue;
             }
             // skip money-market "core" cash sweeps (they are cash, not holdings)
-            if (CASH_SWEEP.has(sym) || /money market|core position|cash reserves/i.test(c.join(' '))) { importSkipped.cash++; continue; }
+            if (CASH_SWEEP.has(sym) || /money market|core position|cash reserves|direct deposit|bank deposit program/i.test(c.join(' '))) { importSkipped.cash++; continue; }
             const isRoth = /roth/i.test(acct) || /roth/i.test(fileName);
             let platform = broker;
             if (broker === 'Fidelity') platform = isRoth ? 'Fidelity Roth IRA' : 'Fidelity Regular Brokerage';
@@ -21785,7 +21811,14 @@ document.addEventListener('click', function(e) {
                 const text = await file.text();
                 if (/\.csv$/i.test(file.name)) {
                     const rows = parseBrokerCSV(text, file.name);
-                    if (!rows.length) { alert('No buy/sell rows found in ' + file.name + '. Is it a transaction-history export?'); return; }
+                    if (!rows.length) {
+                        const why = importSkipped.wrongFile === 'performance' ? 'This is a performance / returns report (yearly totals only).'
+                                  : importSkipped.wrongFile === 'positions' ? 'This is a Positions (holdings) file — use it with 🧮 Compare instead.'
+                                  : 'Is it a transaction-history export?';
+                        importSkipped.wrongFile = null;
+                        alert('No buy/sell rows found in ' + file.name + '. ' + why + '\n\nMerrill Edge: Accounts → Download Account Data → Spreadsheets and Text → Activity (tick Security Transactions) → .CSV');
+                        return;
+                    }
                     parsedTransactions.push(...rows.map(normTx).filter(t => t.symbol && t.shares > 0));
                     continue;
                 }
