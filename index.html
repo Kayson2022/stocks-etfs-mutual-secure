@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v9: positions reader stops at the holdings table, checks broker choice) - 2026-10-06 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v10: positions reader checks broker choice; stale gap table cleared) - 2026-10-06 -->
 
 <html lang="en">
 <head>
@@ -21777,6 +21777,7 @@ document.addEventListener('click', function(e) {
     async function processCSVFiles() {
         parsedTransactions = [];
         importSkipped = { retirement: 0, cash: 0, accounts: new Set() };
+        fitReport = null;   // a new file means the old 'close the gaps' table no longer applies
         
         try {
             // every selected file (overlapping exports are caught as duplicates below)
@@ -21969,6 +21970,7 @@ document.addEventListener('click', function(e) {
                 `\n\nENTRIES IN THE APP (date, type, shares, price):\n` + appTx.map(t => `${t.day}\t${t.type}\t${t.shares}\t${t.price}`).join('\n');
             return { sym, plat, gap: g, n: items.length, picked: pick ? pick.length : 0, sum: pick ? pick.reduce((a, x) => a + x.s, 0) : 0, ok: !!pick, edit, how, copy };
         }).sort((a, b) => (a.ok - b.ok) || Math.abs(b.gap) - Math.abs(a.gap));
+        fitReport._at = G.at;
         displayPreview();
     }
     window._csvFitToGaps = fitToGaps;
@@ -21984,6 +21986,7 @@ document.addEventListener('click', function(e) {
         let html = `🎯 Your last <b>Compare with broker positions</b> (${when}, ${G.covered.join(' + ')}) found <b>${nGaps}</b> position(s) that differ.
             <br><button type="button" onclick="window._csvFitToGaps()" style="margin-top:8px;padding:10px 16px;border:none;border-radius:8px;background:#15803d;color:#ffffff;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,0.2);">🎯 Tick only the rows that close those gaps</button>
             <div style="font-size:12px;margin-top:6px;">Rows of positions that already match are unticked, so they can't be counted twice. Run Compare again after importing.</div>`;
+        if (fitReport && fitReport._at !== G.at) fitReport = null;   // Compare was re-run since: table is stale
         if (fitReport) {
             const ok = fitReport.filter(r => r.ok && !r.edit).length, ed = fitReport.filter(r => r.edit).length;
             html += `<div style="margin-top:10px;font-weight:700;">${ok} of ${fitReport.length} gaps closed by the ticked rows${ed ? `; ${ed} need one entry edited (✏️ below — do that in the stock's transaction list)` : ''}.</div>
