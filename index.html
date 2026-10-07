@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v14: FIFO per account, retirement accounts out of tax reports, sector no longer overwritten) - 2026-10-07 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v15: FIFO per account, retirement accounts out of tax reports, sector fix, share-count compare vs 401k app) - 2026-10-07 -->
 
 <html lang="en">
 <head>
@@ -24210,14 +24210,14 @@ window.k401Connect = async () => {
 window.k401Disconnect = async () => { if (confirm('Disconnect the 401k app from this app? (Nothing is deleted anywhere.)')) await signOut(auth); };
 window.k401RenderTab = render;
 // ── 🔍 pop-ups for the summary ──
-function popup(title, html) {
+function popup(title, html, w) {
   let ov = document.getElementById('sumPopup');
   if (!ov) {
     ov = document.createElement('div'); ov.id = 'sumPopup'; ov.className = 'dbm-overlay';
     ov.addEventListener('click', e => { if (e.target === ov) ov.style.display = 'none'; });
     document.body.appendChild(ov);
   }
-  ov.innerHTML = `<div class="dbm-box" style="max-width:560px;"><div class="dbm-head"><h3>${title}</h3>
+  ov.innerHTML = `<div class="dbm-box" style="max-width:${w || 560}px;"><div class="dbm-head"><h3>${title}</h3>
     <button type="button" class="dbm-close" aria-label="Close" onclick="document.getElementById('sumPopup').style.display='none'">&times;</button></div>${html}</div>`;
   ov.style.display = 'flex';
 }
@@ -24236,6 +24236,44 @@ window.showCashDetails = () => {
 };
 
 // Which account explains the difference between Secure and the 401k app?
+// Share counts per symbol and account, Secure vs 401k app (prices don't matter here) — v15
+function shareDiffHTML(accounts) {
+  const tr = window.stockTracker; if (!tr || !pd) return '';
+  const sec = {}, k4 = {}, px = {};
+  [...(tr.stocks || []), ...(tr.mutualFunds || [])].forEach(it => {
+    const sym = String(it.symbol || '').toUpperCase(); if (+it.price > 0) px[sym] = +it.price;
+    (it.transactions || []).forEach(t => {
+      if (t.type !== 'buy' && t.type !== 'sell') return;
+      const k = sym + '|' + (t.platform || 'Uncategorized');
+      sec[k] = (sec[k] || 0) + (t.type === 'buy' ? 1 : -1) * (+t.shares || 0);
+    });
+  });
+  holdings(['Regular Brokerage', 'Roth IRA']).filter(h => !h.isCash).forEach(h => {
+    const sym = String(h.symbol || '').toUpperCase();
+    const plat = h.platform === 'Fidelity' ? (h.accountType === 'Roth IRA' ? 'Fidelity Roth IRA' : 'Fidelity Regular Brokerage') : h.platform;
+    const k = sym + '|' + plat; k4[k] = (k4[k] || 0) + h.shares;
+    if (!px[sym] && h.price > 0) px[sym] = h.price;
+  });
+  const accts = new Set(accounts);
+  const rows = [...new Set([...Object.keys(sec), ...Object.keys(k4)])].map(k => {
+    const [sym, plat] = k.split('|'), a = sec[k] || 0, b = k4[k] || 0, d = a - b;
+    return { sym, plat, a, b, d, usd: d * (px[sym] || 0) };
+  }).filter(r => accts.has(r.plat) && Math.abs(r.d) >= 0.001 && (Math.abs(r.a) > 0.0001 || Math.abs(r.b) > 0.0001))
+    .sort((x, y) => Math.abs(y.usd) - Math.abs(x.usd) || x.sym.localeCompare(y.sym));
+  const f = n => (+n).toLocaleString('en-US', { maximumFractionDigits: 4 });
+  window._shareDiffText = 'Account\tSymbol\tSecure\t401k app\tSecure - 401k\n' + rows.map(r => `${r.plat}\t${r.sym}\t${f(r.a)}\t${f(r.b)}\t${f(r.d)}`).join('\n');
+  const body = rows.length ? tbl(['Account', 'Symbol', 'Secure', '401k app', 'Shares diff', '≈ $'],
+      rows.map(r => `<tr><td>${esc(r.plat)}</td><td class="r"><b>${esc(r.sym)}</b></td><td class="r">${f(r.a)}</td><td class="r">${f(r.b)}</td>
+        <td class="r" style="color:#f59e0b;font-weight:700;">${r.d > 0 ? '+' : ''}${f(r.d)}</td><td class="r">${r.usd >= 0 ? '+' : '−'}${fmt$(Math.abs(r.usd)).replace(/^−/, '')}</td></tr>`).join(''))
+    : '<p style="font-size:0.85rem;">✅ Every symbol has the same number of shares in both apps — any $ gap above is price timing only.</p>';
+  return `<div style="margin-top:16px;border-top:1px solid var(--border-color);padding-top:12px;">
+      <div style="font-weight:800;margin-bottom:4px;">📊 Share counts — Secure vs 401k app</div>
+      <p style="font-size:0.8rem;color:var(--text-secondary);margin:0 0 8px;">Compares shares, not prices, so timing doesn't show up here. Secure has been checked against all four brokers, so where they differ the <b>401k app</b> is the one to fix.
+      <b>+</b> = the 401k app is missing shares (add a BUY there, or delete an extra SELL). <b>−</b> = the 401k app has too many (delete a duplicate BUY, or add a missing SELL).</p>
+      ${rows.length ? `<p style="font-size:0.8rem;margin:0 0 8px;"><b>${rows.length}</b> position(s) differ.
+        <button type="button" class="rt-btn" style="margin-left:6px;" onclick="(navigator.clipboard&&navigator.clipboard.writeText(window._shareDiffText).then(()=>alert('Copied — paste it into the chat.'),()=>window.prompt('Copy this text:',window._shareDiffText)))||window.prompt('Copy this text:',window._shareDiffText)">📋 Copy list</button></p>` : ''}
+      ${body}</div>`;
+}
 window.showMatchDetails = () => {
   const link = window._k401Link, tr = window.stockTracker;
   if (!link || !tr) return;
@@ -24260,7 +24298,7 @@ window.showMatchDetails = () => {
   popup('🔍 Secure vs 401k app', `<p style="font-size:0.84rem;margin:0 0 10px;">Both apps' <b>Regular Brokerage + Roth IRA</b> value (holdings + cash), account by account. Amber = the account where they disagree.</p>` +
     tbl(['Account', 'Secure', '401k app', 'Difference'], rows +
       `<tr><td><b>Total</b></td><td class="r"><b>${fmt$(tS)}</b></td><td class="r"><b>${fmt$(tK)}</b></td><td class="r"><b>${tS - tK >= 0 ? '+' : ''}${fmt$(tS - tK)}</b></td></tr>`) +
-    `<p style="font-size:0.78rem;color:var(--text-secondary);margin-top:10px;">Small gaps are usually <b>timing</b> — each app refreshes prices at different moments. A big gap in one account usually means a trade was entered in one app but not the other: open that account in both apps and compare share counts.</p>`);
+    `<p style="font-size:0.78rem;color:var(--text-secondary);margin-top:10px;">Small gaps are usually <b>timing</b> — each app refreshes prices at different moments. A big gap in one account usually means a trade was entered in one app but not the other: open that account in both apps and compare share counts.</p>` + shareDiffHTML(names), 760);
 };
 
 window.toggleIncludeCash = () => {
