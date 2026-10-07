@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v17: FIFO per account, tax reports, sector fix, 401k fixes file, Export for Yahoo Finance) - 2026-10-07 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v18: FIFO per account, tax reports, sector fix, 401k fixes file, Yahoo export, fund NAV not counted as today's change) - 2026-10-07 -->
 
 <html lang="en">
 <head>
@@ -232,6 +232,46 @@ function safeUrl(str) {
   return '#';
 }
 /* ===== END XSS-SAFE ESCAPE HELPER ===== */
+</script>
+<script>
+/* ===== TODAY'S CHANGE FOR MUTUAL FUNDS (v18, 2026-10-07) =====
+   A mutual fund prices once a day, after the close (NAV out ~6 PM ET). During the trading day the
+   fund's latest quote is still yesterday's NAV, so its "change" is yesterday's move — which was being
+   added to today's P/L. Rule: the fund's change counts only when its quote is from the current
+   session; otherwise it is 0 for today. */
+window.isMutualFundItem = function (it) {
+  if (!it) return false;
+  const tr = window.stockTracker;
+  if (tr && Array.isArray(tr.mutualFunds) && tr.mutualFunds.some(f => f.id === it.id)) return true;
+  if (String(it.instrumentType || '').toUpperCase() === 'MUTUALFUND') return true;
+  if (String(it.industry || '') === 'Mutual Fund') return true;
+  const s = String(it.symbol || '').toUpperCase();
+  return s.length === 5 && s.endsWith('X');
+};
+window.etDateKey = function (d) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+};
+// Date (YYYY-MM-DD, ET) of the session stock prices currently reflect
+window.currentSessionKey = function () {
+  const now = new Date();
+  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const mins = et.getHours() * 60 + et.getMinutes();
+  const d = new Date(et);
+  if (d.getDay() >= 1 && d.getDay() <= 5 && mins < 570) d.setDate(d.getDate() - 1);   // before 9:30 → previous session
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+};
+window.fundNavIsStale = function (it) {
+  if (!window.isMutualFundItem(it)) return false;
+  if (it.quoteTime) return window.etDateKey(new Date(it.quoteTime * 1000)) < window.currentSessionKey();
+  // no quote date saved yet (older data): assume stale while the market is open, before NAVs are out
+  const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const mins = et.getHours() * 60 + et.getMinutes();
+  return et.getDay() >= 1 && et.getDay() <= 5 && mins >= 570 && mins < 1080;
+};
+window.todayChangeOf = function (it) {
+  return window.fundNavIsStale(it) ? 0 : (Number(it && it.change) || 0);
+};
 </script>
 <script>
 /* ===== PER-ACCOUNT FIFO HELPERS (v14, 2026-10-07) =====
@@ -5370,7 +5410,8 @@ async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
                     fiftyTwoWeekHigh: meta?.fiftyTwoWeekHigh ?? null,
                     fiftyTwoWeekLow:  meta?.fiftyTwoWeekLow  ?? null,
                     sector:           meta?.sector ?? null,
-                    industry:         meta?.industry ?? meta?.finnhubIndustry ?? null
+                    industry:         meta?.industry ?? meta?.finnhubIndustry ?? null,
+                    marketTime:       meta?.regularMarketTime ?? null
                 };
             }
 
@@ -5928,6 +5969,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                                     high: price,
                                     low: price,
                                     previousClose,
+                                    quoteTime: y.marketTime || null,
                                     industry: "Mutual Fund"
                                 }
                             };
@@ -8942,12 +8984,12 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         totalCurrentValue += stats.currentValue;
                         totalUnrealizedPL += stats.unrealizedPL;
 
-                        const dailyChange = (item.change || 0) * stats.totalSharesOwned;
+                        const dailyChange = window.todayChangeOf(item) * stats.totalSharesOwned;
                         if (!isNaN(dailyChange) && isFinite(dailyChange)) {
                             totalPLToday += dailyChange;
                         }
 
-                        const previousDayPrice = item.price - (item.change || 0);
+                        const previousDayPrice = item.price - window.todayChangeOf(item);
                         totalPreviousDayValue += previousDayPrice * stats.totalSharesOwned;
                     }
 
@@ -9849,7 +9891,7 @@ renderPortfolioSummary() {
                         const totalPLPercent = (stats.costOfRemainingShares + (stats.realizedPL > 0 ? 0 : -stats.realizedPL)) > 0 ? (totalPL / (stats.costOfRemainingShares + (stats.realizedPL > 0 ? 0 : -stats.realizedPL))) * 100 : 0;
                         const totalPLClass = totalPL >= 0 ? 'positive' : 'negative';
                         const totalValue = stats.currentValue;
-                        const totalChangeToday = (item.change || 0) * stats.totalSharesOwned;
+                        const totalChangeToday = window.todayChangeOf(item) * stats.totalSharesOwned;
                         const totalChangeTodayClass = totalChangeToday >= 0 ? 'positive' : 'negative'; 
                         summaryText = `Gained <span class="${changeClass}">${this.formatCurrency(item.change)}</span> today, a change of <span class="${changePercentClass}">${(item.changePercent || 0).toFixed(2)}%</span>.`;
                         summaryText += `\nTotal Value: <span class="${totalPL >= 0 ? 'positive' : 'negative'}">${this.formatCurrency(totalValue)}</span>`;
@@ -9864,7 +9906,7 @@ renderPortfolioSummary() {
 
                     items.forEach(item => {
                         const stats = this.calculateTransactionStats(item.transactions, item.price);
-                        totalChangeToday += (item.change || 0) * stats.totalSharesOwned;
+                        totalChangeToday += window.todayChangeOf(item) * stats.totalSharesOwned;
                         totalValue += stats.currentValue;
                         totalCostBasis += stats.costOfRemainingShares;
                         totalPLUnrealized += stats.unrealizedPL;
@@ -10284,7 +10326,9 @@ renderPortfolioSummary() {
                         }
                     }
                     
-                    const todayPL = (item.change || 0) * stats.totalSharesOwned; 
+                    const todayPL = window.todayChangeOf(item) * stats.totalSharesOwned;
+                    const _navNote = window.fundNavIsStale(item)
+                        ? ` <span style="font-size:0.72em;opacity:0.75;font-weight:500;">(NAV ${item.quoteTime ? new Date(item.quoteTime * 1000).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : 'from last close'} — today's not out yet)</span>` : ''; 
                     
                     let cardActionsHTML = '';
                     if (type === 'watchlist') {
@@ -10382,7 +10426,7 @@ renderPortfolioSummary() {
                         <div class="stock-info">${stockInfoHTML}</div>
                         <div class="card-tap-hint">▼ tap card to see chart</div>
                         ${cardChartHTML}
-                        <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}` : ''}</div>
+                        <div class="total-pl ${todayPL >= 0 ? 'positive' : 'negative'}">${type !== 'watchlist' ? `P/L Today: ${this.formatCurrency(todayPL)}${_navNote}` : ''}</div>
                         ${cardActionsHTML}
                         ${type !== 'watchlist' ? `
                         <!-- Collapsible bottom features section -->
@@ -22335,7 +22379,7 @@ document.addEventListener('click', function(e) {
                 const prev = parseFloat(f.previousClose || f.previousClosePrice || f.price) || 0;
                 totalValue    += stats.currentValue;
                 totalCost     += stats.costOfRemainingShares;
-                totalPLToday  += (f.price - prev) * stats.totalSharesOwned;
+                totalPLToday  += (window.fundNavIsStale(f) ? 0 : (f.price - prev)) * stats.totalSharesOwned;
                 activeFunds++;
             }
         });
