@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v13: reads Merrill Edge Positions + Activity files, reinvestment price from description) - 2026-10-06 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v14: FIFO per account, retirement accounts out of tax reports, sector no longer overwritten) - 2026-10-07 -->
 
 <html lang="en">
 <head>
@@ -232,6 +232,39 @@ function safeUrl(str) {
   return '#';
 }
 /* ===== END XSS-SAFE ESCAPE HELPER ===== */
+</script>
+<script>
+/* ===== PER-ACCOUNT FIFO HELPERS (v14, 2026-10-07) =====
+   One card can hold one symbol's trades from several accounts (e.g. MRVL in Vanguard,
+   Fidelity Roth and Schwab). A sale in one account can only use lots bought in THAT account,
+   so cost basis / realized P/L must be worked out per account and then added up.
+   Account = platform + taxable/retirement, so a blank vs "Regular Brokerage" account type
+   doesn't split one real account in two. */
+window.isRetirementTxn = function (t) {
+  const a = String((t && t.accountType) || '').trim().toLowerCase();
+  if (a) return /roth|ira|401|403|457|529|hsa|pension|tsp/.test(a);
+  return /roth|ira\b|401|529|hsa/i.test(String((t && t.platform) || ''));
+};
+window.splitTxnsByAccount = function (txns) {
+  const map = new Map();
+  (txns || []).forEach(t => {
+    const plat = String(t.platform || '').trim() || 'Uncategorized';
+    const ret = window.isRetirementTxn(t);
+    const key = plat + '|' + (ret ? 'R' : 'T');
+    if (!map.has(key)) map.set(key, { key, platform: plat, retirement: ret, txns: [] });
+    map.get(key).txns.push(t);
+  });
+  return [...map.values()];
+};
+// One virtual item per account, same shape as a holding. opts.taxableOnly drops Roth/IRA/401k/529/HSA.
+window.itemsByAccount = function (items, opts) {
+  const out = [];
+  (items || []).forEach(it => window.splitTxnsByAccount(it.transactions).forEach(g => {
+    if (opts && opts.taxableOnly && g.retirement) return;
+    out.push(Object.assign({}, it, { transactions: g.txns, _platform: g.platform, _retirement: g.retirement }));
+  }));
+  return out;
+};
 </script>
 
 <script>
@@ -9346,6 +9379,27 @@ renderPortfolioSummary() {
                 });
             }
             calculateTransactionStats(transactions = [], currentPrice = 0) {
+                // FIFO runs separately per account, then the results are added up (v14)
+                const groups = window.splitTxnsByAccount ? window.splitTxnsByAccount(transactions) : [];
+                if (groups.length < 2) return this._fifoStatsOne(transactions, currentPrice);
+                const parts = groups.map(g => this._fifoStatsOne(g.txns, currentPrice));
+                const sum = k => parts.reduce((a, p) => a + (p[k] || 0), 0);
+                const totalSharesOwned = sum('totalSharesOwned'), realizedPL = sum('realizedPL');
+                const costOfRemainingShares = sum('costOfRemainingShares');
+                const currentValue = totalSharesOwned * currentPrice;
+                const unrealizedPL = totalSharesOwned > 0 ? currentValue - costOfRemainingShares : 0;
+                const averageCostBasis = totalSharesOwned > 0 ? costOfRemainingShares / totalSharesOwned : 0;
+                const originalTotalShares = sum('originalTotalShares'), originalTotalCost = sum('originalTotalCost');
+                const originalAvgCost = originalTotalShares > 0 ? originalTotalCost / originalTotalShares : 0;
+                const sharesSold = sum('sharesSold');
+                const pctRemaining = originalTotalShares > 0 ? (totalSharesOwned / originalTotalShares) * 100 : 100;
+                const pctSold = originalTotalShares > 0 ? (sharesSold / originalTotalShares) * 100 : 0;
+                const trueTotal = realizedPL + unrealizedPL;
+                const trueTotalPct = originalTotalCost > 0 ? (trueTotal / originalTotalCost) * 100 : 0;
+                return { totalSharesOwned, averageCostBasis, realizedPL, unrealizedPL, currentValue, costOfRemainingShares,
+                         originalTotalShares, originalTotalCost, originalAvgCost, sharesSold, pctRemaining, pctSold, trueTotal, trueTotalPct };
+            }
+            _fifoStatsOne(transactions = [], currentPrice = 0) {
                 const buys = JSON.parse(JSON.stringify((transactions || []).filter(t => t.type === 'buy').sort((a,b) => new Date(a.date) - new Date(b.date))));
                 const sells = JSON.parse(JSON.stringify((transactions || []).filter(t => t.type === 'sell')));
                 let totalSharesOwned = buys.reduce((s, t) => s + t.shares, 0) - sells.reduce((s, t) => s + t.shares, 0);
@@ -12079,16 +12133,21 @@ getOldestTransactionDate(item) {
                     .filter(t => t.type === 'sell')
                     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-                // FIFO lot calculation
-                const lots = buys.map(b => ({ ...b, remainingShares: b.shares }));
-                sells.forEach(sell => {
-                    let toSell = sell.shares;
-                    for (const lot of lots) {
-                        if (toSell <= 0) break;
-                        const used = Math.min(toSell, lot.remainingShares);
-                        lot.remainingShares -= used;
-                        toSell -= used;
-                    }
+                // FIFO lot calculation, per account (a sale only uses lots from its own account)
+                const lots = [];
+                window.splitTxnsByAccount(item.transactions || []).forEach(g => {
+                    const gl = g.txns.filter(t => t.type === 'buy').sort((a, b) => new Date(a.date) - new Date(b.date))
+                        .map(b => ({ ...b, remainingShares: b.shares, _acct: g.platform }));
+                    g.txns.filter(t => t.type === 'sell').sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(sell => {
+                        let toSell = sell.shares;
+                        for (const lot of gl) {
+                            if (toSell <= 0) break;
+                            const used = Math.min(toSell, lot.remainingShares);
+                            lot.remainingShares -= used;
+                            toSell -= used;
+                        }
+                    });
+                    lots.push(...gl);
                 });
 
                 const activeLots = lots.filter(l => l.remainingShares > 0.0001);
@@ -12111,7 +12170,7 @@ getOldestTransactionDate(item) {
 
                     return `
                     <tr style="border-bottom:0.5px solid var(--border-color);">
-                        <td style="padding:8px 6px;font-size:0.82rem;color:var(--text-secondary);">${lot.date?.split('T')[0] || ''}</td>
+                        <td style="padding:8px 6px;font-size:0.82rem;color:var(--text-secondary);">${lot.date?.split('T')[0] || ''}<div style="font-size:0.68rem;opacity:0.75;">${lot._acct || ''}</div></td>
                         <td style="padding:8px 6px;text-align:right;">${lot.remainingShares.toFixed(4)}</td>
                         <td style="padding:8px 6px;text-align:right;">${this.formatCurrency(lot.price)}</td>
                         <td style="padding:8px 6px;text-align:right;">${this.formatCurrency(cost)}</td>
@@ -12153,7 +12212,7 @@ getOldestTransactionDate(item) {
                             <div style="font-size:1.2rem;font-weight:800;color:${isPos ? 'var(--color-positive)' : 'var(--color-negative)'};">${isPos ? '+' : ''}${this.formatCurrency(totalGL)}<br><span style="font-size:0.8rem;">(${isPos ? '+' : ''}${totalGLPct.toFixed(2)}%)</span></div>
                         </div>
                     </div>
-                    <p style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:8px;">Using FIFO method. Long-term = held 365+ days (may qualify for lower capital gains tax rate).</p>
+                    <p style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:8px;">Using FIFO per account (a sale only uses lots from its own account). Long-term = held 365+ days (may qualify for lower capital gains tax rate).</p>
                     <div style="overflow-x:auto;">
                     <table style="width:100%;border-collapse:collapse;font-size:0.83rem;">
                         <thead><tr style="border-bottom:2px solid var(--border-color);text-align:left;">
@@ -12430,7 +12489,7 @@ getOldestTransactionDate(item) {
                 }
                 
                 item.name = newName;
-                item.industry = item.industry.includes('Mutual Fund') ? 'Mutual Fund' : 'Custom Industry';
+                // (v14) sector is left as it is — saving used to overwrite it with "Custom Industry"
 
                 // Update platform and account type across all transactions if not disabled
                 if (!this.elements.editStockPlatform.disabled && newPlatform) {
@@ -15339,9 +15398,9 @@ window.renderTax = function renderTax() {
   const selYear = window._stTaxYear || currentYear;
   const isLT = buyDate => (today - new Date(buyDate)) > 365*24*60*60*1000;
 
-  // FIFO per symbol
+  // FIFO per symbol and account; retirement accounts are not taxable, so they are left out
   const realized = [], openLots = [];
-  getAllItems().forEach(item => {
+  window.itemsByAccount(getAllItems(), { taxableOnly: true }).forEach(item => {
     const buys = [...(item.transactions||[]).filter(t=>t.type==='buy')].sort((a,b)=>new Date(a.date)-new Date(b.date));
     const sells = [...(item.transactions||[]).filter(t=>t.type==='sell')];
     const lotQueue = buys.map(b=>({...b, remaining:b.shares}));
@@ -15442,7 +15501,7 @@ window.renderTax = function renderTax() {
       <td style="padding:7px 8px;text-align:right;">${colorGL(stGain+ltGain)}</td>
     </tr></tfoot></table>
   </div>
-  <p style="font-size:0.68rem;color:var(--text-secondary);margin-top:12px;font-style:italic;">FIFO cost basis. Estimates only — not tax advice.</p>`;
+  <p style="font-size:0.68rem;color:var(--text-secondary);margin-top:12px;font-style:italic;">FIFO cost basis, worked out per account. Roth IRA, IRA, 401(k), 529 and HSA accounts are left out (not taxable). Estimates only — not tax advice.</p>`;
 }
 window._stRenderTax = renderTax;
 window._stTaxYear = new Date().getFullYear();
@@ -17713,9 +17772,9 @@ window.renderJournal = function renderJournal() {
   const fc  = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2}).format(n||0);
   const all = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
 
-  // Build closed trades via FIFO matching
+  // Build closed trades via FIFO matching (per account)
   const closedTrades = [];
-  all.forEach(item => {
+  window.itemsByAccount(all).forEach(item => {
     const buys  = (item.transactions||[]).filter(t=>t.type==='buy').sort((a,b)=>new Date(a.date)-new Date(b.date));
     const sells = (item.transactions||[]).filter(t=>t.type==='sell').sort((a,b)=>new Date(a.date)-new Date(b.date));
     const lots  = buys.map(b=>({...b, rem: b.shares}));
@@ -18026,7 +18085,7 @@ window.renderPerfStats = function renderPerfStats() {
   // Closed trade stats (from transactions)
   const all = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
   let totalTrades=0, wonTrades=0, totalHold=0;
-  all.forEach(item => {
+  window.itemsByAccount(all).forEach(item => {
     const buys  = (item.transactions||[]).filter(t=>t.type==='buy').sort((a,b)=>new Date(a.date)-new Date(b.date));
     const sells = (item.transactions||[]).filter(t=>t.type==='sell');
     const lots  = buys.map(b=>({...b,rem:b.shares}));
@@ -18220,7 +18279,7 @@ window.renderPerfStats = function renderPerfStats() {
     })()}
     ${(() => {
       // ── Tax-Loss Harvesting Alert ──
-      const allItemsTL = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
+      const allItemsTL = window.itemsByAccount([...(tracker.stocks||[]), ...(tracker.mutualFunds||[])], { taxableOnly: true });
       const opportunities = [];
       allItemsTL.forEach(item => {
         if (!item.price || !item.transactions) return;
@@ -18977,7 +19036,7 @@ window.renderSchedD = function renderSchedD() {
   const years = [currentYear, currentYear-1, currentYear-2];
 
   const renderForYear = (yr) => {
-    const all = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
+    const all = window.itemsByAccount([...(tracker.stocks||[]), ...(tracker.mutualFunds||[])], { taxableOnly: true });
     const stTrades = [], ltTrades = [];
 
     all.forEach(item => {
@@ -19061,7 +19120,7 @@ window.renderSchedD = function renderSchedD() {
           </tr></thead><tbody>${rows(ltTrades,'long-term')}</tbody>
         </table>
       </div>
-      <p style="font-size:0.68rem;color:var(--text-secondary);margin-top:10px;">FIFO cost basis. Short-term = held ≤365 days. Long-term = held >365 days. Not tax advice — verify with your broker.</p>`;
+      <p style="font-size:0.68rem;color:var(--text-secondary);margin-top:10px;">FIFO cost basis per account; retirement accounts (Roth, IRA, 401(k)) are left out. Short-term = held ≤365 days. Long-term = held >365 days. Not tax advice — verify with your broker.</p>`;
   };
 
   window._stSchedDYear = window._stSchedDYear || currentYear;
@@ -19071,7 +19130,7 @@ window.renderSchedD = function renderSchedD() {
 window.stExportSchedDCSV = function(yr) {
   const tracker = getTracker();
   if (!tracker) return;
-  const all = [...(tracker.stocks||[]), ...(tracker.mutualFunds||[])];
+  const all = window.itemsByAccount([...(tracker.stocks||[]), ...(tracker.mutualFunds||[])], { taxableOnly: true });
   const rows = [['Part','Description','Date Acquired','Date Sold','Proceeds','Cost Basis','Adjustment','Gain/Loss']];
   ['Short-Term','Long-Term'].forEach((part,pi) => {
     all.forEach(item => {
@@ -20867,6 +20926,30 @@ window.renderTrueExposure = function() {
 })();</script>
 
 <!-- Safety net: re-expose all panel functions globally after IIFE runs --></script>
+<script>
+/* (v14) Put back the real sector on holdings whose sector was overwritten with "Custom Industry"
+   by Edit Position. Runs once per load, a few seconds in, one Finnhub profile call per holding. */
+(function () {
+  async function repair() {
+    const tr = window.stockTracker, key = tr && tr.config && tr.config.finnhubApiKey;
+    if (!tr || !key || window._demoModeActive) return;
+    const bad = (tr.stocks || []).filter(it => it.industry === 'Custom Industry');
+    if (!bad.length) return;
+    let fixed = 0;
+    for (const it of bad) {
+      try {
+        const r = await fetch('https://finnhub.io/api/v1/stock/profile2?symbol=' + encodeURIComponent(it.symbol) + '&token=' + key);
+        const j = r.ok ? await r.json() : null;
+        if (j && j.finnhubIndustry) { it.industry = j.finnhubIndustry; fixed++; }
+      } catch (e) {}
+      await new Promise(res => setTimeout(res, 1100));
+    }
+    if (fixed) { await tr.saveData(); tr.renderContent(); console.log('[Sector repair] restored sector on', fixed, 'holding(s)'); }
+  }
+  window.addEventListener('load', () => setTimeout(repair, 12000));
+  window.repairCustomIndustry = repair;
+})();
+</script>
 
 <!-- Safety net: re-expose all panel functions globally after IIFE runs -->
 <script>
