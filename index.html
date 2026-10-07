@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v7: close-the-gaps handles recurring buys, Copy list) - 2026-10-05 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v8: positions reader stops at the holdings table) - 2026-10-06 -->
 
 <html lang="en">
 <head>
@@ -24206,7 +24206,15 @@ window.toggleIncludeCash = () => {
     const iQty = iQtyExact >= 0 ? iQtyExact : h.findIndex(c => /quantity|^qty|shares/i.test(c) && !/exchange/i.test(c));
     const iAcct = h.findIndex(c => /^account name$/i.test(c)) >= 0 ? h.findIndex(c => /^account name$/i.test(c)) : h.findIndex(c => /^account( type)?$/i.test(c));
     const out = {}, skipped = new Set();
+    // Read only the holdings table: stop at the first blank line after it, or where another table starts
+    // (Vanguard puts holdings and transactions in one file).
+    let started = false, stopped = false;
     rows.slice(hi + 1).forEach(r => {
+      if (stopped) return;
+      const blank = r.every(c => c === '');
+      if (blank) { if (started) stopped = true; return; }
+      if (r.some(c => /^(trade date|settlement date|transaction type)$/i.test(c))) { stopped = true; return; }
+      started = true;
       const sym = cleanSym(r[iSym]), q = num(r[iQty]);
       if (!sym || q == null || !/^[A-Z0-9.\-]{1,12}$/.test(sym) || CASH.test(sym)) return;
       let plat = choice;
