@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v15: FIFO per account, retirement accounts out of tax reports, sector fix, share-count compare vs 401k app) - 2026-10-07 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v16: FIFO per account, tax reports, sector fix, share compare + fixes file for 401k app) - 2026-10-07 -->
 
 <html lang="en">
 <head>
@@ -24236,6 +24236,74 @@ window.showCashDetails = () => {
 };
 
 // Which account explains the difference between Secure and the 401k app?
+// ── v16: which exact trades does the 401k app miss? ──
+// For each position that differs, Secure trades with no counterpart in the 401k app (same type,
+// shares within 0.001, date within 3 days) are the candidates. If the 401k app has no unmatched
+// trades of its own, all candidates are exported. Otherwise only a set of candidates that adds up
+// to the gap is exported (e.g. the newest reinvestments next to an old summary entry); if none
+// does, the position is listed for a manual fix.
+function k401Fixes(rows) {
+  const tr = window.stockTracker, dayOf = d => { const x = new Date(d); return isNaN(x) ? String(d || '').slice(0, 10)
+    : x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
+  const gap = (a, b) => Math.abs((new Date(a) - new Date(b)) / 86400000);
+  const secPlat = t => t.platform === 'Fidelity' ? (t.accountType === 'Roth IRA' ? 'Fidelity Roth IRA' : 'Fidelity Regular Brokerage') : t.platform;
+  const names = {};
+  [...(tr.stocks || []), ...(tr.mutualFunds || [])].forEach(it => { names[String(it.symbol).toUpperCase()] = it.name || it.symbol; });
+  const subset = (items, target, tol) => {
+    const n = items.length; if (!n || n > 22) return null;
+    let best = null;
+    for (let m = 1; m < (1 << n); m++) {
+      let sum = 0, cnt = 0, newest = '';
+      for (let i = 0; i < n; i++) if (m & (1 << i)) { sum += items[i].s; cnt++; if (items[i].day > newest) newest = items[i].day; }
+      const d = Math.abs(sum - target);
+      if (d <= tol && (!best || cnt < best.cnt || (cnt === best.cnt && newest > best.newest))) best = { m, cnt, newest };
+    }
+    return best ? items.filter((x, i) => best.m & (1 << i)) : null;
+  };
+  const exportRows = [], manual = [];
+  rows.forEach(r => {
+    const secTx = [];
+    [...(tr.stocks || []), ...(tr.mutualFunds || [])].filter(it => String(it.symbol).toUpperCase() === r.sym).forEach(it =>
+      (it.transactions || []).forEach(t => { if ((t.type === 'buy' || t.type === 'sell') && (t.platform || 'Uncategorized') === r.plat)
+        secTx.push({ type: t.type, shares: +t.shares || 0, price: +t.price || 0, day: dayOf(t.date), acct: t.accountType || '' }); }));
+    const kTx = ((pd && pd.transactions) || []).filter(t => String(t.symbol || '').toUpperCase() === r.sym &&
+        ['Regular Brokerage', 'Roth IRA'].includes(t.accountType) && secPlat(t) === r.plat && /^(BUY|SELL)$/i.test(t.transactionType || ''))
+      .map(t => ({ type: String(t.transactionType).toLowerCase(), shares: +t.shares || 0, price: +t.price || 0, day: dayOf(t.date), acct: t.accountType, used: false }));
+    const unSec = secTx.filter(t => {
+      const hit = kTx.find(k => !k.used && k.type === t.type && Math.abs(k.shares - t.shares) < 0.001 && gap(k.day, t.day) <= 3);
+      if (hit) { hit.used = true; return false; } return true;
+    }).map(t => Object.assign(t, { s: (t.type === 'sell' ? -1 : 1) * t.shares }));
+    const unK = kTx.filter(k => !k.used);
+    const tol = Math.max(0.002, Math.abs(r.d) * 0.0005);
+    let pick = !unK.length ? unSec : subset(unSec, r.d, tol);
+    if (pick && Math.abs(pick.reduce((a, x) => a + x.s, 0) - r.d) > tol) pick = null;
+    const k401Plat = r.plat.startsWith('Fidelity') ? 'Fidelity' : r.plat;
+    const k401Acct = r.plat === 'Fidelity Roth IRA' ? 'Roth IRA' : r.plat === 'Fidelity Regular Brokerage' ? 'Regular Brokerage'
+      : ((kTx[0] && kTx[0].acct) || (/roth/i.test((secTx[0] || {}).acct || '') ? 'Roth IRA' : 'Regular Brokerage'));
+    if (pick && pick.length) pick.forEach(t => exportRows.push({ day: t.day, action: t.type.toUpperCase(), sym: r.sym, qty: t.shares, price: t.price,
+        plat: k401Plat, acct: k401Acct, name: names[r.sym] || r.sym, posKey: r.plat + ' ' + r.sym }));
+    else manual.push({ r, unSec, unK });
+  });
+  return { exportRows, manual };
+}
+window.exportK401Fixes = function () {
+  const f = window._k401FixPlan; if (!f || !f.exportRows.length) { alert('Nothing to export.'); return; }
+  const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const csv = 'Secure app fixes for 401k app (generated ' + new Date().toISOString().slice(0, 10) + ')\n' +
+    'Date,Action,Symbol,Quantity,Price,Platform,Account Type,Name\n' +
+    f.exportRows.map(x => [x.day, x.action, x.sym, +x.qty.toFixed(6), +x.price.toFixed(6), x.plat, x.acct, x.name].map(q).join(',')).join('\n') + '\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'secure-fixes-for-401k-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+};
+window.copyK401Manual = function () {
+  const f = window._k401FixPlan; if (!f) return;
+  const t = f.manual.map(m => `${m.r.plat} · ${m.r.sym} · Secure ${m.r.a} · 401k ${m.r.b} · diff ${+m.r.d.toFixed(6)}\n` +
+    `  Secure trades not in 401k app: ${m.unSec.map(x => x.day + ' ' + x.type + ' ' + x.shares + ' @ ' + x.price).join('; ') || '—'}\n` +
+    `  401k app trades not in Secure: ${m.unK.map(x => x.day + ' ' + x.type + ' ' + x.shares + ' @ ' + x.price).join('; ') || '—'}`).join('\n\n');
+  (navigator.clipboard && navigator.clipboard.writeText(t).then(() => alert('Copied — paste it into the chat.'), () => window.prompt('Copy this text:', t))) || window.prompt('Copy this text:', t);
+};
 // Share counts per symbol and account, Secure vs 401k app (prices don't matter here) — v15
 function shareDiffHTML(accounts) {
   const tr = window.stockTracker; if (!tr || !pd) return '';
@@ -24261,6 +24329,16 @@ function shareDiffHTML(accounts) {
   }).filter(r => accts.has(r.plat) && Math.abs(r.d) >= 0.001 && (Math.abs(r.a) > 0.0001 || Math.abs(r.b) > 0.0001))
     .sort((x, y) => Math.abs(y.usd) - Math.abs(x.usd) || x.sym.localeCompare(y.sym));
   const f = n => (+n).toLocaleString('en-US', { maximumFractionDigits: 4 });
+  const plan = window._k401FixPlan = k401Fixes(rows);
+  const nPos = new Set(plan.exportRows.map(x => x.posKey)).size;
+  const fixBox = rows.length ? `<div style="margin:0 0 10px;padding:10px;border-radius:8px;border:1px solid #10b981;background:rgba(16,185,129,0.08);font-size:0.82rem;">
+      <b>📤 Fix the 401k app automatically</b><br>
+      ${plan.exportRows.length ? `<b>${plan.exportRows.length}</b> trade(s) found that close <b>${nPos}</b> of ${rows.length} gaps (same dates and prices as in this app).
+        <button type="button" class="rt-btn rt-primary" style="margin-left:6px;padding:6px 12px;" onclick="window.exportK401Fixes()">📤 Download fixes file</button>
+        <div style="margin-top:4px;color:var(--text-secondary);">Then in the 401k app: 📥 Import Broker CSV → pick this file → Import. These trades don't move cash (SPAXX etc.).</div>` : 'No trades could be matched automatically.'}
+      ${plan.manual.length ? `<div style="margin-top:6px;">⚠️ <b>${plan.manual.length}</b> gap(s) need a manual fix (${plan.manual.map(m => esc(m.r.sym)).join(', ')}).
+        <button type="button" class="rt-btn" style="margin-left:6px;" onclick="window.copyK401Manual()">📋 Copy details</button></div>` : ''}
+    </div>` : '';
   window._shareDiffText = 'Account\tSymbol\tSecure\t401k app\tSecure - 401k\n' + rows.map(r => `${r.plat}\t${r.sym}\t${f(r.a)}\t${f(r.b)}\t${f(r.d)}`).join('\n');
   const body = rows.length ? tbl(['Account', 'Symbol', 'Secure', '401k app', 'Shares diff', '≈ $'],
       rows.map(r => `<tr><td>${esc(r.plat)}</td><td class="r"><b>${esc(r.sym)}</b></td><td class="r">${f(r.a)}</td><td class="r">${f(r.b)}</td>
@@ -24272,7 +24350,7 @@ function shareDiffHTML(accounts) {
       <b>+</b> = the 401k app is missing shares (add a BUY there, or delete an extra SELL). <b>−</b> = the 401k app has too many (delete a duplicate BUY, or add a missing SELL).</p>
       ${rows.length ? `<p style="font-size:0.8rem;margin:0 0 8px;"><b>${rows.length}</b> position(s) differ.
         <button type="button" class="rt-btn" style="margin-left:6px;" onclick="(navigator.clipboard&&navigator.clipboard.writeText(window._shareDiffText).then(()=>alert('Copied — paste it into the chat.'),()=>window.prompt('Copy this text:',window._shareDiffText)))||window.prompt('Copy this text:',window._shareDiffText)">📋 Copy list</button></p>` : ''}
-      ${body}</div>`;
+      ${fixBox}${body}</div>`;
 }
 window.showMatchDetails = () => {
   const link = window._k401Link, tr = window.stockTracker;
