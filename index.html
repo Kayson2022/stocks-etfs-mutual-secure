@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v8: positions reader stops at the holdings table) - 2026-10-06 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v9: positions reader stops at the holdings table, checks broker choice) - 2026-10-06 -->
 
 <html lang="en">
 <head>
@@ -24205,6 +24205,8 @@ window.toggleIncludeCash = () => {
     const iQtyExact = h.findIndex(c => /^(quantity|qty|shares|qty \(quantity\))$/i.test(c));
     const iQty = iQtyExact >= 0 ? iQtyExact : h.findIndex(c => /quantity|^qty|shares/i.test(c) && !/exchange/i.test(c));
     const iAcct = h.findIndex(c => /^account name$/i.test(c)) >= 0 ? h.findIndex(c => /^account name$/i.test(c)) : h.findIndex(c => /^account( type)?$/i.test(c));
+    if (choice === '__fidelity__' && !h.some(c => /^account name$/i.test(c)))
+      throw new Error('This does not look like a Fidelity Positions file (no "Account Name" column). If it is from Vanguard, Schwab or Merrill Edge, pick that broker in the list above, then choose the file again.');
     const out = {}, skipped = new Set();
     // Read only the holdings table: stop at the first blank line after it, or where another table starts
     // (Vanguard puts holdings and transactions in one file).
