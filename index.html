@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v18.2: FIFO per account, tax reports, sector fix, 401k fixes file, Yahoo export, fund today's change fixed, funds refresh with stocks) - 2026-10-07 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v19: FIFO per account, tax reports, 401k fixes file, Yahoo export, fund today fixes, Trim Planner) - 2026-10-07 -->
 
 <html lang="en">
 <head>
@@ -4350,6 +4350,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     <div class="ut-title">📊 Analysis</div>
     <div class="ut-grid">
       <button class="add-btn" id="concentrationBtn" onclick="window.showConcentration()">📊 Concentration</button>
+      <button class="add-btn" onclick="window.openTrimPlanner()">✂️ Trim Planner</button>
       <button class="add-btn" onclick="window.stockTracker.openDividendTracker()">💰 Dividend Tracker</button>
       <button class="add-btn" id="erCalBtn" onclick="window.showErCalendar()">📅 Earnings Calendar</button>
       <button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
@@ -20999,6 +21000,217 @@ window.renderTrueExposure = function() {
 })();</script>
 
 <!-- Safety net: re-expose all panel functions globally after IIFE runs --></script>
+<script>
+/* ═══ ✂️ Trim Planner (v19, 2026-10-07) ═══
+   Pick a stock and a target weight; works out how many shares to sell, from which lots
+   (Roth/IRA first = no tax, then the highest-cost long-term lots), the gain and an
+   estimated tax, compared with the broker's default FIFO. Individual stocks only.
+   Estimates, not tax advice. */
+(function () {
+  const $ = id => document.getElementById(id);
+  const money = n => (n < 0 ? '−$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  const money2 = n => (n < 0 ? '−$' : '$') + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sh = n => (+n).toLocaleString('en-US', { maximumFractionDigits: 4 });
+  const LS = 'trimPlannerPrefs';
+  const prefs = () => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch (e) { return {}; } };
+  const savePrefs = p => { try { localStorage.setItem(LS, JSON.stringify(p)); } catch (e) {} };
+
+  function openLots(it) {
+    const out = [];
+    window.splitTxnsByAccount(it.transactions || []).forEach(g => {
+      const lots = g.txns.filter(t => t.type === 'buy').sort((a, b) => new Date(a.date) - new Date(b.date))
+        .map(b => ({ shares: +b.shares || 0, price: +b.price || 0, date: new Date(b.date), acct: g.platform, ret: g.retirement }));
+      g.txns.filter(t => t.type === 'sell').sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(s => {
+        let n = +s.shares || 0;
+        for (const l of lots) { if (n <= 0) break; const u = Math.min(n, l.shares); l.shares -= u; n -= u; }
+      });
+      lots.filter(l => l.shares > 1e-6).forEach(l => out.push(l));
+    });
+    return out;
+  }
+  const isLT = (d, when) => (when - d) / 864e5 > 365;
+
+  function holdings() {
+    const tr = window.stockTracker, all = [...(tr.stocks || []), ...(tr.mutualFunds || [])];
+    let total = 0; const stocks = [];
+    all.forEach(it => {
+      const lots = openLots(it), shares = lots.reduce((a, l) => a + l.shares, 0);
+      if (shares <= 1e-4) return;
+      const value = shares * (+it.price || 0); total += value;
+      if (window.classifyAsset(it, tr) === 'stock') stocks.push({ it, sym: String(it.symbol).toUpperCase(), lots, shares, value, price: +it.price || 0 });
+    });
+    stocks.sort((a, b) => b.value - a.value);
+    return { total, stocks };
+  }
+
+  function plan(h, opts, total, rates, now) {
+    const keep = opts.reinvest ? opts.target / 100 * total
+      : (opts.target / 100) * (total - (h.value - opts.target / 100 * total) / (1 - opts.target / 100));
+    let sellValue = opts.reinvest ? h.value - opts.target / 100 * total
+      : (h.value - opts.target / 100 * total) / (1 - opts.target / 100);
+    if (opts.mode === 'shares') sellValue = Math.min(opts.shares, h.shares) * h.price;
+    sellValue = Math.max(0, Math.min(sellValue, h.value));
+    let toSell = h.price > 0 ? sellValue / h.price : 0;
+    const taxOf = l => (l.ret ? 0 : (isLT(l.date, now) ? rates.lt : rates.st));
+    const pick = order => {
+      let left = toSell; const rows = [];
+      for (const l of order) {
+        if (left <= 1e-6) break;
+        const u = Math.min(left, l.shares); left -= u;
+        const gain = u * (h.price - l.price), lt = isLT(l.date, now);
+        rows.push({ l, u, gain, lt, tax: Math.max(0, gain) * taxOf(l) * (l.ret ? 0 : 1), taxRate: taxOf(l) });
+      }
+      const sum = k => rows.reduce((a, r) => a + r[k], 0);
+      const tx = rows.filter(r => !r.l.ret);
+      return { rows, shares: sum('u'), proceeds: sum('u') * h.price,
+        ltGain: tx.filter(r => r.lt).reduce((a, r) => a + r.gain, 0),
+        stGain: tx.filter(r => !r.lt).reduce((a, r) => a + r.gain, 0),
+        retShares: rows.filter(r => r.l.ret).reduce((a, r) => a + r.u, 0) };
+    };
+    const ret = h.lots.filter(l => l.ret), tax = h.lots.filter(l => !l.ret);
+    const smart = [...(opts.rothFirst ? ret : []),
+      ...tax.filter(l => isLT(l.date, now)).sort((a, b) => b.price - a.price),
+      ...tax.filter(l => !isLT(l.date, now)).sort((a, b) => b.price - a.price),
+      ...(opts.rothFirst ? [] : ret)];
+    const fifo = [...h.lots].sort((a, b) => a.date - b.date);
+    return { toSell, sellValue, smart: pick(smart), fifo: pick(fifo) };
+  }
+
+  function harvestable(stocks, exclude, now) {
+    const rows = [];
+    stocks.forEach(s => {
+      if (s.sym === exclude) return;
+      let lt = 0, st = 0, val = 0;
+      s.lots.filter(l => !l.ret).forEach(l => {
+        const g = l.shares * (s.price - l.price);
+        if (g < 0) { (isLT(l.date, now) ? (lt += g) : (st += g)); val += l.shares * s.price; }
+      });
+      if (lt + st < -1) rows.push({ sym: s.sym, lt, st, val });
+    });
+    return rows.sort((a, b) => (a.lt + a.st) - (b.lt + b.st));
+  }
+
+  // Net gains and losses the IRS way (ST vs ST, LT vs LT, then across); $3k ordinary offset ignored
+  function netTax(ltG, stG, ltL, stL, rates) {
+    let st = stG + stL, lt = ltG + ltL;
+    if (st < 0 && lt > 0) { lt += st; st = 0; } else if (lt < 0 && st > 0) { st += lt; lt = 0; }
+    return Math.max(0, lt) * rates.lt + Math.max(0, st) * rates.st;
+  }
+
+  function render() {
+    const p = prefs(), now = new Date();
+    const { total, stocks } = holdings();
+    const sel = $('tpSym'), cur = sel.value || p.sym || (stocks[0] && stocks[0].sym);
+    sel.innerHTML = stocks.map(s => `<option value="${s.sym}" ${s.sym === cur ? 'selected' : ''}>${s.sym} — ${money(s.value)} (${(s.value / total * 100).toFixed(1)}%)</option>`).join('');
+    const h = stocks.find(s => s.sym === sel.value) || stocks[0];
+    if (!h) { $('tpOut').innerHTML = '<p>No individual stocks found.</p>'; return; }
+    const fedLT = +$('tpFedLT').value, fedOrd = +$('tpFedOrd').value, ca = +$('tpCA').value, niit = $('tpNIIT').checked ? 3.8 : 0;
+    const rates = { lt: (fedLT + ca + niit) / 100, st: (fedOrd + ca + niit) / 100 };
+    const opts = { mode: $('tpMode').value, target: +$('tpTarget').value, shares: +$('tpShares').value,
+                   reinvest: $('tpReinvest').checked, rothFirst: $('tpRoth').checked };
+    savePrefs({ sym: h.sym, mode: opts.mode, target: opts.target, fedLT, fedOrd, ca, niit: !!niit, reinvest: opts.reinvest, rothFirst: opts.rothFirst });
+    $('tpTargetWrap').style.display = opts.mode === 'pct' ? '' : 'none';
+    $('tpSharesWrap').style.display = opts.mode === 'shares' ? '' : 'none';
+    const curPct = h.value / total * 100;
+    if (opts.mode === 'pct' && opts.target >= curPct) {
+      $('tpOut').innerHTML = `<p style="margin-top:12px;">${h.sym} is already ${curPct.toFixed(1)}% of the portfolio — at or under ${opts.target}%. Nothing to sell.</p>`; return;
+    }
+    const r = plan(h, opts, total, rates, now), s = r.smart, f = r.fifo;
+    const losses = harvestable(stocks, h.sym, now), useLoss = $('tpHarvest').checked;
+    const ltL = useLoss ? losses.reduce((a, x) => a + x.lt, 0) : 0, stL = useLoss ? losses.reduce((a, x) => a + x.st, 0) : 0;
+    const taxS = netTax(s.ltGain, s.stGain, 0, 0, rates), taxF = netTax(f.ltGain, f.stGain, 0, 0, rates);
+    const taxSL = netTax(s.ltGain, s.stGain, ltL, stL, rates);
+    const after = opts.reinvest ? (h.value - r.sellValue) / total * 100 : (h.value - r.sellValue) / (total - r.sellValue) * 100;
+    const rowsHTML = s.rows.map(x => `<tr>
+        <td>${x.l.acct}${x.l.ret ? ' <span class="tp-tag tp-free">no tax</span>' : ''}</td>
+        <td>${x.l.date.toISOString().slice(0, 10)} <span class="tp-tag ${x.lt ? 'tp-lt' : 'tp-st'}">${x.lt ? 'long' : 'short'}</span></td>
+        <td class="r">${sh(x.u)}</td><td class="r">${money2(x.l.price)}</td>
+        <td class="r ${x.gain >= 0 ? 'tp-pos' : 'tp-neg'}">${money(x.gain)}</td>
+        <td class="r">${x.l.ret ? '$0' : money(x.tax)}</td></tr>`).join('');
+    const nextLT = h.lots.filter(l => !l.ret && !isLT(l.date, now)).map(l => new Date(l.date.getTime() + 366 * 864e5)).sort((a, b) => a - b)[0];
+    $('tpOut').innerHTML = `
+      <div class="tp-kpis">
+        <div><span>Sell</span><b>${sh(s.shares)} sh</b><em>${money(s.proceeds)}</em></div>
+        <div><span>${h.sym} weight</span><b>${curPct.toFixed(1)}% → ${after.toFixed(1)}%</b><em>of ${money(total)} stocks + funds</em></div>
+        <div><span>Taxable gain</span><b>${money(s.ltGain + s.stGain)}</b><em>long ${money(s.ltGain)} · short ${money(s.stGain)}</em></div>
+        <div><span>Est. tax (this plan)</span><b>${money(useLoss ? taxSL : taxS)}</b><em>${useLoss ? 'after harvesting losses' : 'before any loss offset'}</em></div>
+      </div>
+      <table class="tp-tbl"><thead><tr><th>Account</th><th>Bought</th><th class="r">Sell</th><th class="r">Cost/sh</th><th class="r">Gain</th><th class="r">Est. tax</th></tr></thead><tbody>${rowsHTML}</tbody></table>
+      <div class="tp-cmp">
+        <b>This plan vs. the broker's default (FIFO, oldest lots first):</b>
+        tax ${money(taxS)} vs ${money(taxF)} — ${taxF - taxS > 1 ? `<span class="tp-pos">saves ${money(taxF - taxS)}</span>` : 'about the same'}.
+        ${taxF - taxS > 1 ? `To get it, choose <b>specific shares</b> (Fidelity: "Specific Shares" / Schwab: "Specific Lot") when you place the order and pick the lots above — otherwise the broker uses FIFO.` : ''}
+        ${s.retShares > 0 ? `<br>${sh(s.retShares)} sh come from a retirement account (no tax there).` : ''}
+        ${nextLT ? `<br>⏳ A short-term lot of ${h.sym} turns long-term on <b>${nextLT.toISOString().slice(0, 10)}</b>.` : ''}
+      </div>
+      <details class="tp-det" ${useLoss ? 'open' : ''}><summary>Losses you could harvest in taxable accounts (individual stocks only): <b>${money(losses.reduce((a, x) => a + x.lt + x.st, 0))}</b></summary>
+        <table class="tp-tbl"><thead><tr><th>Stock</th><th class="r">Long-term loss</th><th class="r">Short-term loss</th><th class="r">Value now</th></tr></thead>
+        <tbody>${losses.map(x => `<tr><td>${x.sym}</td><td class="r tp-neg">${x.lt ? money(x.lt) : '—'}</td><td class="r tp-neg">${x.st ? money(x.st) : '—'}</td><td class="r">${money(x.val)}</td></tr>`).join('')}</tbody></table>
+        <p class="tp-note">Only counts if sold in the same tax year as the gain. Wash sale: don't buy the same stock within 30 days before or after — in any account, Roth included.</p>
+      </details>
+      <p class="tp-note">Rates used: long-term ${(rates.lt * 100).toFixed(1)}%, short-term ${(rates.st * 100).toFixed(1)}% (federal + California${niit ? ' + 3.8% NIIT' : ''}). California taxes capital gains as ordinary income. Splitting the sale between December and January puts the gain in two tax years, which can keep each year in a lower bracket — this tool assumes the same rate either way. Estimates only, not tax advice; check with your CPA before a large sale.</p>`;
+  }
+
+  window.openTrimPlanner = function () {
+    const tr = window.stockTracker; if (!tr || !window.splitTxnsByAccount) { alert('App not ready yet'); return; }
+    let ov = $('tpModal');
+    if (!ov) {
+      const p = prefs();
+      ov = document.createElement('div'); ov.id = 'tpModal';
+      ov.innerHTML = `<style>
+        #tpModal{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto}
+        #tpModal .tp-box{background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:14px;width:100%;max-width:880px;padding:18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+        #tpModal h3{margin:0;font-size:1.15rem} #tpModal .tp-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+        #tpModal .tp-x{background:none;border:none;color:var(--text-secondary);font-size:1.4rem;cursor:pointer}
+        #tpModal .tp-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0}
+        #tpModal label{font-size:.75rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:4px}
+        #tpModal select,#tpModal input[type=number]{background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:8px;padding:7px 8px;font-size:.9rem}
+        #tpModal .tp-checks{display:flex;flex-wrap:wrap;gap:14px;font-size:.82rem;margin:4px 0 2px} #tpModal .tp-checks label{flex-direction:row;align-items:center;color:var(--text-primary);font-size:.82rem}
+        #tpModal .tp-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:14px 0}
+        #tpModal .tp-kpis div{background:var(--bg-tertiary);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column}
+        #tpModal .tp-kpis span{font-size:.72rem;color:var(--text-secondary)} #tpModal .tp-kpis b{font-size:1.15rem} #tpModal .tp-kpis em{font-style:normal;font-size:.74rem;color:var(--text-secondary)}
+        #tpModal .tp-tbl{width:100%;border-collapse:collapse;font-size:.84rem} #tpModal .tp-tbl th{text-align:left;font-size:.72rem;color:var(--text-secondary);font-weight:600;border-bottom:1px solid var(--border-color);padding:6px}
+        #tpModal .tp-tbl td{padding:6px;border-bottom:1px solid var(--border-color)} #tpModal .r{text-align:right}
+        #tpModal .tp-pos{color:var(--color-positive)} #tpModal .tp-neg{color:var(--color-negative)}
+        #tpModal .tp-tag{font-size:.66rem;padding:1px 6px;border-radius:999px;margin-left:4px;font-weight:600}
+        #tpModal .tp-lt{background:rgba(23,165,137,.15);color:var(--color-positive)} #tpModal .tp-st{background:rgba(231,76,60,.15);color:var(--color-negative)} #tpModal .tp-free{background:rgba(124,58,237,.15);color:var(--accent-primary)}
+        #tpModal .tp-cmp{margin:12px 0;padding:10px 12px;border-radius:10px;background:var(--bg-tertiary);font-size:.84rem;line-height:1.5}
+        #tpModal .tp-det{margin:10px 0;font-size:.84rem} #tpModal .tp-det summary{cursor:pointer;padding:6px 0}
+        #tpModal .tp-note{font-size:.74rem;color:var(--text-secondary);margin:8px 0 0}
+        @media (max-width:600px){#tpModal{padding:8px}#tpModal .tp-box{padding:14px}#tpModal .tp-tbl{font-size:.76rem}}
+      </style>
+      <div class="tp-box">
+        <div class="tp-head"><h3>✂️ Trim Planner</h3><button class="tp-x" onclick="document.getElementById('tpModal').remove()">×</button></div>
+        <div style="font-size:.8rem;color:var(--text-secondary);">How many shares of one stock to sell, from which lots, and the estimated tax. Individual stocks only (ETFs and funds are left alone).</div>
+        <div class="tp-form">
+          <label>Stock<select id="tpSym"></select></label>
+          <label>Plan by<select id="tpMode"><option value="pct">Target weight</option><option value="shares">Number of shares</option></select></label>
+          <label id="tpTargetWrap">Target weight (%)<input id="tpTarget" type="number" step="0.5" min="0" max="100" value="${p.target ?? 15}"></label>
+          <label id="tpSharesWrap" style="display:none">Shares to sell<input id="tpShares" type="number" step="any" min="0" value="10"></label>
+          <label>Federal long-term rate<select id="tpFedLT"><option>0</option><option>15</option><option>20</option></select></label>
+          <label>Federal bracket (short-term)<select id="tpFedOrd"><option>22</option><option>24</option><option>32</option><option>35</option><option>37</option></select></label>
+          <label>California rate (%)<input id="tpCA" type="number" step="0.1" min="0" max="14.4" value="${p.ca ?? 9.3}"></label>
+        </div>
+        <div class="tp-checks">
+          <label><input type="checkbox" id="tpNIIT" ${p.niit === false ? '' : 'checked'}> +3.8% NIIT</label>
+          <label><input type="checkbox" id="tpRoth" ${p.rothFirst === false ? '' : 'checked'}> Sell Roth/IRA shares first (no tax)</label>
+          <label><input type="checkbox" id="tpReinvest" ${p.reinvest === false ? '' : 'checked'}> Proceeds stay invested (e.g. into another fund)</label>
+          <label><input type="checkbox" id="tpHarvest"> Offset with harvested losses</label>
+        </div>
+        <div id="tpOut"></div>
+      </div>`;
+      document.body.appendChild(ov);
+      ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+      $('tpFedLT').value = String(p.fedLT ?? 15); $('tpFedOrd').value = String(p.fedOrd ?? 32);
+      if (p.mode) $('tpMode').value = p.mode;
+      ov.querySelectorAll('select,input').forEach(el => el.addEventListener('input', render));
+    }
+    render();
+  };
+  window.__trimPlannerTest = { openLots, plan, netTax, harvestable };
+})();
+</script>
+
 <script>
 /* (v14) Put back the real sector on holdings whose sector was overwritten with "Custom Industry"
    by Edit Position. Runs once per load, a few seconds in, one Finnhub profile call per holding. */
