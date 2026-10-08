@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v20: FIFO per account, tax reports, 401k fixes file, Yahoo export, fund today fixes, Trim Planner, Year-End Tax Plan) - 2026-10-07 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v21: FIFO per account, tax reports, 401k fixes file, Yahoo export, fund today fixes, Trim Planner, Year-End Tax Plan, Dividend Income) - 2026-10-07 -->
 
 <html lang="en">
 <head>
@@ -4353,6 +4353,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
       <button class="add-btn" onclick="window.openTrimPlanner()">✂️ Trim Planner</button>
       <button class="add-btn" onclick="window.openTaxPlan()">🧾 Year-End Tax Plan</button>
       <button class="add-btn" onclick="window.stockTracker.openDividendTracker()">💰 Dividend Tracker</button>
+      <button class="add-btn" onclick="window.openDividendIncome()">💵 Dividend Income</button>
       <button class="add-btn" id="erCalBtn" onclick="window.showErCalendar()">📅 Earnings Calendar</button>
       <button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
       <button class="add-btn" id="listAllBtn">📋 List All Stocks</button>
@@ -21369,6 +21370,143 @@ window.renderTrueExposure = function() {
   window.__taxPlanTest = { analyse, taxOf };
 })();
 </script>
+<script>
+/* ═══ 💵 Dividend Income (v21, 2026-10-07) ═══
+   Real dividend income worked out from each holding's dividend history (Yahoo, through your
+   Worker) × the shares you held on each ex-dividend date (from your transactions, all accounts).
+   Counts cash and reinvested dividends alike. Histories are cached 24 h in this browser.
+   Share counts are today's terms (they match the brokers), and Yahoo's per-share amounts are
+   split-adjusted, so the two line up. Summary entries dated earlier than the real buys will
+   overstate older years. */
+(function () {
+  const $ = id => document.getElementById(id);
+  const money = n => '$' + (+n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const money0 = n => '$' + Math.round(+n).toLocaleString('en-US');
+  const CK = 'divHistCache_v1', DAY = 864e5;
+  const cache = () => { try { return JSON.parse(localStorage.getItem(CK) || '{}'); } catch (e) { return {}; } };
+  const saveCache = c => { try { localStorage.setItem(CK, JSON.stringify(c)); } catch (e) {} };
+
+  async function history(sym, c) {
+    const hit = c[sym];
+    if (hit && Date.now() - hit.t < DAY) return hit.d;
+    const url = window.YQ(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1mo&range=15y&events=div`);
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const ev = j?.chart?.result?.[0]?.events?.dividends || {};
+    const d = Object.values(ev).map(x => [x.date * 1000, +x.amount]).filter(x => x[1] > 0).sort((a, b) => a[0] - b[0]);
+    c[sym] = { t: Date.now(), d }; return d;
+  }
+
+  function sharesOn(txns, when, retirement) {
+    let n = 0;
+    for (const t of txns) {
+      if (t.type !== 'buy' && t.type !== 'sell') continue;
+      if (retirement != null && !!window.isRetirementTxn(t) !== retirement) continue;
+      if (new Date(t.date).getTime() < when) n += (t.type === 'buy' ? 1 : -1) * (+t.shares || 0);
+    }
+    return Math.max(0, n);
+  }
+
+  async function compute(progress) {
+    const tr = window.stockTracker, c = cache();
+    const items = [...(tr.stocks || []), ...(tr.mutualFunds || [])].filter(it => (it.transactions || []).some(t => t.type === 'buy'));
+    const bySym = {}; items.forEach(it => { const s = String(it.symbol).toUpperCase(); (bySym[s] = bySym[s] || []).push(it); });
+    const syms = Object.keys(bySym), out = [], failed = [];
+    let done = 0;
+    const work = async sym => {
+      try {
+        const hist = await history(sym, c);
+        const txns = bySym[sym].flatMap(it => it.transactions || []);
+        const price = +bySym[sym][0].price || 0;
+        const nowSh = sharesOn(txns, Date.now() + DAY, null);
+        const pays = hist.map(([ts, amt]) => {
+          const tax = sharesOn(txns, ts, false), ret = sharesOn(txns, ts, true);
+          return { ts, amt, tax: tax * amt, ret: ret * amt };
+        }).filter(p => p.tax + p.ret > 0.005);
+        const ttmPerShare = hist.filter(([ts]) => ts > Date.now() - 365 * DAY).reduce((a, [, x]) => a + x, 0);
+        out.push({ sym, price, nowSh, pays, ttmPerShare, fwd: ttmPerShare * nowSh, value: nowSh * price });
+      } catch (e) { failed.push(sym); }
+      progress(++done, syms.length);
+    };
+    const q = [...syms];
+    await Promise.all(Array.from({ length: 4 }, async () => { while (q.length) await work(q.shift()); }));
+    saveCache(c);
+    return { rows: out, failed };
+  }
+
+  function render(res) {
+    const now = new Date(), yr = now.getFullYear(), yearStart = new Date(yr, 0, 1).getTime(), ttmStart = Date.now() - 365 * DAY;
+    const all = res.rows.flatMap(r => r.pays.map(p => ({ ...p, sym: r.sym })));
+    const sum = (arr, k) => arr.reduce((a, p) => a + p[k], 0);
+    const byYear = {};
+    all.forEach(p => { const y = new Date(p.ts).getFullYear(); const b = byYear[y] = byYear[y] || { tax: 0, ret: 0 }; b.tax += p.tax; b.ret += p.ret; });
+    const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+    const ytd = all.filter(p => p.ts >= yearStart), ttm = all.filter(p => p.ts >= ttmStart);
+    const fwd = res.rows.reduce((a, r) => a + r.fwd, 0), val = res.rows.reduce((a, r) => a + r.value, 0);
+    const maxY = Math.max(1, ...years.map(y => byYear[y].tax + byYear[y].ret));
+    const payers = res.rows.filter(r => r.fwd > 0.5 || r.pays.some(p => p.ts >= ttmStart)).sort((a, b) => b.fwd - a.fwd);
+    window._divIncome = { ytd: sum(ytd, 'tax') + sum(ytd, 'ret'), ttm: sum(ttm, 'tax') + sum(ttm, 'ret'), fwd, byYear };
+    $('dvOut').innerHTML = `
+      <div class="dv-kpis">
+        <div><span>${yr} so far</span><b>${money0(sum(ytd, 'tax') + sum(ytd, 'ret'))}</b><em>taxable ${money0(sum(ytd, 'tax'))} · retirement ${money0(sum(ytd, 'ret'))}</em></div>
+        <div><span>Last 12 months</span><b>${money0(sum(ttm, 'tax') + sum(ttm, 'ret'))}</b><em>≈ ${money0((sum(ttm, 'tax') + sum(ttm, 'ret')) / 12)}/month</em></div>
+        <div><span>Next 12 months (est.)</span><b>${money0(fwd)}</b><em>last year's payouts × shares you hold now</em></div>
+        <div><span>Portfolio yield</span><b>${val ? (fwd / val * 100).toFixed(2) : '0.00'}%</b><em>on ${money0(val)}</em></div>
+      </div>
+      <h4>By year</h4>
+      <div class="dv-years">${years.map(y => { const t = byYear[y].tax + byYear[y].ret;
+        return `<div class="dv-yr"><span>${y}${y === yr ? ' (YTD)' : ''}</span><div class="dv-bar"><i style="width:${(byYear[y].tax / maxY * 100).toFixed(1)}%"></i><i class="ret" style="width:${(byYear[y].ret / maxY * 100).toFixed(1)}%"></i></div><b>${money0(t)}</b></div>`; }).join('')}
+        <div class="dv-legend"><i></i> taxable accounts &nbsp; <i class="ret"></i> Roth / IRA / 401(k)</div></div>
+      <h4>Dividend payers (${payers.length})</h4>
+      <table class="dv-tbl"><thead><tr><th>Holding</th><th class="r">Shares now</th><th class="r">Per share, 12 mo</th><th class="r">Yield</th><th class="r">Next 12 mo (est.)</th><th class="r">${yr} so far</th></tr></thead><tbody>
+        ${payers.map(r => { const y = r.pays.filter(p => p.ts >= yearStart).reduce((a, p) => a + p.tax + p.ret, 0);
+          return `<tr><td><b>${r.sym}</b></td><td class="r">${r.nowSh.toLocaleString('en-US', { maximumFractionDigits: 3 })}</td><td class="r">${money(r.ttmPerShare)}</td>
+            <td class="r">${r.price ? (r.ttmPerShare / r.price * 100).toFixed(2) + '%' : '—'}</td><td class="r">${money(r.fwd)}</td><td class="r">${money(y)}</td></tr>`; }).join('')}
+      </tbody></table>
+      ${res.failed.length ? `<p class="dv-note">⚠️ Couldn't load dividend history for: ${res.failed.join(', ')}.</p>` : ''}
+      <p class="dv-note">Dividends × shares held on each ex-dividend date, all accounts, cash and reinvested. Taxable-account dividends are what goes on your 1099-DIV (qualified vs ordinary not split out). Holdings entered as one summary BUY with an early date can overstate older years. Data cached 24 h — ↻ to reload.</p>`;
+  }
+
+  window.openDividendIncome = async function (force) {
+    if (!window.stockTracker || !window.YQ) { alert('App not ready yet'); return; }
+    if (force) { try { localStorage.removeItem(CK); } catch (e) {} }
+    let ov = $('dvModal'); if (ov) ov.remove();
+    ov = document.createElement('div'); ov.id = 'dvModal';
+    ov.innerHTML = `<style>
+      #dvModal{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto}
+      #dvModal .dv-box{background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:14px;width:100%;max-width:880px;padding:18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+      #dvModal h3{margin:0;font-size:1.15rem} #dvModal h4{margin:18px 0 8px;font-size:.95rem}
+      #dvModal .dv-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+      #dvModal .dv-btn{background:none;border:1px solid var(--border-color);color:var(--text-secondary);border-radius:8px;padding:4px 10px;cursor:pointer}
+      #dvModal .dv-x{background:none;border:none;color:var(--text-secondary);font-size:1.4rem;cursor:pointer}
+      #dvModal .dv-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}
+      #dvModal .dv-kpis div{background:var(--bg-tertiary);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column}
+      #dvModal .dv-kpis span{font-size:.72rem;color:var(--text-secondary)} #dvModal .dv-kpis b{font-size:1.15rem} #dvModal .dv-kpis em{font-style:normal;font-size:.74rem;color:var(--text-secondary)}
+      #dvModal .dv-yr{display:grid;grid-template-columns:90px 1fr 80px;align-items:center;gap:10px;font-size:.84rem;margin:4px 0}
+      #dvModal .dv-yr b{text-align:right} #dvModal .dv-bar{display:flex;height:12px;background:var(--bg-tertiary);border-radius:6px;overflow:hidden}
+      #dvModal .dv-bar i,#dvModal .dv-legend i{display:inline-block;background:var(--color-positive)} #dvModal .dv-bar i.ret,#dvModal .dv-legend i.ret{background:var(--accent-primary)}
+      #dvModal .dv-legend{font-size:.72rem;color:var(--text-secondary);margin-top:6px} #dvModal .dv-legend i{width:10px;height:10px;border-radius:2px;vertical-align:middle}
+      #dvModal .dv-tbl{width:100%;border-collapse:collapse;font-size:.83rem}
+      #dvModal .dv-tbl th{text-align:left;font-size:.72rem;color:var(--text-secondary);font-weight:600;border-bottom:1px solid var(--border-color);padding:6px}
+      #dvModal .dv-tbl td{padding:6px;border-bottom:1px solid var(--border-color)} #dvModal .r{text-align:right}
+      #dvModal .dv-note{font-size:.74rem;color:var(--text-secondary);margin:10px 0 0}
+      @media (max-width:600px){#dvModal{padding:8px}#dvModal .dv-box{padding:14px}#dvModal .dv-tbl{font-size:.74rem}#dvModal .dv-yr{grid-template-columns:70px 1fr 70px}}
+    </style>
+    <div class="dv-box">
+      <div class="dv-head"><h3>💵 Dividend Income</h3><span><button class="dv-btn" onclick="window.openDividendIncome(true)" title="Reload dividend histories">↻</button>
+        <button class="dv-x" onclick="document.getElementById('dvModal').remove()">×</button></span></div>
+      <div id="dvOut"><p style="font-size:.85rem;color:var(--text-secondary);">Loading dividend history… <span id="dvProg"></span></p></div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    const res = await compute((d, n) => { const p = $('dvProg'); if (p) p.textContent = d + ' / ' + n; });
+    if ($('dvOut')) render(res);
+  };
+  window.__divIncomeTest = { sharesOn, render };
+})();
+</script>
+
 
 
 <script>
