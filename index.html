@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v21: FIFO per account, tax reports, 401k fixes file, Yahoo export, fund today fixes, Trim Planner, Year-End Tax Plan, Dividend Income) - 2026-10-07 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v22: FIFO per account, tax reports, 401k fixes, Yahoo export, fund today fixes, Trim Planner, Tax Plan, Dividend Income + monthly, old dividend tools hidden) - 2026-10-07 -->
 
 <html lang="en">
 <head>
@@ -3978,8 +3978,8 @@ document.addEventListener("DOMContentLoaded", function(){
     <button type="button" class="st-dd-btn" aria-haspopup="true" aria-expanded="false" onclick="window.toggleStDropdown(this)">💵 Income &amp; Tax <span class="st-dd-caret">▾</span></button>
     <div class="st-group-grid st-dd-menu" role="menu">
       <div class="ut-title st-dd-title">💵 Income &amp; Taxes</div>
-      <button class="st-toolbar-btn" data-st-panel="divcal">💰 Div Calendar</button>
-      <button class="st-toolbar-btn" data-st-panel="divwaterfall">💧 Div Waterfall</button>
+      <button class="st-toolbar-btn" data-st-panel="divcal" style="display:none" data-retired="v22">💰 Div Calendar</button>
+      <button class="st-toolbar-btn" data-st-panel="divwaterfall" style="display:none" data-retired="v22">💧 Div Waterfall</button>
       <button class="st-toolbar-btn" data-st-panel="tax">🧾 Tax Summary</button>
       <button class="st-toolbar-btn" data-st-panel="schedd">📄 Schedule D</button>
     </div>
@@ -4257,7 +4257,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 <div class="summary-item-value"><span class="summary-value" id="total-contributions">$0.00</span></div>
 </div>
 <div class="summary-item">
-<div class="summary-item-label">Total Dividends</div>
+<div class="summary-item-label" id="total-dividends-label">Total Dividends</div>
 <div class="summary-item-value"><span class="summary-value" id="total-dividends">$0.00</span></div>
 </div>
 <div class="summary-item summary-item-pair">
@@ -4352,7 +4352,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
       <button class="add-btn" id="concentrationBtn" onclick="window.showConcentration()">📊 Concentration</button>
       <button class="add-btn" onclick="window.openTrimPlanner()">✂️ Trim Planner</button>
       <button class="add-btn" onclick="window.openTaxPlan()">🧾 Year-End Tax Plan</button>
-      <button class="add-btn" onclick="window.stockTracker.openDividendTracker()">💰 Dividend Tracker</button>
+      <button class="add-btn" onclick="window.stockTracker.openDividendTracker()" style="display:none" data-retired="v22">💰 Dividend Tracker</button>
       <button class="add-btn" onclick="window.openDividendIncome()">💵 Dividend Income</button>
       <button class="add-btn" id="erCalBtn" onclick="window.showErCalendar()">📅 Earnings Calendar</button>
       <button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
@@ -9173,7 +9173,10 @@ renderPortfolioSummary() {
                 const contributionsEl = document.getElementById('total-contributions');
                 if (contributionsEl) contributionsEl.textContent = this.formatCurrency(combinedMetrics.totalContributions);
 
-                setElement(document.getElementById('total-dividends'), combinedMetrics.totalDividends);
+                // (v22) real dividends of the last 12 months from 💵 Dividend Income, once loaded
+                const _divShown = (window._divIncome && window._divIncome.ttm != null) ? window._divIncome.ttm : combinedMetrics.totalDividends;
+                setElement(document.getElementById('total-dividends'), _divShown);
+                { const _dl = document.getElementById('total-dividends-label'); if (_dl && window._divIncome) _dl.textContent = 'Dividends (12 mo)'; }
                 setElement(document.getElementById('total-pl-today'), totalPLTodayFinal); // Use final calculated value
                 setElement(document.getElementById('total-pl-percent-today'), totalPLPercentToday, true);
                 setElement(document.getElementById('total-pl-unrealized'), combinedMetrics.totalUnrealizedPL);
@@ -9200,7 +9203,7 @@ renderPortfolioSummary() {
                     const sanDt = document.getElementById('san-detail');
                     const _h = this.portfolioHistory || [];
                     const _tv = combinedMetrics.totalCurrentValue || 0;
-                    const _ad = combinedMetrics.totalDividends || 0;
+                    const _ad = _divShown || 0;
                     let volScore = 25, divScore = 0, details = [], hasVol = false;
                     if (_h.length >= 10) {
                         const vals = _h.map(h=>h.value);
@@ -21425,7 +21428,7 @@ window.renderTrueExposure = function() {
           return { ts, amt, tax: tax * amt, ret: ret * amt };
         }).filter(p => p.tax + p.ret > 0.005);
         const ttmPerShare = hist.filter(([ts]) => ts > Date.now() - 365 * DAY).reduce((a, [, x]) => a + x, 0);
-        out.push({ sym, price, nowSh, pays, ttmPerShare, fwd: ttmPerShare * nowSh, value: nowSh * price });
+        out.push({ sym, price, nowSh, pays, hist, ttmPerShare, fwd: ttmPerShare * nowSh, value: nowSh * price });
       } catch (e) { failed.push(sym); }
       progress(++done, syms.length);
     };
@@ -21435,9 +21438,28 @@ window.renderTrueExposure = function() {
     return { rows: out, failed };
   }
 
+  // Totals + where the next 12 months of payouts land (each payout of the last 12 months, one year
+  // later, × the shares held now)
+  function summarize(res) {
+    const now = new Date(), ttmStart = Date.now() - 365 * DAY, yearStart = new Date(now.getFullYear(), 0, 1).getTime();
+    const all = res.rows.flatMap(r => r.pays);
+    const tot = arr => arr.reduce((a, p) => a + p.tax + p.ret, 0);
+    const months = Array.from({ length: 13 }, (_, i) => { const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      return { label: d.toLocaleString('en-US', { month: 'short' }) + (i === 0 ? ' (rest)' : d.getMonth() === 0 ? " '" + String(d.getFullYear()).slice(2) : ''), amt: 0, syms: {} }; });
+    res.rows.forEach(r => (r.hist || []).forEach(([ts, amt]) => {
+      if (ts < ttmStart || !r.nowSh) return;
+      const pd = new Date(ts + 365 * DAY), i = (pd.getFullYear() - now.getFullYear()) * 12 + pd.getMonth() - now.getMonth();
+      if (i < 0 || i > 12) return;
+      const v = amt * r.nowSh; months[i].amt += v; months[i].syms[r.sym] = (months[i].syms[r.sym] || 0) + v;
+    }));
+    return { ytd: tot(all.filter(p => p.ts >= yearStart)), ttm: tot(all.filter(p => p.ts >= ttmStart)),
+             fwd: res.rows.reduce((a, r) => a + r.fwd, 0), months };
+  }
+
   function render(res) {
     const now = new Date(), yr = now.getFullYear(), yearStart = new Date(yr, 0, 1).getTime(), ttmStart = Date.now() - 365 * DAY;
     const all = res.rows.flatMap(r => r.pays.map(p => ({ ...p, sym: r.sym })));
+    const S = summarize(res), maxM = Math.max(1, ...S.months.map(m => m.amt));
     const sum = (arr, k) => arr.reduce((a, p) => a + p[k], 0);
     const byYear = {};
     all.forEach(p => { const y = new Date(p.ts).getFullYear(); const b = byYear[y] = byYear[y] || { tax: 0, ret: 0 }; b.tax += p.tax; b.ret += p.ret; });
@@ -21446,7 +21468,8 @@ window.renderTrueExposure = function() {
     const fwd = res.rows.reduce((a, r) => a + r.fwd, 0), val = res.rows.reduce((a, r) => a + r.value, 0);
     const maxY = Math.max(1, ...years.map(y => byYear[y].tax + byYear[y].ret));
     const payers = res.rows.filter(r => r.fwd > 0.5 || r.pays.some(p => p.ts >= ttmStart)).sort((a, b) => b.fwd - a.fwd);
-    window._divIncome = { ytd: sum(ytd, 'tax') + sum(ytd, 'ret'), ttm: sum(ttm, 'tax') + sum(ttm, 'ret'), fwd, byYear };
+    window._divIncome = { ytd: S.ytd, ttm: S.ttm, fwd, byYear, months: S.months };
+    window._divIncomeRefreshBanner && window._divIncomeRefreshBanner();
     $('dvOut').innerHTML = `
       <div class="dv-kpis">
         <div><span>${yr} so far</span><b>${money0(sum(ytd, 'tax') + sum(ytd, 'ret'))}</b><em>taxable ${money0(sum(ytd, 'tax'))} · retirement ${money0(sum(ytd, 'ret'))}</em></div>
@@ -21454,6 +21477,11 @@ window.renderTrueExposure = function() {
         <div><span>Next 12 months (est.)</span><b>${money0(fwd)}</b><em>last year's payouts × shares you hold now</em></div>
         <div><span>Portfolio yield</span><b>${val ? (fwd / val * 100).toFixed(2) : '0.00'}%</b><em>on ${money0(val)}</em></div>
       </div>
+      <h4>Next 12 months, by month (est.)</h4>
+      <div class="dv-months">${S.months.map(m => `<div class="dv-m" title="${Object.entries(m.syms).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + money(v)).join('\n')}">
+          <b>${m.amt >= 1 ? money0(m.amt) : '—'}</b><div class="dv-col"><i style="height:${(m.amt / maxM * 100).toFixed(1)}%"></i></div>
+          <span>${m.label}</span><em>${Object.entries(m.syms).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => k).join(' ')}</em></div>`).join('')}</div>
+      <p class="dv-note" style="margin-top:4px;">Each payout of the last 12 months, a year later, × the shares you hold now. Hover a month for the full list.</p>
       <h4>By year</h4>
       <div class="dv-years">${years.map(y => { const t = byYear[y].tax + byYear[y].ret;
         return `<div class="dv-yr"><span>${y}${y === yr ? ' (YTD)' : ''}</span><div class="dv-bar"><i style="width:${(byYear[y].tax / maxY * 100).toFixed(1)}%"></i><i class="ret" style="width:${(byYear[y].ret / maxY * 100).toFixed(1)}%"></i></div><b>${money0(t)}</b></div>`; }).join('')}
@@ -21491,6 +21519,13 @@ window.renderTrueExposure = function() {
       #dvModal .dv-tbl th{text-align:left;font-size:.72rem;color:var(--text-secondary);font-weight:600;border-bottom:1px solid var(--border-color);padding:6px}
       #dvModal .dv-tbl td{padding:6px;border-bottom:1px solid var(--border-color)} #dvModal .r{text-align:right}
       #dvModal .dv-note{font-size:.74rem;color:var(--text-secondary);margin:10px 0 0}
+      #dvModal .dv-months{display:grid;grid-template-columns:repeat(13,1fr);gap:4px;align-items:end}
+      #dvModal .dv-m{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:.68rem;min-width:0}
+      #dvModal .dv-m b{font-size:.68rem;font-weight:600;white-space:nowrap} #dvModal .dv-m span{color:var(--text-secondary);white-space:nowrap}
+      #dvModal .dv-m em{font-style:normal;color:var(--text-secondary);font-size:.6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+      #dvModal .dv-col{width:70%;height:70px;background:var(--bg-tertiary);border-radius:4px;display:flex;align-items:flex-end;overflow:hidden}
+      #dvModal .dv-col i{display:block;width:100%;background:var(--color-positive);border-radius:4px 4px 0 0}
+      @media (max-width:600px){#dvModal .dv-months{grid-template-columns:repeat(7,1fr);row-gap:10px}#dvModal .dv-m b{font-size:.6rem}}
       @media (max-width:600px){#dvModal{padding:8px}#dvModal .dv-box{padding:14px}#dvModal .dv-tbl{font-size:.74rem}#dvModal .dv-yr{grid-template-columns:70px 1fr 70px}}
     </style>
     <div class="dv-box">
@@ -21503,7 +21538,24 @@ window.renderTrueExposure = function() {
     const res = await compute((d, n) => { const p = $('dvProg'); if (p) p.textContent = d + ' / ' + n; });
     if ($('dvOut')) render(res);
   };
-  window.__divIncomeTest = { sharesOn, render };
+  // Banner: show the last 12 months of real dividends. Loads quietly ~20 s after start (cached 24 h).
+  window._divIncomeRefreshBanner = function () {
+    const tr = window.stockTracker, d = window._divIncome; if (!tr || !d) return;
+    const el = document.getElementById('total-dividends'), lb = document.getElementById('total-dividends-label');
+    if (el) el.textContent = tr.formatCurrency ? tr.formatCurrency(d.ttm) : money(d.ttm);
+    if (lb) lb.textContent = 'Dividends (12 mo)';
+  };
+  window.addEventListener('load', () => setTimeout(async () => {
+    try {
+      if (!window.stockTracker || window._demoModeActive || window._divIncome) return;
+      const res = await compute(() => {});
+      if (window._divIncome) return;
+      const S = summarize(res);
+      window._divIncome = { ytd: S.ytd, ttm: S.ttm, fwd: res.rows.reduce((a, r) => a + r.fwd, 0), months: S.months };
+      window._divIncomeRefreshBanner();
+    } catch (e) { console.warn('Dividend income (banner) skipped:', e); }
+  }, 20000));
+  window.__divIncomeTest = { sharesOn, render, summarize };
 })();
 </script>
 
