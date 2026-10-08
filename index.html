@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v18: FIFO per account, tax reports, sector fix, 401k fixes file, Yahoo export, fund NAV not counted as today's change) - 2026-10-07 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v18.1: FIFO per account, tax reports, sector fix, 401k fixes file, Yahoo export, fund today's change fixed) - 2026-10-07 -->
 
 <html lang="en">
 <head>
@@ -5392,7 +5392,28 @@ async _fetchYahooQuoteViaQuoteEndpoint(symbol) {
                 }
 
                 const price = meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? null;
-                const previousClose = meta?.previousClose ?? meta?.chartPreviousClose ?? null;
+                // (v18.1) With range=5d, meta.chartPreviousClose is the close BEFORE the 5-day window,
+                // so using it as "previous close" made the change a 5-day move (seen on mutual funds:
+                // FXAIX +1.94% on a day VOO was −0.26%). Take the last daily close dated before the
+                // price's own date instead; chartPreviousClose is only a last resort.
+                let previousClose = meta?.previousClose ?? null;
+                if (previousClose == null) {
+                    try {
+                        const r0 = json?.chart?.result?.[0];
+                        const ts = r0?.timestamp || [];
+                        const closes = r0?.indicators?.quote?.[0]?.close || [];
+                        const etKey = sec => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York',
+                            year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(sec * 1000));
+                        const priceDay = meta?.regularMarketTime ? etKey(meta.regularMarketTime) : null;
+                        for (let i = ts.length - 1; i >= 0; i--) {
+                            const c = closes[i];
+                            if (c == null || !isFinite(c)) continue;
+                            if (priceDay && etKey(ts[i]) >= priceDay) continue;   // that's the price's own day
+                            previousClose = c; break;
+                        }
+                    } catch (_) {}
+                }
+                if (previousClose == null) previousClose = meta?.chartPreviousClose ?? null;
 
                 if (typeof price !== "number" || !isFinite(price)) {
                     throw new Error("Invalid Yahoo chart meta price");
