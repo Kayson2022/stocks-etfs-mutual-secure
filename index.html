@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v19: FIFO per account, tax reports, 401k fixes file, Yahoo export, fund today fixes, Trim Planner) - 2026-10-07 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v20: FIFO per account, tax reports, 401k fixes file, Yahoo export, fund today fixes, Trim Planner, Year-End Tax Plan) - 2026-10-07 -->
 
 <html lang="en">
 <head>
@@ -4351,6 +4351,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     <div class="ut-grid">
       <button class="add-btn" id="concentrationBtn" onclick="window.showConcentration()">📊 Concentration</button>
       <button class="add-btn" onclick="window.openTrimPlanner()">✂️ Trim Planner</button>
+      <button class="add-btn" onclick="window.openTaxPlan()">🧾 Year-End Tax Plan</button>
       <button class="add-btn" onclick="window.stockTracker.openDividendTracker()">💰 Dividend Tracker</button>
       <button class="add-btn" id="erCalBtn" onclick="window.showErCalendar()">📅 Earnings Calendar</button>
       <button class="add-btn" id="viewAlertsBtn">🔔 View Active Alerts</button>
@@ -21210,6 +21211,165 @@ window.renderTrueExposure = function() {
   window.__trimPlannerTest = { openLots, plan, netTax, harvestable };
 })();
 </script>
+<script>
+/* ═══ 🧾 Year-End Tax Plan (v20, 2026-10-07) ═══
+   Taxable accounts only (Roth/IRA/401k/529/HSA left out). FIFO per account, as brokers do by default.
+   - Realized this year: every sale in the year, short vs long term
+   - Losses you could still harvest before Dec 31 (individual stocks and ETFs shown separately)
+   - Lots with a gain that turn long-term before Dec 31 (wait before selling)
+   - Estimated tax with the Trim Planner's rates, plus an optional planned gain (e.g. a DELL trim)
+   Estimates only, not tax advice. */
+(function () {
+  const $ = id => document.getElementById(id);
+  const money = n => (n < 0 ? '−$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  const sh = n => (+n).toLocaleString('en-US', { maximumFractionDigits: 4 });
+  const day = d => d.toISOString().slice(0, 10);
+  const LT = (buy, when) => (when - buy) / 864e5 > 365;
+  const prefs = () => { try { return JSON.parse(localStorage.getItem('trimPlannerPrefs') || '{}'); } catch (e) { return {}; } };
+
+  function analyse(year, now) {
+    const tr = window.stockTracker, yearEnd = new Date(year, 11, 31, 23, 59);
+    const realized = [], harvest = [], waitLT = [];
+    [...(tr.stocks || []), ...(tr.mutualFunds || [])].forEach(it => {
+      const sym = String(it.symbol || '').toUpperCase(), px = +it.price || 0;
+      const kind = window.classifyAsset ? window.classifyAsset(it, tr) : 'stock';
+      window.splitTxnsByAccount(it.transactions || []).forEach(g => {
+        if (g.retirement) return;
+        const lots = g.txns.filter(t => t.type === 'buy').sort((a, b) => new Date(a.date) - new Date(b.date))
+          .map(b => ({ sh: +b.shares || 0, p: +b.price || 0, d: new Date(b.date) }));
+        g.txns.filter(t => t.type === 'sell').sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(s => {
+          let n = +s.shares || 0; const sd = new Date(s.date), sp = +s.price || 0;
+          let st = 0, lt = 0, proceeds = 0;
+          for (const l of lots) {
+            if (n <= 1e-9) break;
+            const u = Math.min(n, l.sh); if (u <= 0) continue;
+            l.sh -= u; n -= u; proceeds += u * sp;
+            const gain = u * (sp - l.p); LT(l.d, sd) ? (lt += gain) : (st += gain);
+          }
+          if (sd.getFullYear() === year) realized.push({ sym, acct: g.platform, date: sd, shares: +s.shares, proceeds, st, lt });
+        });
+        lots.filter(l => l.sh > 1e-6).forEach(l => {
+          const gain = l.sh * (px - l.p);
+          if (gain < -1) harvest.push({ sym, kind, acct: g.platform, sh: l.sh, gain, lt: LT(l.d, now), value: l.sh * px });
+          if (gain > 1 && !LT(l.d, now)) {
+            const ltDay = new Date(l.d.getTime() + 366 * 864e5);
+            if (ltDay <= yearEnd) waitLT.push({ sym, acct: g.platform, sh: l.sh, gain, ltDay });
+          }
+        });
+      });
+    });
+    return { realized: realized.sort((a, b) => a.date - b.date), harvest, waitLT: waitLT.sort((a, b) => a.ltDay - b.ltDay) };
+  }
+
+  // IRS netting: ST with ST, LT with LT, then across; up to $3,000 of a net loss offsets ordinary income
+  function taxOf(st, lt, rates) {
+    let s = st, l = lt;
+    if (s < 0 && l > 0) { l += s; s = 0; } else if (l < 0 && s > 0) { s += l; l = 0; }
+    const net = s + l;
+    if (net < 0) { const ded = Math.min(3000, -net); return { tax: -ded * rates.st, carry: -net - ded, st: s, lt: l }; }
+    return { tax: Math.max(0, s) * rates.st + Math.max(0, l) * rates.lt, carry: 0, st: s, lt: l };
+  }
+
+  function render() {
+    const now = new Date(), year = +$('typYear').value;
+    const p = prefs(), ca = p.ca ?? 9.3, niit = p.niit === false ? 0 : 3.8;
+    const rates = { lt: ((p.fedLT ?? 15) + ca + niit) / 100, st: ((p.fedOrd ?? 32) + ca + niit) / 100 };
+    const a = analyse(year, now);
+    const rST = a.realized.reduce((x, r) => x + r.st, 0), rLT = a.realized.reduce((x, r) => x + r.lt, 0);
+    const planned = +$('typPlanned').value || 0;
+    const useStocks = $('typHStocks').checked, useEtfs = $('typHEtfs').checked;
+    const picked = a.harvest.filter(h => (h.kind === 'stock' ? useStocks : useEtfs));
+    const hST = picked.filter(h => !h.lt).reduce((x, h) => x + h.gain, 0), hLT = picked.filter(h => h.lt).reduce((x, h) => x + h.gain, 0);
+    const base = taxOf(rST, rLT + planned, rates), withH = taxOf(rST + hST, rLT + planned + hLT, rates);
+    const bySym = {};
+    a.harvest.forEach(h => { const k = h.sym; const b = bySym[k] = bySym[k] || { sym: k, kind: h.kind, st: 0, lt: 0, value: 0, accts: new Set() };
+      h.lt ? (b.lt += h.gain) : (b.st += h.gain); b.value += h.value; b.accts.add(h.acct); });
+    const hRows = Object.values(bySym).sort((x, y) => (x.st + x.lt) - (y.st + y.lt));
+    const kindLbl = k => k === 'stock' ? 'Stock' : k === 'etf' ? 'ETF' : 'Fund';
+    $('typOut').innerHTML = `
+      <div class="typ-kpis">
+        <div><span>Realized ${year} (taxable)</span><b>${money(rST + rLT)}</b><em>short ${money(rST)} · long ${money(rLT)}</em></div>
+        <div><span>Est. tax now</span><b>${money(base.tax)}</b><em>${planned ? 'incl. planned gain ' + money(planned) : 'on realized gains so far'}</em></div>
+        <div><span>Losses you could harvest</span><b>${money(hST + hLT)}</b><em>${useStocks && useEtfs ? 'stocks + ETFs' : useStocks ? 'individual stocks only' : useEtfs ? 'ETFs only' : 'none selected'}</em></div>
+        <div><span>Est. tax after harvesting</span><b>${money(withH.tax)}</b><em>${base.tax - withH.tax > 1 ? '<span class="typ-pos">saves ' + money(base.tax - withH.tax) + '</span>' : '—'}${withH.carry > 1 ? ' · carry ' + money(withH.carry) + ' to next year' : ''}</em></div>
+      </div>
+
+      <h4>📋 Before December 31</h4>
+      <ul class="typ-list">
+        <li>Sales must <b>trade by Wed Dec 31, ${year}</b> (the trade date counts, not settlement) to land in ${year}.</li>
+        ${hRows.length ? `<li>Harvesting losses offsets gains first, then up to $3,000 of salary; the rest carries forward. Wash sale: no buying the same security 30 days before or after — in any account, Roth included.</li>` : ''}
+        ${a.waitLT.length ? `<li>${a.waitLT.length} lot(s) with a gain turn long-term before year-end — don't sell them early (list below).</li>` : ''}
+        <li>Splitting a big sale between December and January puts half the gain in each year; this estimate uses one flat rate, so it doesn't show that benefit.</li>
+        <li>Mutual funds and ETFs may pay year-end capital-gain distributions (taxable even if reinvested) — not included here.</li>
+      </ul>
+
+      <h4>✅ Realized in ${year} (${a.realized.length} sale${a.realized.length === 1 ? '' : 's'})</h4>
+      ${a.realized.length ? `<table class="typ-tbl"><thead><tr><th>Date</th><th>Stock</th><th>Account</th><th class="r">Shares</th><th class="r">Short-term</th><th class="r">Long-term</th></tr></thead><tbody>
+        ${a.realized.map(r => `<tr><td>${day(r.date)}</td><td><b>${r.sym}</b></td><td>${r.acct}</td><td class="r">${sh(r.shares)}</td>
+          <td class="r ${r.st >= 0 ? 'typ-pos' : 'typ-neg'}">${Math.abs(r.st) > 0.5 ? money(r.st) : '—'}</td><td class="r ${r.lt >= 0 ? 'typ-pos' : 'typ-neg'}">${Math.abs(r.lt) > 0.5 ? money(r.lt) : '—'}</td></tr>`).join('')}
+        </tbody></table>` : '<p class="typ-note">No sales in taxable accounts this year.</p>'}
+
+      <h4>🧹 Losses you could harvest</h4>
+      ${hRows.length ? `<table class="typ-tbl"><thead><tr><th>Holding</th><th>Type</th><th class="r">Short-term loss</th><th class="r">Long-term loss</th><th class="r">Value now</th></tr></thead><tbody>
+        ${hRows.map(r => `<tr><td><b>${r.sym}</b> <span class="typ-sub">${[...r.accts].join(', ')}</span></td><td>${kindLbl(r.kind)}</td>
+          <td class="r typ-neg">${r.st ? money(r.st) : '—'}</td><td class="r typ-neg">${r.lt ? money(r.lt) : '—'}</td><td class="r">${money(r.value)}</td></tr>`).join('')}
+        </tbody></table>` : '<p class="typ-note">No taxable lots at a loss.</p>'}
+
+      ${a.waitLT.length ? `<h4>⏳ Turning long-term before year-end</h4>
+        <table class="typ-tbl"><thead><tr><th>Stock</th><th>Account</th><th class="r">Shares</th><th class="r">Gain now</th><th class="r">Long-term on</th></tr></thead><tbody>
+        ${a.waitLT.map(w => `<tr><td><b>${w.sym}</b></td><td>${w.acct}</td><td class="r">${sh(w.sh)}</td><td class="r typ-pos">${money(w.gain)}</td><td class="r">${day(w.ltDay)}</td></tr>`).join('')}
+        </tbody></table>` : ''}
+
+      <p class="typ-note">Rates from ✂️ Trim Planner: long-term ${(rates.lt * 100).toFixed(1)}%, short-term ${(rates.st * 100).toFixed(1)}% (federal + California${niit ? ' + NIIT' : ''}) — change them there. FIFO per account, taxable accounts only. Estimates only, not tax advice; check with your CPA.</p>`;
+  }
+
+  window.openTaxPlan = function () {
+    if (!window.stockTracker || !window.splitTxnsByAccount) { alert('App not ready yet'); return; }
+    let ov = $('typModal'); if (ov) ov.remove();
+    const y = new Date().getFullYear();
+    ov = document.createElement('div'); ov.id = 'typModal';
+    ov.innerHTML = `<style>
+      #typModal{position:fixed;inset:0;z-index:10050;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto}
+      #typModal .typ-box{background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:14px;width:100%;max-width:900px;padding:18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+      #typModal h3{margin:0;font-size:1.15rem} #typModal h4{margin:18px 0 6px;font-size:.95rem}
+      #typModal .typ-head{display:flex;justify-content:space-between;align-items:center}
+      #typModal .typ-x{background:none;border:none;color:var(--text-secondary);font-size:1.4rem;cursor:pointer}
+      #typModal .typ-form{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin:12px 0 4px;font-size:.82rem}
+      #typModal .typ-form label{display:flex;flex-direction:column;gap:4px;color:var(--text-secondary);font-size:.75rem}
+      #typModal .typ-form .chk{flex-direction:row;align-items:center;color:var(--text-primary);font-size:.82rem}
+      #typModal select,#typModal input[type=number]{background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-color);border-radius:8px;padding:7px 8px;font-size:.9rem;width:150px}
+      #typModal .typ-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:12px 0}
+      #typModal .typ-kpis div{background:var(--bg-tertiary);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column}
+      #typModal .typ-kpis span{font-size:.72rem;color:var(--text-secondary)} #typModal .typ-kpis b{font-size:1.15rem} #typModal .typ-kpis em{font-style:normal;font-size:.74rem;color:var(--text-secondary)}
+      #typModal .typ-tbl{width:100%;border-collapse:collapse;font-size:.83rem}
+      #typModal .typ-tbl th{text-align:left;font-size:.72rem;color:var(--text-secondary);font-weight:600;border-bottom:1px solid var(--border-color);padding:6px}
+      #typModal .typ-tbl td{padding:6px;border-bottom:1px solid var(--border-color)} #typModal .r{text-align:right}
+      #typModal .typ-pos{color:var(--color-positive)} #typModal .typ-neg{color:var(--color-negative)}
+      #typModal .typ-sub{font-size:.7rem;color:var(--text-secondary)}
+      #typModal .typ-list{margin:0;padding-left:18px;font-size:.84rem;line-height:1.55}
+      #typModal .typ-note{font-size:.74rem;color:var(--text-secondary);margin:10px 0 0}
+      @media (max-width:600px){#typModal{padding:8px}#typModal .typ-box{padding:14px}#typModal .typ-tbl{font-size:.75rem}}
+    </style>
+    <div class="typ-box">
+      <div class="typ-head"><h3>🧾 Year-End Tax Plan</h3><button class="typ-x" onclick="document.getElementById('typModal').remove()">×</button></div>
+      <div style="font-size:.8rem;color:var(--text-secondary);">Taxable accounts only — Roth IRA, IRA, 401(k), 529 and HSA are left out.</div>
+      <div class="typ-form">
+        <label>Tax year<select id="typYear"><option>${y}</option><option>${y - 1}</option></select></label>
+        <label>Planned long-term gain ($)<input id="typPlanned" type="number" step="1000" min="0" value="0" title="e.g. the gain from a DELL trim in Trim Planner"></label>
+        <label class="chk"><input type="checkbox" id="typHStocks" checked>&nbsp;Harvest individual stocks</label>
+        <label class="chk"><input type="checkbox" id="typHEtfs">&nbsp;Harvest ETFs too</label>
+      </div>
+      <div id="typOut"></div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    ov.querySelectorAll('select,input').forEach(el => el.addEventListener('input', render));
+    render();
+  };
+  window.__taxPlanTest = { analyse, taxOf };
+})();
+</script>
+
 
 <script>
 /* (v14) Put back the real sector on holdings whose sector was overwritten with "Custom Industry"
