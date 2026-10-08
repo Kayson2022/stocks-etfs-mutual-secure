@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v18.1: FIFO per account, tax reports, sector fix, 401k fixes file, Yahoo export, fund today's change fixed) - 2026-10-07 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v18.2: FIFO per account, tax reports, sector fix, 401k fixes file, Yahoo export, fund today's change fixed, funds refresh with stocks) - 2026-10-07 -->
 
 <html lang="en">
 <head>
@@ -8703,6 +8703,13 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     watchlist: () => this.refreshWatchlist()
                 };
                 if (tabActions[this.currentTab]) await tabActions[this.currentTab]();
+                // (v18.2) Mutual funds only refreshed on their own tab, so the banner kept old fund
+                // numbers (value and today's change) while you sat on Stocks. Funds move once a day,
+                // so refresh them alongside, at most every 30 minutes.
+                if (this.currentTab !== 'funds' && (this.mutualFunds || []).length &&
+                    (!this._lastFundRefresh || Date.now() - this._lastFundRefresh > 30 * 60 * 1000)) {
+                    try { await this.refreshFunds(); } catch (e) { console.warn('Fund refresh skipped:', e); }
+                }
                 if (isAutoRefresh) {
                     this.restoreScrollPosition();
                 }
@@ -8743,7 +8750,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
             // readable and avoids reaching across objects for a one-liner.
             _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             async refreshStocks() { await this.refreshItems(this.stocks, 'stock'); }
-            async refreshFunds() { await this.refreshItems(this.mutualFunds, 'fund'); }
+            async refreshFunds() { await this.refreshItems(this.mutualFunds, 'fund'); this._lastFundRefresh = Date.now(); }
             async refreshWatchlist() { await this.refreshItems(this.watchlist, 'watchlist'); }
                         async refreshItems(items, type) {
                 if (items.length === 0) return;
