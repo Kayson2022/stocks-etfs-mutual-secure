@@ -21592,6 +21592,8 @@ window.renderTrueExposure = function() {
   function classify(text, name) {
     const head = text.replace(/^﻿/, '').split(/\r?\n/).slice(0, 60).join('\n');
     const all = text.slice(0, 200000), lc = head.toLowerCase();
+    if (/^\s*"?Secure app fixes for 401k app/i.test(head)) return { broker: 'this app', kind: 'own', why: 'made by Secure for the 401k app — import it there' };
+    if (/^Symbol,Current Price,Date,Time,Change/i.test(head)) return { broker: 'this app', kind: 'own', why: 'made by Secure for Yahoo Finance (MY_LIST)' };
     if (/cumulative time weighted return|opening balance/i.test(head)) return { broker: 'Merrill Edge', kind: 'bad', why: 'performance report (yearly totals, no trades or holdings)' };
     if (/"?positions"?\s*,\s*"?quantity/i.test(head)) return { broker: 'Merrill Edge', kind: 'pos', choice: 'Merrill Edge' };
     if (/symbol\/cusip/i.test(head) && /trade date|settlement date/i.test(head)) return { broker: 'Merrill Edge', kind: 'hist' };
@@ -21608,23 +21610,24 @@ window.renderTrueExposure = function() {
     if (/robinhood/i.test(name) || /trans code/i.test(lc)) return { broker: 'Robinhood', kind: 'hist' };
     return { broker: '?', kind: 'bad', why: 'not a holdings or transaction file the app knows (e.g. Merrill "PortfolioSummary")' };
   }
-  const KIND = { hist: '📜 History', pos: '📸 Positions', both: '📸 + 📜 both', bad: '❌ Not usable', hist401k: '📜 401(k) history' };
-  const USE = { hist: 'Import', pos: 'Compare', both: 'Compare + Import', bad: 'skip', hist401k: 'skip here (401k app)' };
+  const KIND = { hist: '📜 History', pos: '📸 Positions', both: '📸 + 📜 both', bad: '❌ Not usable', hist401k: '📜 401(k) history', own: '📄 App file' };
+  const USE = { hist: 'Import', pos: 'Compare', both: 'Compare + Import', bad: 'skip', hist401k: 'skip here (401k app)', own: 'skip' };
 
   function render() {
     // newest file per broker + kind wins
+    // History files can cover different months (Merrill gives ~3 months per file), so ALL are imported —
+    // the import skips trades it already has. Positions are a snapshot: only the newest per broker counts.
     const best = {};
-    files.forEach(f => { if (f.c.kind === 'bad' || f.c.kind === 'hist401k') return;
-      ['hist', 'pos'].forEach(k => { if (f.c.kind === k || f.c.kind === 'both') { const key = f.c.broker + '|' + k;
-        if (!best[key] || (f.f.lastModified || 0) > (best[key].f.lastModified || 0)) best[key] = f; } }); });
-    files.forEach(f => { f.useHist = Object.values(best).includes(f) && (f.c.kind === 'hist' || f.c.kind === 'both') && best[f.c.broker + '|hist'] === f;
-                         f.usePos = (f.c.kind === 'pos' || f.c.kind === 'both') && best[f.c.broker + '|pos'] === f; });
+    files.forEach(f => { if (f.c.kind === 'pos' || f.c.kind === 'both') { const key = f.c.broker;
+      if (!best[key] || (f.f.lastModified || 0) > (best[key].f.lastModified || 0)) best[key] = f; } });
+    files.forEach(f => { f.useHist = f.c.kind === 'hist' || f.c.kind === 'both';
+                         f.usePos = (f.c.kind === 'pos' || f.c.kind === 'both') && best[f.c.broker] === f; });
     const hist = files.filter(f => f.useHist);
     $('bfOut').innerHTML = `<table class="rt-table" style="width:100%;margin-top:10px;font-size:.84rem;"><thead><tr><th>File</th><th>Broker</th><th>Kind</th><th>Use for</th><th></th></tr></thead><tbody>
-      ${files.map((f, i) => { const older = !f.useHist && !f.usePos && f.c.kind !== 'bad' && f.c.kind !== 'hist401k';
+      ${files.map((f, i) => { const older = !f.useHist && !f.usePos && ['hist', 'pos', 'both'].includes(f.c.kind);
         return `<tr style="${f.c.kind === 'bad' || older ? 'opacity:.6' : ''}"><td style="word-break:break-all;">${esc(f.f.name)}<div style="font-size:.7rem;color:var(--text-secondary);">${f.f.lastModified ? new Date(f.f.lastModified).toLocaleString() : ''}</div></td>
           <td>${esc(f.c.broker)}</td><td>${KIND[f.c.kind]}</td>
-          <td>${older ? 'skip — a newer copy was picked' : esc(USE[f.c.kind])}${f.c.why ? `<div style="font-size:.7rem;color:var(--text-secondary);">${esc(f.c.why)}</div>` : ''}</td>
+          <td>${older ? 'skip — older Positions file (a newer one was picked)' : esc(USE[f.c.kind])}${f.c.why ? `<div style="font-size:.7rem;color:var(--text-secondary);">${esc(f.c.why)}</div>` : ''}</td>
           <td>${f.usePos ? `<button type="button" class="add-btn" style="padding:4px 10px;font-size:.78rem;" data-cmp="${i}">🧮 Compare</button>` : ''}</td></tr>`; }).join('')}
       </tbody></table>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
