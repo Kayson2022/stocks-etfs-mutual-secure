@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v23: clean-up in progress — hidden: Dividend Tracker, Div Calendar, Div Waterfall, Tax Summary) - 2026-10-07 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v24: clean-up — hidden: Dividend Tracker, Div Calendar, Div Waterfall, Tax Summary; Dividends (12 mo) follows the filter) - 2026-10-08 -->
 
 <html lang="en">
 <head>
@@ -9174,7 +9174,10 @@ renderPortfolioSummary() {
                 if (contributionsEl) contributionsEl.textContent = this.formatCurrency(combinedMetrics.totalContributions);
 
                 // (v22) real dividends of the last 12 months from 💵 Dividend Income, once loaded
-                const _divShown = (window._divIncome && window._divIncome.ttm != null) ? window._divIncome.ttm : combinedMetrics.totalDividends;
+                // (v24) follow the account / type filter — the all-accounts total showed even when one account was picked
+                const _divFiltered = window.divTTMFor ? window.divTTMFor(platformFilterTerm, assetTypeTerm) : null;
+                const _divShown = _divFiltered != null ? _divFiltered
+                    : (window._divIncome && window._divIncome.ttm != null) ? window._divIncome.ttm : combinedMetrics.totalDividends;
                 setElement(document.getElementById('total-dividends'), _divShown);
                 { const _dl = document.getElementById('total-dividends-label'); if (_dl && window._divIncome) _dl.textContent = 'Dividends (12 mo)'; }
                 setElement(document.getElementById('total-pl-today'), totalPLTodayFinal); // Use final calculated value
@@ -21538,11 +21541,27 @@ window.renderTrueExposure = function() {
     const res = await compute((d, n) => { const p = $('dvProg'); if (p) p.textContent = d + ' / ' + n; });
     if ($('dvOut')) render(res);
   };
+  // Dividends of the last 12 months for the current account / asset-type filter, from the cached
+  // histories (null until 💵 Dividend Income data has loaded once).
+  window.divTTMFor = function (term, typeTerm) {
+    const c = cache(), tr = window.stockTracker; if (!tr || !Object.keys(c).length) return null;
+    const since = Date.now() - 365 * DAY; let tot = 0;
+    [...(tr.stocks || []), ...(tr.mutualFunds || [])].forEach(it => {
+      if (typeTerm && typeTerm !== 'all' && window.classifyAsset && window.classifyAsset(it, tr) !== typeTerm) return;
+      const h = (c[String(it.symbol).toUpperCase()] || {}).d; if (!h) return;
+      const txns = (it.transactions || []).filter(t => !term || term === 'All Platforms' || window.matchesAccountFilter(t, term));
+      if (!txns.length) return;
+      h.forEach(([ts, amt]) => { if (ts >= since) tot += sharesOn(txns, ts, null) * amt; });
+    });
+    return tot;
+  };
   // Banner: show the last 12 months of real dividends. Loads quietly ~20 s after start (cached 24 h).
   window._divIncomeRefreshBanner = function () {
     const tr = window.stockTracker, d = window._divIncome; if (!tr || !d) return;
     const el = document.getElementById('total-dividends'), lb = document.getElementById('total-dividends-label');
-    if (el) el.textContent = tr.formatCurrency ? tr.formatCurrency(d.ttm) : money(d.ttm);
+    const f = tr.elements || {}, v = window.divTTMFor(f.platformFilter ? f.platformFilter.value : 'All Platforms', f.assetTypeFilter ? f.assetTypeFilter.value : 'all');
+    const shown = v != null ? v : d.ttm;
+    if (el) el.textContent = tr.formatCurrency ? tr.formatCurrency(shown) : money(shown);
     if (lb) lb.textContent = 'Dividends (12 mo)';
   };
   window.addEventListener('load', () => setTimeout(async () => {
