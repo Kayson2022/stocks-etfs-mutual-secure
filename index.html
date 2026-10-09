@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v24: clean-up — hidden: Dividend Tracker, Div Calendar, Div Waterfall, Tax Summary; Dividends (12 mo) follows the filter) - 2026-10-08 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v25: 📂 Broker files sorter; Dividends (12 mo) follows the filter; clean-up hides 4 tools) - 2026-10-08 -->
 
 <html lang="en">
 <head>
@@ -4342,6 +4342,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
       <button class="add-btn" id="expandCollapseAllBtn" onclick="window.toggleExpandCollapseAll()">↕ Collapse All</button>
       <button class="add-btn" id="togglePrivacyBtn">👁️ Privacy Mode</button>
       <button class="add-btn" id="toggleDarkModeBtn">🌙 Toggle Theme</button>
+      <button class="add-btn" onclick="window.openBrokerFiles()" title="Pick all broker downloads; the app sorts them">📂 Broker files</button>
       <button class="add-btn" onclick="window.exportYahooPortfolio()" title="Download a CSV to import into Yahoo Finance">📤 Yahoo Finance file</button>
       <button class="add-btn" data-st-panel="compact" id="stCompactBtn" onclick="window.toggleCompact && window.toggleCompact()" title="Tighter card spacing, hides card charts">⊞ Compact: Off</button>
     </div>
@@ -21577,6 +21578,96 @@ window.renderTrueExposure = function() {
   window.__divIncomeTest = { sharesOn, render, summarize };
 })();
 </script>
+<script>
+/* ═══ 📂 Broker files (v25, 2026-10-08) ═══
+   Pick every file you downloaded from the brokers at once. The app only SORTS them and shows a
+   table — which broker, which kind (📜 history → Import, 📸 positions → Compare) — and does
+   nothing until you press a button for one step. Older copies of the same broker + kind are
+   flagged so only the newest is used. */
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let files = [];
+
+  function classify(text, name) {
+    const head = text.replace(/^﻿/, '').split(/\r?\n/).slice(0, 60).join('\n');
+    const all = text.slice(0, 200000), lc = head.toLowerCase();
+    if (/cumulative time weighted return|opening balance/i.test(head)) return { broker: 'Merrill Edge', kind: 'bad', why: 'performance report (yearly totals, no trades or holdings)' };
+    if (/"?positions"?\s*,\s*"?quantity/i.test(head)) return { broker: 'Merrill Edge', kind: 'pos', choice: 'Merrill Edge' };
+    if (/symbol\/cusip/i.test(head) && /trade date|settlement date/i.test(head)) return { broker: 'Merrill Edge', kind: 'hist' };
+    if (/investment/i.test(head) && /transaction type/i.test(head) && /shares\/unit/i.test(head)) return { broker: 'Fidelity NetBenefits', kind: 'hist401k', why: '401(k) history — use it in the 401k app' };
+    if (/run date/i.test(head) && /action/i.test(head)) return { broker: 'Fidelity', kind: 'hist' };
+    if (/account name/i.test(head) && /symbol/i.test(head) && /quantity/i.test(head)) return { broker: 'Fidelity', kind: 'pos', choice: '__fidelity__' };
+    if (/investment name/i.test(head) && /share price/i.test(head)) {
+      const hasTx = /trade date/i.test(all) && /transaction type/i.test(all);
+      return { broker: 'Vanguard', kind: hasTx ? 'both' : 'pos', choice: 'Vanguard' };
+    }
+    if (/trade date/i.test(head) && /transaction type/i.test(head) && /share price|investment name/i.test(all)) return { broker: 'Vanguard', kind: 'hist' };
+    if (/positions for account|mkt val|qty \(quantity\)/i.test(head)) return { broker: 'Charles Schwab', kind: 'pos', choice: 'Charles Schwab' };
+    if (/"?date"?\s*,\s*"?action"?/i.test(head) && /fees & comm/i.test(head)) return { broker: 'Charles Schwab', kind: 'hist' };
+    if (/robinhood/i.test(name) || /trans code/i.test(lc)) return { broker: 'Robinhood', kind: 'hist' };
+    return { broker: '?', kind: 'bad', why: 'not a holdings or transaction file the app knows (e.g. Merrill "PortfolioSummary")' };
+  }
+  const KIND = { hist: '📜 History', pos: '📸 Positions', both: '📸 + 📜 both', bad: '❌ Not usable', hist401k: '📜 401(k) history' };
+  const USE = { hist: 'Import', pos: 'Compare', both: 'Compare + Import', bad: 'skip', hist401k: 'skip here (401k app)' };
+
+  function render() {
+    // newest file per broker + kind wins
+    const best = {};
+    files.forEach(f => { if (f.c.kind === 'bad' || f.c.kind === 'hist401k') return;
+      ['hist', 'pos'].forEach(k => { if (f.c.kind === k || f.c.kind === 'both') { const key = f.c.broker + '|' + k;
+        if (!best[key] || (f.f.lastModified || 0) > (best[key].f.lastModified || 0)) best[key] = f; } }); });
+    files.forEach(f => { f.useHist = Object.values(best).includes(f) && (f.c.kind === 'hist' || f.c.kind === 'both') && best[f.c.broker + '|hist'] === f;
+                         f.usePos = (f.c.kind === 'pos' || f.c.kind === 'both') && best[f.c.broker + '|pos'] === f; });
+    const hist = files.filter(f => f.useHist);
+    $('bfOut').innerHTML = `<table class="rt-table" style="width:100%;margin-top:10px;font-size:.84rem;"><thead><tr><th>File</th><th>Broker</th><th>Kind</th><th>Use for</th><th></th></tr></thead><tbody>
+      ${files.map((f, i) => { const older = !f.useHist && !f.usePos && f.c.kind !== 'bad' && f.c.kind !== 'hist401k';
+        return `<tr style="${f.c.kind === 'bad' || older ? 'opacity:.6' : ''}"><td style="word-break:break-all;">${esc(f.f.name)}<div style="font-size:.7rem;color:var(--text-secondary);">${f.f.lastModified ? new Date(f.f.lastModified).toLocaleString() : ''}</div></td>
+          <td>${esc(f.c.broker)}</td><td>${KIND[f.c.kind]}</td>
+          <td>${older ? 'skip — a newer copy was picked' : esc(USE[f.c.kind])}${f.c.why ? `<div style="font-size:.7rem;color:var(--text-secondary);">${esc(f.c.why)}</div>` : ''}</td>
+          <td>${f.usePos ? `<button type="button" class="add-btn" style="padding:4px 10px;font-size:.78rem;" data-cmp="${i}">🧮 Compare</button>` : ''}</td></tr>`; }).join('')}
+      </tbody></table>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        ${hist.length ? `<button type="button" class="add-btn" id="bfImport" style="background:#10b981;color:#fff;border-color:#10b981;">📊 Import ${hist.length} history file(s)</button>` : ''}
+      </div>
+      <p style="font-size:.76rem;color:var(--text-secondary);margin-top:8px;">Nothing has changed yet. Each button opens that step with its own preview, exactly as if you had picked the file there yourself. 📜 History adds trades (Import). 📸 Positions checks share counts (Compare) — in the 401k app the same Positions files also feed 💵 Sync cash.</p>`;
+    $('bfOut').querySelectorAll('[data-cmp]').forEach(b => b.onclick = () => runCompare(files[+b.dataset.cmp]));
+    if ($('bfImport')) $('bfImport').onclick = () => {
+      if (typeof window.openCSVImportModal !== 'function' || typeof window.__secureHandleCSVFiles !== 'function') { alert('Import tool not ready'); return; }
+      $('bfModal').remove(); window.openCSVImportModal(); window.__secureHandleCSVFiles(hist.map(f => f.f));
+    };
+  }
+
+  async function runCompare(f) {
+    if (typeof window.openPositionsCompare !== 'function' || typeof window.__posCmpRun !== 'function') { alert('Compare tool not ready'); return; }
+    $('bfModal').style.display = 'none';
+    window.openPositionsCompare();
+    const sel = $('posCmpPlat'); if (sel) { if (![...sel.options].some(o => o.value === f.c.choice)) sel.add(new Option(f.c.choice, f.c.choice)); sel.value = f.c.choice; }
+    window.__posCmpRun(await f.f.text(), f.c.choice);
+  }
+
+  window.openBrokerFiles = function () {
+    let ov = $('bfModal'); if (ov) { ov.style.display = 'flex'; return; }
+    files = [];
+    ov = document.createElement('div'); ov.id = 'bfModal'; ov.className = 'dbm-overlay'; ov.style.display = 'flex';
+    ov.innerHTML = `<div class="dbm-box" style="max-width:820px;"><div class="dbm-head"><h3>📂 Broker files</h3>
+        <button type="button" class="dbm-close" onclick="document.getElementById('bfModal').remove()">&times;</button></div>
+      <p style="font-size:.84rem;margin:0 0 10px;">Pick <b>all</b> the files you downloaded from Fidelity, Vanguard, Schwab and Merrill Edge — any kind, any name. The app sorts them and shows what each one is for. Nothing is imported or changed until you press a button below.</p>
+      <label class="add-btn" for="bfInput" style="cursor:pointer;margin:0;">📂 Choose files</label>
+      <input type="file" id="bfInput" accept=".csv,.txt,text/csv" multiple style="display:none;">
+      <div id="bfOut"></div></div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    $('bfInput').onchange = async e => {
+      files = [];
+      for (const f of e.target.files) { let c; try { c = classify(await f.text(), f.name); } catch (err) { c = { broker: '?', kind: 'bad', why: String(err.message || err) }; } files.push({ f, c }); }
+      render(); e.target.value = '';
+    };
+  };
+  window.__brokerFilesTest = { classify };
+})();
+</script>
+
 
 
 
@@ -22492,6 +22583,7 @@ document.addEventListener('click', function(e) {
     };
     
     // Handle file selection
+    window.__secureHandleCSVFiles = (files) => handleCSVFiles(files);   // used by 📂 Broker files (v25)
     function handleCSVFiles(files) {
         uploadedCSVFiles = Array.from(files).filter(f => /\.(json|csv)$/i.test(f.name));
         
@@ -24294,6 +24386,7 @@ window.sendSecureBackupToTelegram = async function() {
         <button class="add-btn" id="exportBtn">📥 Export Data</button>
         <label class="add-btn" for="importFile" style="cursor:pointer;" title="Restores a file made with Export Data">📤 Import Export File (.json)</label>
         <input accept=".json" id="importFile" style="display:none;" type="file"/>
+        <button class="add-btn" onclick="window.closeDataManager();window.openBrokerFiles()" style="border-color:#10b981;">📂 Broker files (sort &amp; check)</button>
         <button class="add-btn" onclick="window.closeDataManager();openCSVImportModal()">📊 Import Broker CSV</button>
         <button class="add-btn" onclick="window.closeDataManager();window.openDupFinder()">🔍 Find Duplicates</button>
         <button class="add-btn" onclick="window.closeDataManager();window.openPositionsCompare()">🧮 Compare with broker positions</button>
@@ -25206,6 +25299,11 @@ window.exportYahooPortfolio = function () {
     document.getElementById('posCmpAll').onchange = () => render(res);
   }
 
+  // used by 📂 Broker files (v25): run a compare with text already read
+  window.__posCmpRun = function (text, choice) {
+    try { render(readBroker(String(text || ''), choice)); }
+    catch (err) { const b = document.getElementById('posCmpResult'); if (b) b.innerHTML = `<p style="color:#ef4444;font-size:0.85rem;margin-top:10px;">${esc(err.message || err)}</p>`; }
+  };
   window.openPositionsCompare = function () {
     if (!window.stockTracker) { alert('App not ready yet'); return; }
     let ov = document.getElementById('posCmpModal');
