@@ -22,7 +22,7 @@
 
 
 <!DOCTYPE html>
-<!-- build: BUY/SELL capitals counted + Compare with broker positions (v25: 📂 Broker files sorter; Dividends (12 mo) follows the filter; clean-up hides 4 tools) - 2026-10-08 -->
+<!-- build: BUY/SELL capitals counted + Compare with broker positions (v25.1: 📂 Broker files sorter (all history files, empty month skipped); Dividends (12 mo) follows the filter; clean-up hides 4 tools) - 2026-10-08 -->
 
 <html lang="en">
 <head>
@@ -22648,6 +22648,8 @@ document.addEventListener('click', function(e) {
                                   : importSkipped.wrongFile === 'positions' ? 'This is a Positions (holdings) file — use it with 🧮 Compare instead.'
                                   : 'Is it a transaction-history export?';
                         importSkipped.wrongFile = null;
+                        // several files picked (e.g. from 📂 Broker files): a month with no trades must not stop the rest
+                        if (uploadedCSVFiles.length > 1) { (importSkipped.emptyFiles = importSkipped.emptyFiles || []).push(file.name); continue; }
                         alert('No buy/sell rows found in ' + file.name + '. ' + why + '\n\nMerrill Edge: Accounts → Download Account Data → Spreadsheets and Text → Activity (tick Security Transactions) → .CSV');
                         return;
                     }
@@ -22666,6 +22668,10 @@ document.addEventListener('click', function(e) {
                 }
             }
             console.log(`✅ Loaded ${parsedTransactions.length} transactions from ${uploadedCSVFiles.length} file(s)`);
+            if (importSkipped.emptyFiles && importSkipped.emptyFiles.length) {
+                if (!parsedTransactions.length) { alert('No buy/sell rows found in any of the ' + uploadedCSVFiles.length + ' files.'); return; }
+                alert('ℹ️ No buy/sell rows in ' + importSkipped.emptyFiles.length + ' file(s) — skipped, the rest continue:\n\n' + importSkipped.emptyFiles.join('\n'));
+            }
         } catch (err) {
             console.error('Error parsing JSON:', err);
             alert('Error reading JSON file: ' + err.message);
