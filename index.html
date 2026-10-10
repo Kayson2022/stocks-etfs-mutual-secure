@@ -24773,6 +24773,8 @@ window.sendSecureBackupToTelegram = async function() {
     if (!collapse && t.expandAllCards) t.expandAllCards();
     window._allCollapsed = collapse;
     if (btn) btn.textContent = collapse ? '↕ Expand All' : '↕ Collapse All';
+    // compact cards (2026-10-10): Expand All also opens every card's Details so the news/More Info shows
+    if (typeof window.kSetAllCardsOpen === 'function') window.kSetAllCardsOpen(!collapse);
   };
 
   // Clear All Data: step 1 = type DELETE, step 2 = the app's own Confirm Delete dialog
@@ -25589,7 +25591,13 @@ window.exportYahooPortfolio = function () {
   }
 
   // 5. Compact stock cards: tag the rows to keep, hide the rest until "Details ▾" (open cards remembered across re-renders)
-  var openCards = new Set((function () { try { return JSON.parse(ls('secOpenCards') || '[]'); } catch (e) { return []; } })());
+  // Expand All / Collapse All set a DEFAULT for every card (also cards drawn later: other groups, tabs,
+  // re-renders); a card's own Details button stores an exception to that default.
+  var openCards = new Set((function () { try { return JSON.parse(ls('secOpenCards') || '[]'); } catch (e) { return []; } })());     // opened while default = closed
+  var closedCards = new Set((function () { try { return JSON.parse(ls('secClosedCards') || '[]'); } catch (e) { return []; } })()); // closed while default = open
+  var defaultOpen = ls('secCardsDefaultOpen') === '1';
+  function isOpen(id) { return defaultOpen ? !closedCards.has(id) : openCards.has(id); }
+  function saveCardState() { ls('secOpenCards', JSON.stringify(Array.from(openCards))); ls('secClosedCards', JSON.stringify(Array.from(closedCards))); ls('secCardsDefaultOpen', defaultOpen ? '1' : '0'); }
   var KEEP = /^(Total Shares|Total Value|Total P\/L)\b/i;
   function decorate(card) {
     if (!card || card.dataset.kcc === '1') return;
@@ -25623,13 +25631,28 @@ window.exportYahooPortfolio = function () {
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
       var open = !card.classList.contains('k-open');
-      if (open) openCards.add(id); else openCards.delete(id);
-      ls('secOpenCards', JSON.stringify(Array.from(openCards)));
+      if (defaultOpen) { if (open) closedCards.delete(id); else closedCards.add(id); }
+      else { if (open) openCards.add(id); else openCards.delete(id); }
+      saveCardState();
       set(open);
     });
     card.classList.add('k-cc');
-    set(openCards.has(id));
+    card._kSet = set;
+    set(isOpen(id));
+    // drawn while "Expand All" is on → also show its More Info / news, like the cards that were on screen
+    if (defaultOpen && !closedCards.has(id)) showNews(card);
   }
+  function showNews(card) {
+    var wrap = card.querySelector('[id^="extra-wrap-"]');
+    if (!wrap) return;
+    wrap.style.display = 'block';
+    var chev = card.querySelector('[id^="extra-chevron-"]'); if (chev) chev.textContent = '▲ Less Info';
+  }
+  // used by Tools › "↕ Expand All / Collapse All"
+  window.kSetAllCardsOpen = function (open) {
+    defaultOpen = !!open; openCards.clear(); closedCards.clear(); saveCardState();
+    document.querySelectorAll('.k-cc').forEach(function (c) { if (c._kSet) c._kSet(defaultOpen); });
+  };
   function scanCards(root) {
     var list = (root && root.querySelectorAll) ? root.querySelectorAll('.stock-card, .fund-card') : [];
     Array.prototype.forEach.call(list, decorate);
@@ -25637,6 +25660,9 @@ window.exportYahooPortfolio = function () {
   }
   function initCards() {
     if (window._kCardsObs) return;
+    // cards start compact → the Tools button should offer "Expand All" first (unless cards were left open)
+    window._allCollapsed = !defaultOpen;   // keep the Tools button in step with the saved default
+    var eb = document.getElementById('expandCollapseAllBtn'); if (eb) eb.textContent = defaultOpen ? '↕ Collapse All' : '↕ Expand All';
     scanCards(document);
     window._kCardsObs = new MutationObserver(function (muts) {
       muts.forEach(function (m) { Array.prototype.forEach.call(m.addedNodes, function (n) { if (n.nodeType === 1) scanCards(n); }); });
