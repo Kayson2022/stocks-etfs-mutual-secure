@@ -3932,6 +3932,35 @@ document.addEventListener("DOMContentLoaded", function(){
 #portfolio-summary.k-less .summary-grid .summary-item-value, #portfolio-summary.k-less .summary-grid .summary-item-value .summary-value { font-size:1.15rem !important; }
 #portfolio-summary.k-less .summary-cash-detail { display:none !important; }
 #portfolio-summary .summary-toggle { margin-left:0 !important; }
+/* ── Compact stock cards (2026-10-10): everyday numbers only, the rest behind "Details ▾" ── */
+.k-cc:not(.k-open) .stock-info > :not(.k-keep),
+.k-cc:not(.k-open) .card-tap-hint,
+.k-cc:not(.k-open) .transaction-details,
+.k-cc:not(.k-open) .k-extra,
+.k-cc:not(.k-open) .card-note-wrap { display:none !important; }
+.k-cc:not(.k-open) .stock-info { display:grid !important; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px 12px; margin-top:8px; }
+.k-cc:not(.k-open) .stock-info > .info-row.k-keep { display:flex !important; flex-direction:column; align-items:flex-start; gap:1px; border:none !important; padding:0 !important; min-width:0; }
+.k-cc:not(.k-open) .stock-info > .info-row.k-keep .info-label { font-size:0.68rem; opacity:0.75; }
+.k-cc:not(.k-open) .stock-info > .info-row.k-keep .info-value { font-size:0.92rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+.k-cc:not(.k-open) .stock-info > .k-52w { grid-column:1 / -1; margin-top:2px; }
+.k-cc:not(.k-open) { padding:16px !important; }
+.k-cc:not(.k-open) .stock-header { margin-bottom:4px !important; padding-bottom:6px !important; }
+/* price and today's change on one line */
+.k-pricerow { display:flex; align-items:center; flex-wrap:wrap; gap:4px 12px; }
+/* each card keeps its own height — opening one card must not stretch its neighbours */
+.stock-card.k-cc, .fund-card.k-cc { align-self:start !important; }
+.k-cc:not(.k-open) .stock-info { flex:0 0 auto !important; align-content:start !important; }
+.k-cc:not(.k-open) .k-pricerow { margin-top:4px; }
+.k-cc:not(.k-open) .k-pricerow > .stock-price { margin:0 !important; }
+.k-cc:not(.k-open) .k-pricerow > .stock-change { width:auto !important; margin:0 !important; flex:0 0 auto !important; }
+.k-open .k-pricerow { display:block; }
+.k-cc:not(.k-open) .sparkline-wrap { margin-top:6px !important; }
+.k-cc:not(.k-open) .stock-info { margin-top:8px !important; padding-top:8px !important; }
+.k-cc:not(.k-open) .total-pl { margin-top:6px !important; padding-top:6px !important; }
+.k-cc:not(.k-open) .card-action-row { margin-top:6px !important; }
+.k-cc-btn { display:block; width:100%; margin-top:8px; padding:6px 10px; border-radius:8px; cursor:pointer; font-size:0.78rem; font-weight:700;
+  border:1px solid var(--border-color); background:transparent; color:var(--text-secondary); }
+.k-cc-btn:hover { color:var(--text-primary); border-color:var(--accent-primary, #7c3aed); }
 /* one-tap 🙈 next to Lock (same action as Tools › Privacy Mode) */
 #headerPrivacyBtn { padding:6px 10px; border-radius:var(--radius-sm, 8px); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); font-size:0.95rem; line-height:1; cursor:pointer; }
 #headerPrivacyBtn:hover { border-color:var(--accent-primary, #7c3aed); }
@@ -25526,7 +25555,63 @@ window.exportYahooPortfolio = function () {
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
   }
 
-  function init() { initTools(); initMore(); initTabs(); }
+  // 5. Compact stock cards: tag the rows to keep, hide the rest until "Details ▾" (open cards remembered across re-renders)
+  var openCards = new Set((function () { try { return JSON.parse(ls('secOpenCards') || '[]'); } catch (e) { return []; } })());
+  var KEEP = /^(Total Shares|Total Value|Total P\/L)\b/i;
+  function decorate(card) {
+    if (!card || card.dataset.kcc === '1') return;
+    var type = card.dataset.type;
+    if (type !== 'stock' && type !== 'fund') return;
+    var info = card.querySelector('.stock-info');
+    if (!info) return;
+    card.dataset.kcc = '1';
+    // price + today's change side by side (the card is a flex column, so they need a shared row)
+    var pr = card.querySelector(':scope > .stock-price'), ch = card.querySelector(':scope > .stock-change');
+    if (pr && ch) { var row = document.createElement('div'); row.className = 'k-pricerow'; card.insertBefore(row, pr); row.appendChild(pr); row.appendChild(ch); }
+    Array.prototype.forEach.call(info.children, function (row) {
+      var lab = row.querySelector && row.querySelector('.info-label');
+      var txt = lab ? lab.textContent.trim() : '';
+      if (lab && KEEP.test(txt) && !/Cost Basis/i.test(txt)) row.classList.add('k-keep');
+      else if (/52W Low/.test(row.textContent || '')) row.classList.add('k-keep', 'k-52w');
+    });
+    // the "More Info" block (news, notes…) sits in the div after transaction-details
+    var more = card.querySelector('[id^="extra-wrap-"]');
+    if (more && more.parentElement && more.parentElement !== card) more.parentElement.classList.add('k-extra');
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'k-cc-btn';
+    var anchor = card.querySelector('.card-action-row') || card.querySelector('.total-pl');
+    if (anchor) anchor.parentNode.insertBefore(btn, anchor.nextSibling); else card.appendChild(btn);
+    var id = card.dataset.id;
+    function set(open) {
+      card.classList.toggle('k-open', open);
+      btn.textContent = open ? 'Less ▴' : 'Details ▾';
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = !card.classList.contains('k-open');
+      if (open) openCards.add(id); else openCards.delete(id);
+      ls('secOpenCards', JSON.stringify(Array.from(openCards)));
+      set(open);
+    });
+    card.classList.add('k-cc');
+    set(openCards.has(id));
+  }
+  function scanCards(root) {
+    var list = (root && root.querySelectorAll) ? root.querySelectorAll('.stock-card, .fund-card') : [];
+    Array.prototype.forEach.call(list, decorate);
+    if (root && root.classList && (root.classList.contains('stock-card') || root.classList.contains('fund-card'))) decorate(root);
+  }
+  function initCards() {
+    if (window._kCardsObs) return;
+    scanCards(document);
+    window._kCardsObs = new MutationObserver(function (muts) {
+      muts.forEach(function (m) { Array.prototype.forEach.call(m.addedNodes, function (n) { if (n.nodeType === 1) scanCards(n); }); });
+    });
+    window._kCardsObs.observe(document.body, { childList: true, subtree: true });   // the stock grid lives outside #app-container
+  }
+
+  function init() { initTools(); initMore(); initTabs(); initCards(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   window.addEventListener('load', init);
 })();
