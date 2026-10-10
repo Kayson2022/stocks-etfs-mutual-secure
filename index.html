@@ -3893,7 +3893,17 @@ document.addEventListener("DOMContentLoaded", function(){
 #toggleToolbarBtn { font-weight:700 !important; }
 #utilityButtonsGrid.k-in-tools { margin:6px 0 10px; }
 /* 3. summary: key numbers first, the rest behind "More stats" */
-#portfolio-summary.k-less .summary-grid, #portfolio-summary.k-less #san-coast-grid { display:none !important; }
+/* collapsed: keep 4 everyday numbers (Stocks, Mutual Funds, Cash, Dividends) as a compact 2×2 on the right;
+   Contributions, Active counts, Sleep-at-Night and Coast FIRE only under "More stats" */
+#portfolio-summary.k-less #san-coast-grid { display:none !important; }
+#portfolio-summary.k-less .summary-grid { grid-template-columns:repeat(2, minmax(0,1fr)) !important; grid-template-rows:none !important; grid-auto-rows:auto !important; align-content:start !important; height:auto !important; min-height:0 !important; gap:8px !important; align-self:center; flex:0 1 auto !important; width:min(480px, 100%) !important; }
+#portfolio-summary.k-less .summary-grid > .summary-item:nth-child(4),
+#portfolio-summary.k-less .summary-grid > .summary-item:nth-child(6) { display:none !important; }
+#portfolio-summary.k-less .summary-grid > .summary-item { padding:10px 14px !important; min-height:0 !important; }
+#portfolio-summary.k-less .summary-grid .summary-item-label { font-size:0.78rem !important; }
+#portfolio-summary.k-less .summary-grid .summary-item-value, #portfolio-summary.k-less .summary-grid .summary-item-value .summary-value { font-size:1.15rem !important; }
+#portfolio-summary.k-less .summary-cash-detail { display:none !important; }
+#portfolio-summary .summary-toggle { margin-left:0 !important; }   /* toggles sit left, right after the P/L badges, instead of floating mid-card */
 .k-sec-more-btn { display:inline-flex; align-items:center; gap:6px; margin-top:10px; padding:6px 14px; border-radius:8px; cursor:pointer;
   border:1px solid var(--border-color); background:rgba(255,255,255,0.06); color:var(--text-secondary); font-size:0.8rem; font-weight:700; }
 .k-sec-more-btn:hover { color:var(--text-primary); }
