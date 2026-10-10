@@ -261,9 +261,37 @@ window.currentSessionKey = function () {
   while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 };
+// Session before the current one (skips weekends)
+window.previousSessionKey = function () {
+  const [y, m, d] = window.currentSessionKey().split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  do { dt.setDate(dt.getDate() - 1); } while (dt.getDay() === 0 || dt.getDay() === 6);
+  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+};
+/* 2026-10-10 (same rule as the 401k app's NAV-fix 09c): Yahoo's quote time can say "today" while a
+   fund's price is still yesterday's NAV (the 401k app showed FXAIX −0.47% on a +0.59% day). So each
+   fund remembers its NAV (it.navPrice) and which session it belongs to (it.navSession), saved with the
+   item. The NAV only becomes "today's" when the price actually CHANGES:
+   - new price seen 9:30–16:00 ET → previous session's NAV posted late
+   - new price seen after 16:00 ET, overnight, before 9:30 or on a weekend → current session
+   - first time seen on a weekday after 9:30 ET → assumed old until it changes */
+window.recordFundNav = function (it) {
+  if (!it || !window.isMutualFundItem(it) || !(Number(it.price) > 0)) return;
+  const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const mins = et.getHours() * 60 + et.getMinutes();
+  const weekday = et.getDay() >= 1 && et.getDay() <= 5;
+  const firstSeen = it.navPrice == null;
+  if (!firstSeen && Math.abs(Number(it.price) - Number(it.navPrice)) < 1e-9) return;   // same NAV as before
+  it.navSession = firstSeen
+    ? ((weekday && mins >= 570) ? window.previousSessionKey() : window.currentSessionKey())
+    : ((weekday && mins >= 570 && mins < 960) ? window.previousSessionKey() : window.currentSessionKey());
+  it.navPrice = Number(it.price);
+};
 window.fundNavIsStale = function (it) {
   if (!window.isMutualFundItem(it)) return false;
-  if (it.quoteTime) return window.etDateKey(new Date(it.quoteTime * 1000)) < window.currentSessionKey();
+  if (it.quoteTime && window.etDateKey(new Date(it.quoteTime * 1000)) < window.currentSessionKey()) return true;   // Yahoo itself says old
+  if (it.navSession) return it.navSession < window.currentSessionKey();
+  if (it.quoteTime) return false;   // older data without NAV memory: keep the previous behavior
   // no quote date saved yet (older data): assume stale while the market is open, before NAVs are out
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
   const mins = et.getHours() * 60 + et.getMinutes();
@@ -3903,7 +3931,13 @@ document.addEventListener("DOMContentLoaded", function(){
 #portfolio-summary.k-less .summary-grid .summary-item-label { font-size:0.78rem !important; }
 #portfolio-summary.k-less .summary-grid .summary-item-value, #portfolio-summary.k-less .summary-grid .summary-item-value .summary-value { font-size:1.15rem !important; }
 #portfolio-summary.k-less .summary-cash-detail { display:none !important; }
-#portfolio-summary .summary-toggle { margin-left:0 !important; }   /* toggles sit left, right after the P/L badges, instead of floating mid-card */
+#portfolio-summary .summary-toggle { margin-left:0 !important; }
+/* 🙈 privacy mode also covers: Today $ in the pinned top bar, Coast FIRE text ($ target / have / need),
+   cash breakdown, and the "vs 401k app: ±$…" check */
+body.privacy-mode #chart-summary-panel #summary-daily .pill-value,
+body.privacy-mode #coast-detail,
+body.privacy-mode #cash-detail,
+body.privacy-mode #cash-match-check { filter:blur(5px); user-select:none; transition:filter .2s ease-in-out; }   /* toggles sit left, right after the P/L badges, instead of floating mid-card */
 .k-sec-more-btn { display:inline-flex; align-items:center; gap:6px; margin-top:10px; padding:6px 14px; border-radius:8px; cursor:pointer;
   border:1px solid var(--border-color); background:rgba(255,255,255,0.06); color:var(--text-secondary); font-size:0.8rem; font-weight:700; }
 .k-sec-more-btn:hover { color:var(--text-primary); }
@@ -8899,6 +8933,7 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                     if (result.success) {
                         const prevChangePercent = Number(item.changePercent) || 0;
                         Object.assign(item, stripProtoKeys(result.data));
+                        if (typeof window.recordFundNav === 'function') window.recordFundNav(item);   // remember NAV → is it today's?
                         const newChangePercent = Number(item.changePercent) || 0;
 
                         // ── Record daily price snapshot for Correlation Matrix ──
@@ -10442,7 +10477,7 @@ renderPortfolioSummary() {
                     
                     const todayPL = window.todayChangeOf(item) * stats.totalSharesOwned;
                     const _navNote = window.fundNavIsStale(item)
-                        ? ` <span style="font-size:0.72em;opacity:0.75;font-weight:500;">(NAV ${item.quoteTime ? new Date(item.quoteTime * 1000).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : 'from last close'} — today's not out yet)</span>` : ''; 
+                        ? ` <span style="font-size:0.72em;opacity:0.75;font-weight:500;">(NAV ${item.navSession ? new Date(item.navSession + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : item.quoteTime ? new Date(item.quoteTime * 1000).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : 'from last close'} — today's not out yet)</span>` : ''; 
                     
                     let cardActionsHTML = '';
                     if (type === 'watchlist') {
