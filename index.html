@@ -3934,10 +3934,10 @@ document.addEventListener("DOMContentLoaded", function(){
 #portfolio-summary .summary-toggle { margin-left:0 !important; }
 /* ── Compact stock cards (2026-10-10): everyday numbers only, the rest behind "Details ▾" ── */
 .k-cc:not(.k-open) .stock-info > :not(.k-keep),
-.k-cc:not(.k-open) .card-tap-hint,
 .k-cc:not(.k-open) .transaction-details,
 .k-cc:not(.k-open) .k-extra,
 .k-cc:not(.k-open) .card-note-wrap { display:none !important; }
+.k-cc:not(.k-open) .card-tap-hint { display:block !important; margin:4px 0 0 !important; padding:2px 0 !important; }   /* keep the chart hint visible in compact cards */
 .k-cc:not(.k-open) .stock-info { display:grid !important; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px 12px; margin-top:8px; }
 .k-cc:not(.k-open) .stock-info > .info-row.k-keep { display:flex !important; flex-direction:column; align-items:flex-start; gap:1px; border:none !important; padding:0 !important; min-width:0; }
 .k-cc:not(.k-open) .stock-info > .info-row.k-keep .info-label { font-size:0.68rem; opacity:0.75; }
@@ -3961,6 +3961,13 @@ document.addEventListener("DOMContentLoaded", function(){
 .k-cc-btn { display:block; width:100%; margin-top:8px; padding:6px 10px; border-radius:8px; cursor:pointer; font-size:0.78rem; font-weight:700;
   border:1px solid var(--border-color); background:transparent; color:var(--text-secondary); }
 .k-cc-btn:hover { color:var(--text-primary); border-color:var(--accent-primary, #7c3aed); }
+/* card chart: % change for the selected range */
+.k-range-change { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; margin:8px 0 4px; font-size:0.85rem; }
+.k-range-change:empty { display:none; }
+.k-range-change .k-rc-range { font-weight:800; color:var(--text-secondary); text-transform:uppercase; font-size:0.72rem; letter-spacing:0.04em; }
+.k-range-change .k-rc-pct { font-weight:800; font-size:1.05rem; }
+.k-range-change .k-rc-px, .k-range-change .k-rc-pos { color:var(--text-secondary); font-size:0.8rem; }
+body.privacy-mode .k-range-change .k-rc-money, body.privacy-mode .k-range-change .k-rc-pos { filter:blur(5px); user-select:none; }
 /* one-tap 🙈 next to Lock (same action as Tools › Privacy Mode) */
 #headerPrivacyBtn { padding:6px 10px; border-radius:var(--radius-sm, 8px); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); font-size:0.95rem; line-height:1; cursor:pointer; }
 #headerPrivacyBtn:hover { border-color:var(--accent-primary, #7c3aed); }
@@ -10720,6 +10727,7 @@ getOldestTransactionDate(item) {
 
                 // Helper to draw error message directly on canvas
                 const drawError = (message) => {
+                     { const _rc = card.querySelector('.k-range-change'); if (_rc) _rc.innerHTML = ''; }
                      if (this.cardChartInstances[chartId]) this.cardChartInstances[chartId].destroy();
                      ctx.clearRect(0, 0, canvas.width, canvas.height);
                      ctx.textAlign = 'center';
@@ -10799,6 +10807,31 @@ getOldestTransactionDate(item) {
                     const firstPrice = chartData[0].y;
                     const lastPrice = chartData[chartData.length - 1].y;
                     const borderColor = lastPrice >= firstPrice ? 'var(--color-positive)' : 'var(--color-negative)';
+
+                    // ── % change for the selected range (2026-10-10) ──
+                    // Base = last close BEFORE the range starts (e.g. YTD → Dec 31 close), so it matches
+                    // how brokers quote 1W / YTD; end = live price when we have one.
+                    try {
+                        const before = allDataPoints.filter(dp => dp.x < startDate);
+                        const basePx = before.length ? before[before.length - 1].y : firstPrice;
+                        const endPx  = (item && Number(item.price) > 0) ? Number(item.price) : lastPrice;
+                        const chgPx  = endPx - basePx, chgPct = basePx ? (chgPx / basePx) * 100 : 0;
+                        let sh = 0;
+                        try { sh = item ? (this.calculateTransactionStats(item.transactions || [], endPx).totalSharesOwned || 0) : 0; } catch (_) {}
+                        const up = chgPx >= 0, sign = up ? '+' : '−', col = up ? 'var(--color-positive)' : 'var(--color-negative)';
+                        const fmt$ = v => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        const label = range === 'All' ? 'Since first buy' : range;
+                        const box = card.querySelector('.card-chart-container');
+                        if (box) {
+                            let el = box.querySelector('.k-range-change');
+                            if (!el) { el = document.createElement('div'); el.className = 'k-range-change'; const ctl = box.querySelector('.chart-controls'); box.insertBefore(el, ctl ? ctl.nextSibling : box.firstChild); }
+                            el.innerHTML = `<span class="k-rc-range">${label}</span>`
+                                + `<span class="k-rc-pct" style="color:${col}">${up ? '▲' : '▼'} ${sign}${Math.abs(chgPct).toFixed(2)}%</span>`
+                                + `<span class="k-rc-px">${sign}${fmt$(chgPx)}/sh</span>`
+                                + (sh > 0.0001 ? `<span class="k-rc-pos">your ${sh.toLocaleString('en-US', { maximumFractionDigits: 3 })} sh: <b class="k-rc-money" style="color:${col}">${sign}${fmt$(chgPx * sh)}</b></span>` : '');
+                            el.title = `From ${fmt$(basePx)} to ${fmt$(endPx)} (position $ uses the shares you hold now)`;
+                        }
+                    } catch (_) {}
                     const gridColor = this.isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
                     const labelColor = this.isDarkMode ? '#f1f1f1' : '#666';
 
