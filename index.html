@@ -3932,6 +3932,9 @@ document.addEventListener("DOMContentLoaded", function(){
 #portfolio-summary.k-less .summary-grid .summary-item-value, #portfolio-summary.k-less .summary-grid .summary-item-value .summary-value { font-size:1.15rem !important; }
 #portfolio-summary.k-less .summary-cash-detail { display:none !important; }
 #portfolio-summary .summary-toggle { margin-left:0 !important; }
+/* one-tap 🙈 next to Lock (same action as Tools › Privacy Mode) */
+#headerPrivacyBtn { padding:6px 10px; border-radius:var(--radius-sm, 8px); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); font-size:0.95rem; line-height:1; cursor:pointer; }
+#headerPrivacyBtn:hover { border-color:var(--accent-primary, #7c3aed); }
 /* 🙈 privacy mode also covers: Today $ in the pinned top bar, Coast FIRE text ($ target / have / need),
    cash breakdown, and the "vs 401k app: ±$…" check */
 body.privacy-mode #chart-summary-panel #summary-daily .pill-value,
@@ -4011,6 +4014,7 @@ body:not(.dark-mode) .k-sec-more-btn { background:rgba(0,0,0,0.04); }
 <div class="header-controls">
 <div id="user-info" style="display: none;">
 <span id="user-name"></span>
+<button id="headerPrivacyBtn" type="button" onclick="window.stockTracker && window.stockTracker.togglePrivacyMode()" title="Hide / show all numbers" aria-label="Hide or show numbers">👁️</button>
 <button id="headerLockBtn" onclick="alLockNow()" title="Lock app" aria-label="Lock app">🔒 Lock</button>
 <button id="sign-out-btn">Sign Out</button>
 </div>
@@ -11982,6 +11986,7 @@ getOldestTransactionDate(item) {
                 this.isPrivacyMode = isPrivate;
                 document.body.classList.toggle('privacy-mode', isPrivate);
                 if(this.elements.togglePrivacyBtn) this.elements.togglePrivacyBtn.textContent = isPrivate ? '👀 Reveal Values' : '👁️ Privacy Mode';
+                { const hb = document.getElementById('headerPrivacyBtn'); if (hb) { hb.textContent = isPrivate ? '🙈' : '👁️'; hb.title = isPrivate ? 'Show numbers' : 'Hide all numbers'; } }
             }
 
             // --- Confirm Modal Management ---
