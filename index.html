@@ -4298,7 +4298,7 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
 </div>
 <div id="stDailyReviewPanel" class="st-panel">
   <div class="st-panel-title">📋 Daily Review — Quick Scan + Deep Dive</div>
-  <div class="st-panel-sub">Quét toàn bộ holdings: giá, 1D/5D, earnings 7 ngày, tỷ trọng. Chỉ phân tích sâu những mã có trigger. Tự chạy mỗi lần mở app, sau khi giá được làm mới.</div>
+  <div class="st-panel-sub">Quét toàn bộ holdings: giá, 1D/5D, earnings 7 ngày, tỷ trọng, so với thị trường (SPY/QQQ). Phân tích sâu mọi mã có trigger. Tự chạy mỗi lần mở app, sau khi giá được làm mới.</div>
   <div id="stDailyReviewContent"></div>
 </div>
 <div id="stAidoctorPanel" class="st-panel">
@@ -25698,7 +25698,8 @@ window.exportYahooPortfolio = function () {
   var AI_MODEL    = 'claude-sonnet-4-20250514';
   var ALWAYS      = ['DELL', 'STX', 'TSLL'];
   var SPECULATIVE = ['CBRG', 'FRMI', 'GEVO', 'QS', 'ENVX', 'SOUN', 'SMR', 'AMPX', 'TSLL'];
-  var TH_1D = 5, TH_5D = 10, TH_CONC = 15, TH_EARN_DAYS = 7, MAX_DEEP = 30, AI_BATCH = 6;
+  var TH_1D = 5, TH_5D = 10, TH_CONC = 15, TH_EARN_DAYS = 7, MAX_DEEP = 999, MAX_CONTEXT = 30, AI_BATCH = 6;
+  var BENCHMARKS = ['SPY', 'QQQ'];
   var AUTO_MIN_GAP_MS = 20 * 60 * 1000;
   var running = false;
   var lastResult = null;
@@ -25808,6 +25809,48 @@ window.exportYahooPortfolio = function () {
     await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
   }
 
+  /* ---------- 2b. Market context: SPY / QQQ 1D and 5D ---------- */
+  async function fetchMarket() {
+    var out = {};
+    await Promise.all(BENCHMARKS.map(async function (sym) {
+      try {
+        var res = await fetch(window.YQ('https://query1.finance.yahoo.com/v8/finance/chart/' + sym + '?interval=1d&range=5d'), { cache: 'no-store' });
+        if (!res.ok) return;
+        var j = await res.json();
+        var r0 = j && j.chart && j.chart.result && j.chart.result[0];
+        if (!r0) return;
+        var meta = r0.meta || {};
+        var px = meta.regularMarketPrice;
+        var ts = r0.timestamp || [];
+        var closes = (r0.indicators && r0.indicators.quote && r0.indicators.quote[0] && r0.indicators.quote[0].close) || [];
+        var etKey = function (sec) {
+          return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(sec * 1000));
+        };
+        var prev = meta.previousClose != null ? meta.previousClose : null;
+        if (prev == null) {
+          var pday = meta.regularMarketTime ? etKey(meta.regularMarketTime) : null;
+          for (var i = ts.length - 1; i >= 0; i--) {
+            if (closes[i] == null) continue;
+            if (pday && etKey(ts[i]) >= pday) continue;
+            prev = closes[i]; break;
+          }
+        }
+        var m = {};
+        if (px > 0 && prev > 0) m.d1 = (px / prev - 1) * 100;
+        if (px > 0 && meta.chartPreviousClose > 0) m.d5 = (px / meta.chartPreviousClose - 1) * 100;
+        if (m.d1 != null || m.d5 != null) out[sym] = m;
+      } catch (e) {}
+    }));
+    return out;
+  }
+  function marketLine(mk) {
+    if (!mk) return '';
+    return BENCHMARKS.filter(function (s) { return mk[s]; }).map(function (s) {
+      var m = mk[s];
+      return s + ' ' + (m.d1 != null ? fmtPct(m.d1) : '–') + ' (5D ' + (m.d5 != null ? fmtPct(m.d5) : '–') + ')';
+    }).join(' · ');
+  }
+
   /* ---------- 3. Triggers ---------- */
   function applyEarnings(rows) {
     var er = null;
@@ -25880,14 +25923,15 @@ window.exportYahooPortfolio = function () {
   }
 
   /* ---------- 5. AI judgement for the deep-dive set ---------- */
-  async function askAI(deepRows, totalValue) {
+  async function askAI(deepRows, totalValue, market) {
     var payload = deepRows.map(function (r) {
       return {
         symbol: r.symbol, price: r.price, change1DPct: +r.d1.toFixed(2),
         change5DPct: r.d5 == null ? null : +r.d5.toFixed(2),
         pctOfPortfolio: +r.pct.toFixed(1), avgCost: +r.avgCost.toFixed(2),
         unrealizedPct: +r.unrealPct.toFixed(1), earningsDate: r.earnDate,
-        triggers: r.triggers, recentHeadlines: r.news || [], analystRatings: r.analyst || null,
+        triggers: r.triggers, newsChecked: !!r.contextFetched, recentHeadlines: r.news || [], analystRatings: r.analyst || null,
+        vsQQQ5DPct: (r.d5 != null && market && market.QQQ && market.QQQ.d5 != null) ? +(r.d5 - market.QQQ.d5).toFixed(2) : null,
         speculative: SPECULATIVE.indexOf(r.symbol) !== -1,
         week52High: r.w52High, week52Low: r.w52Low,
         previousReview: r.prev || null
@@ -25895,9 +25939,12 @@ window.exportYahooPortfolio = function () {
     });
     var prompt =
       'You are a careful portfolio analyst for a retail investor (Khanh). Today is ' + new Date().toDateString() + '. ' +
-      'Total portfolio value is about ' + fmtMoney(totalValue) + '. Review ONLY the holdings in the JSON below.\n\n' +
+      'Total portfolio value is about ' + fmtMoney(totalValue) + '. Review ONLY the holdings in the JSON below.\n' +
+      'MARKET CONTEXT (benchmarks, % change): ' + (marketLine(market) || 'not available') + '\n\n' +
       'Rules:\n' +
       '- Use ONLY the data given. If the data does not explain a move, say "chưa rõ nguyên nhân từ dữ liệu có sẵn". Never invent news, numbers or earnings results.\n' +
+      '- First separate market-wide moves from stock-specific ones: compare each stock with SPY/QQQ (vsQQQ5DPct = stock 5D minus QQQ 5D). A drop in line with the market is not by itself a reason to TRIM or SELL; a drop far worse than the market needs a stock-specific reason.\n' +
+      '- newsChecked=false means headlines were NOT fetched for that stock (not that there is no news); do not conclude "no news".\n' +
       '- A falling price is NOT automatically BUY. Weigh: why it moved, what the headlines/analysts say, earnings proximity, position size and risk/reward.\n' +
       '- DELL is a very large position: weigh concentration. TSLL is a leveraged ETF: treat as high risk. Speculative names: be conservative about averaging down.\n' +
       '- action must be exactly one of BUY, HOLD, WAIT, TRIM, SELL.\n' +
@@ -25945,21 +25992,21 @@ window.exportYahooPortfolio = function () {
 
   // Small batches keep each answer short (long answers were getting cut off), and
   // each batch gets one retry. Returns { results, errors }.
-  async function askAIBatched(deepRows, totalValue, onProgress) {
+  async function askAIBatched(deepRows, totalValue, onProgress, market) {
     var results = [], errors = [];
     for (var i = 0; i < deepRows.length; i += AI_BATCH) {
       var chunk = deepRows.slice(i, i + AI_BATCH);
       if (onProgress) onProgress(Math.min(i + AI_BATCH, deepRows.length), deepRows.length);
       var got = null, lastErr = null;
       for (var attempt = 0; attempt < 2 && !got; attempt++) {
-        try { got = await askAI(chunk, totalValue); }
+        try { got = await askAI(chunk, totalValue, market); }
         catch (e) { lastErr = e.message || String(e); await sleep(1500); }
       }
       if (got) {
         results = results.concat(got);
         var missing = chunk.filter(function (r) { return !got.some(function (o) { return String(o.symbol).toUpperCase() === r.symbol; }); });
         if (missing.length) {          // one quick retry for symbols the AI skipped
-          try { results = results.concat(await askAI(missing, totalValue)); } catch (e) {}
+          try { results = results.concat(await askAI(missing, totalValue, market)); } catch (e) {}
         }
       } else {
         errors.push(lastErr);
@@ -25980,7 +26027,8 @@ window.exportYahooPortfolio = function () {
       var total = rows.total;
       applyEarnings(rows);
       setStatus('⏳ Lấy biến động 5 ngày (' + rows.length + ' mã)…');
-      await fetchAll5D(rows);
+      var market = {};
+      await Promise.all([fetchAll5D(rows), fetchMarket().then(function (m) { market = m; })]);
       applyTriggers(rows);
 
       var triggered = rows.filter(function (r) { return r.triggers.length; })
@@ -25996,11 +26044,13 @@ window.exportYahooPortfolio = function () {
         });
       }
       if (deep.length) {
-        setStatus('⏳ Lấy news và analyst cho ' + deep.length + ' mã…');
-        await fetchContext(deep);
+        setStatus('⏳ Lấy news và analyst cho ' + Math.min(deep.length, MAX_CONTEXT) + ' mã…');
+        var ctxRows = deep.slice(0, MAX_CONTEXT);
+        await fetchContext(ctxRows);
+        ctxRows.forEach(function (r) { r.contextFetched = true; });
         setStatus('⏳ AI đang phân tích ' + deep.length + ' mã…');
         try {
-          var batch = await askAIBatched(deep, total, function (done, n) { setStatus('⏳ AI đang phân tích ' + done + '/' + n + ' mã…'); });
+          var batch = await askAIBatched(deep, total, function (done, n) { setStatus('⏳ AI đang phân tích ' + done + '/' + n + ' mã…'); }, market);
           if (batch.errors.length) aiError = batch.errors[0] + (batch.errors.length > 1 ? ' (' + batch.errors.length + ' nhóm lỗi)' : '');
           batch.results.forEach(function (o) {
             var sym = String(o.symbol || '').toUpperCase();
@@ -26030,7 +26080,7 @@ window.exportYahooPortfolio = function () {
                  next: r.next, priority: r.priority, deep: r.deep, unrealPct: r.unrealPct,
                  unreviewed: !!r.unreviewed, aiMissing: !!r.aiMissing, prevAction: r.prev ? r.prev.action : null, kind: r.kind };
       });
-      lastResult = { at: Date.now(), session: sessionKey(), marketOpen: marketOpen(), total: total, rows: plain, aiError: aiError, earningsReady: !!window.getErCache && !!window.getErCache() };
+      lastResult = { at: Date.now(), session: sessionKey(), marketOpen: marketOpen(), market: market, total: total, rows: plain, aiError: aiError, earningsReady: !!window.getErCache && !!window.getErCache() };
       saveLast(lastResult);
       setStatus('');
       render();
@@ -26089,7 +26139,8 @@ window.exportYahooPortfolio = function () {
     var html = head +
       '<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:12px;">Cập nhật ' + esc(when) + ' (giờ California) · ' +
       rows.length + ' mã · tổng ≈ ' + fmtMoney(res.total) + ' · ' + (deep.length + rows.filter(function (r) { return r.unreviewed; }).length) + ' mã có trigger, ' + deep.filter(function (r) { return !r.aiMissing; }).length + ' đã được AI phân tích' +
-      (res.earningsReady ? '' : ' · <b>lịch earnings chưa tải xong, bấm Chạy ngay lại sau ít phút</b>') + '</div>';
+      (res.earningsReady ? '' : ' · <b>lịch earnings chưa tải xong, bấm Chạy ngay lại sau ít phút</b>') + '</div>' +
+      (marketLine(res.market) ? '<div style="font-size:0.8rem;margin:-4px 0 12px;padding:8px 12px;border:1px solid var(--border-color);border-radius:9px;background:var(--bg-secondary);">📈 Thị trường: ' + esc(marketLine(res.market)) + '</div>' : '');
     if (res.aiError) {
       var okN = deep.filter(function (r) { return !r.aiMissing; }).length;
       html += '<div style="padding:10px 12px;margin-bottom:12px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;font-size:0.78rem;color:#e74c3c;">' +
@@ -26152,7 +26203,7 @@ window.exportYahooPortfolio = function () {
     if (!res) return '';
     var deep = res.rows.filter(function (r) { return r.deep; }).sort(function (a, b) { return b.priority - a.priority; });
     var lines = ['📋 DAILY REVIEW ' + new Date(res.at).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' }) + ' PT',
-                 'Portfolio ≈ ' + fmtMoney(res.total) + ' · ' + res.rows.length + ' mã', '', 'TOP 5 ACTIONS'];
+                 'Portfolio ≈ ' + fmtMoney(res.total) + ' · ' + res.rows.length + ' mã'].concat(marketLine(res.market) ? ['📈 ' + marketLine(res.market)] : []).concat(['', 'TOP 5 ACTIONS']);
     if (!deep.length) lines.push('Không có mã nào chạm trigger.');
     deep.slice(0, 5).forEach(function (r, i) {
       lines.push((i + 1) + '. ' + r.symbol + ' — ' + r.action + (r.prevAction && r.prevAction !== r.action ? ' (đổi từ ' + r.prevAction + ')' : '') + ' (' + fmtPct(r.d1) + (r.d5 != null ? ', 5D ' + fmtPct(r.d5) : '') + ')');
