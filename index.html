@@ -25698,7 +25698,7 @@ window.exportYahooPortfolio = function () {
   var AI_MODEL    = 'claude-sonnet-4-20250514';
   var ALWAYS      = ['DELL', 'STX', 'TSLL'];
   var SPECULATIVE = ['CBRG', 'FRMI', 'GEVO', 'QS', 'ENVX', 'SOUN', 'SMR', 'AMPX', 'TSLL'];
-  var TH_1D = 5, TH_5D = 8, TH_CONC = 15, TH_EARN_DAYS = 7, MAX_DEEP = 15;
+  var TH_1D = 5, TH_5D = 10, TH_CONC = 15, TH_EARN_DAYS = 7, MAX_DEEP = 30, AI_BATCH = 6;
   var AUTO_MIN_GAP_MS = 20 * 60 * 1000;
   var running = false;
   var lastResult = null;
@@ -25830,7 +25830,7 @@ window.exportYahooPortfolio = function () {
       var t = [];
       if (Math.abs(r.d1) >= TH_1D) t.push('1D ' + fmtPct(r.d1));
       if (r.d5 != null && Math.abs(r.d5) >= TH_5D) t.push('5D ' + fmtPct(r.d5));
-      if (r.earnDays != null && r.earnDays >= 0 && r.earnDays <= TH_EARN_DAYS) t.push('Earnings in ' + r.earnDays + 'd (' + r.earnDate + ')');
+      if (r.earnDays != null && r.earnDays >= 0 && r.earnDays <= TH_EARN_DAYS) t.push('Earnings ' + (r.earnDays === 0 ? 'hôm nay' : r.earnDays === 1 ? 'ngày mai' : 'trong ' + r.earnDays + ' ngày') + ' (' + r.earnDate + ')');
       if (r.pct >= TH_CONC && r.kind === 'stock') t.push('Concentration ' + r.pct.toFixed(1) + '% of portfolio');
       if (ALWAYS.indexOf(r.symbol) !== -1) t.push('Priority holding');
       r.triggers = t;
@@ -25909,17 +25909,63 @@ window.exportYahooPortfolio = function () {
       'HOLDINGS:\n' + JSON.stringify(payload);
     var res = await fetch(AI_URL, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: AI_MODEL, max_tokens: 6000, messages: [{ role: 'user', content: prompt }] })
+      body: JSON.stringify({ model: AI_MODEL, max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
     });
     var data = await res.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     var text = (data.content || []).filter(function (b) { return b.type === 'text'; })
       .map(function (b) { return b.text; }).join('');
-    var s = text.indexOf('['), e = text.lastIndexOf(']');
-    if (s < 0 || e < s) throw new Error('AI did not return JSON');
-    var arr = JSON.parse(text.slice(s, e + 1));
-    if (!Array.isArray(arr)) throw new Error('Bad AI format');
+    var arr = parseAIList(text);
+    if (!arr.length) {
+      var snippet = String(text || '').replace(/\s+/g, ' ').slice(0, 140);
+      throw new Error(text ? ('AI trả về không đúng định dạng: "' + snippet + '…"') : 'AI trả về rỗng');
+    }
     return arr;
+  }
+
+  // Accepts a clean array, a fenced ```json block, an object wrapping the array, or a
+  // response cut off mid-way (keeps every complete {...} object that has a symbol).
+  function parseAIList(text) {
+    if (!text) return [];
+    var t = String(text).replace(/```(?:json)?/gi, '');
+    var s = t.indexOf('['), e = t.lastIndexOf(']');
+    if (s >= 0 && e > s) {
+      try { var a = JSON.parse(t.slice(s, e + 1)); if (Array.isArray(a)) return a.filter(function (o) { return o && o.symbol; }); } catch (x) {}
+    }
+    try {
+      var o = JSON.parse(t.trim());
+      if (o && typeof o === 'object') {
+        for (var k in o) { if (Array.isArray(o[k])) return o[k].filter(function (x) { return x && x.symbol; }); }
+      }
+    } catch (x) {}
+    var out = [], m, re = /\{[^{}]*"symbol"\s*:\s*"[^"]+"[^{}]*\}/g;
+    while ((m = re.exec(t))) { try { out.push(JSON.parse(m[0])); } catch (x) {} }
+    return out;
+  }
+
+  // Small batches keep each answer short (long answers were getting cut off), and
+  // each batch gets one retry. Returns { results, errors }.
+  async function askAIBatched(deepRows, totalValue, onProgress) {
+    var results = [], errors = [];
+    for (var i = 0; i < deepRows.length; i += AI_BATCH) {
+      var chunk = deepRows.slice(i, i + AI_BATCH);
+      if (onProgress) onProgress(Math.min(i + AI_BATCH, deepRows.length), deepRows.length);
+      var got = null, lastErr = null;
+      for (var attempt = 0; attempt < 2 && !got; attempt++) {
+        try { got = await askAI(chunk, totalValue); }
+        catch (e) { lastErr = e.message || String(e); await sleep(1500); }
+      }
+      if (got) {
+        results = results.concat(got);
+        var missing = chunk.filter(function (r) { return !got.some(function (o) { return String(o.symbol).toUpperCase() === r.symbol; }); });
+        if (missing.length) {          // one quick retry for symbols the AI skipped
+          try { results = results.concat(await askAI(missing, totalValue)); } catch (e) {}
+        }
+      } else {
+        errors.push(lastErr);
+      }
+    }
+    return { results: results, errors: errors };
   }
 
   /* ---------- 6. Main run ---------- */
@@ -25954,9 +26000,11 @@ window.exportYahooPortfolio = function () {
         await fetchContext(deep);
         setStatus('⏳ AI đang phân tích ' + deep.length + ' mã…');
         try {
-          var out = await askAI(deep, total);
-          out.forEach(function (o) {
-            var r = rows.filter(function (x) { return x.symbol === o.symbol; })[0];
+          var batch = await askAIBatched(deep, total, function (done, n) { setStatus('⏳ AI đang phân tích ' + done + '/' + n + ' mã…'); });
+          if (batch.errors.length) aiError = batch.errors[0] + (batch.errors.length > 1 ? ' (' + batch.errors.length + ' nhóm lỗi)' : '');
+          batch.results.forEach(function (o) {
+            var sym = String(o.symbol || '').toUpperCase();
+            var r = rows.filter(function (x) { return x.symbol === sym; })[0];
             if (!r) return;
             var a = String(o.action || '').toUpperCase();
             r.action = ['BUY', 'HOLD', 'WAIT', 'TRIM', 'SELL'].indexOf(a) !== -1 ? a : 'WAIT';
@@ -26040,10 +26088,13 @@ window.exportYahooPortfolio = function () {
     var when = new Date(res.at).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
     var html = head +
       '<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:12px;">Cập nhật ' + esc(when) + ' (giờ California) · ' +
-      rows.length + ' mã · tổng ≈ ' + fmtMoney(res.total) + ' · ' + deep.length + ' mã có trigger' +
+      rows.length + ' mã · tổng ≈ ' + fmtMoney(res.total) + ' · ' + (deep.length + rows.filter(function (r) { return r.unreviewed; }).length) + ' mã có trigger, ' + deep.filter(function (r) { return !r.aiMissing; }).length + ' đã được AI phân tích' +
       (res.earningsReady ? '' : ' · <b>lịch earnings chưa tải xong, bấm Chạy ngay lại sau ít phút</b>') + '</div>';
     if (res.aiError) {
-      html += '<div style="padding:10px 12px;margin-bottom:12px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;font-size:0.78rem;color:#e74c3c;">AI không khả dụng: ' + esc(res.aiError) + '. Bảng bên dưới vẫn đúng về giá và trigger.</div>';
+      var okN = deep.filter(function (r) { return !r.aiMissing; }).length;
+      html += '<div style="padding:10px 12px;margin-bottom:12px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;font-size:0.78rem;color:#e74c3c;">' +
+        (okN ? 'Một phần AI bị lỗi (' + okN + ' mã vẫn có kết quả): ' : 'AI không khả dụng: ') + esc(res.aiError) +
+        '. Giá và trigger bên dưới vẫn đúng; bấm Chạy ngay để thử lại.</div>';
     }
 
     html += '<div class="st-section-head">TOP 5 ACTIONS</div>';
@@ -26056,14 +26107,23 @@ window.exportYahooPortfolio = function () {
         (r.next ? '<div style="font-size:0.78rem;margin-top:3px;color:var(--text-secondary);">➜ ' + esc(r.next) + '</div>' : '') + '</div>';
     });
 
-    var rest = deep.slice(5).concat(rows.filter(function (r) { return r.unreviewed; }));
+    var rest = deep.slice(5);
+    var unrev = rows.filter(function (r) { return r.unreviewed; });
     if (rest.length) {
-      html += '<div class="st-section-head" style="margin-top:16px;">DEEP DIVE (' + rest.length + ' mã còn lại có trigger)</div>';
+      html += '<div class="st-section-head" style="margin-top:16px;">DEEP DIVE (' + rest.length + ' mã còn lại đã phân tích)</div>';
       rest.forEach(function (r) {
         html += '<div style="padding:8px 12px;margin:5px 0;border:1px solid var(--border-color);border-radius:9px;">' +
           '<b>' + esc(r.symbol) + '</b> · ' + actBadge(r.action, r) + ' · <span style="color:' + colorPct(r.d1) + ';">' + fmtPct(r.d1) + '</span>' +
           '<div style="font-size:0.76rem;color:var(--text-secondary);margin-top:2px;">' + esc(r.triggers.join(' · ')) + '</div>' +
           '<div style="font-size:0.78rem;margin-top:3px;">' + esc(r.reason) + (r.next ? ' ➜ ' + esc(r.next) : '') + '</div></div>';
+      });
+    }
+
+    if (unrev.length) {
+      html += '<div class="st-section-head" style="margin-top:16px;">CÓ TRIGGER NHƯNG CHƯA PHÂN TÍCH (' + unrev.length + ')</div>' +
+        '<div style="font-size:0.76rem;color:var(--text-secondary);margin-bottom:6px;">Ngoài giới hạn ' + MAX_DEEP + ' mã mỗi lần. Xem nhanh lý do trigger:</div>';
+      unrev.forEach(function (r) {
+        html += '<div style="font-size:0.78rem;padding:3px 0;"><b>' + esc(r.symbol) + '</b> · <span style="color:' + colorPct(r.d1) + ';">' + fmtPct(r.d1) + '</span> · ' + esc(r.triggers.join(' · ')) + '</div>';
       });
     }
 
