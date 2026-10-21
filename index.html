@@ -300,6 +300,31 @@ window.fundNavIsStale = function (it) {
 window.todayChangeOf = function (it) {
   return window.fundNavIsStale(it) ? 0 : (Number(it && it.change) || 0);
 };
+/* 2026-10-21: "P/L Today" multiplied today's change (price − yesterday's close) by ALL shares, so shares
+   bought today were credited with the whole day's move (SMCI: bought at $35.52 after a +10% open,
+   showed +$145 today while the position was only +$15). Like Fidelity/Vanguard, shares bought in the
+   current session now count from their purchase price. Sells are not added back (shares no longer held). */
+window.todayPLOf = function (it, shares) {
+  const ch = window.todayChangeOf(it);
+  shares = Number(shares) || 0;
+  let pl = ch * shares;
+  if (!ch || !(shares > 0)) return pl;
+  const price = Number(it && it.price) || 0, prev = price - ch;
+  const sess = window.currentSessionKey();
+  let left = shares;
+  (it.transactions || []).forEach(t => {
+    if (left <= 0 || String(t.type || '').toLowerCase() !== 'buy') return;
+    let d = String(t.date || '').trim();
+    const us = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    d = us ? us[3] + '-' + us[1].padStart(2, '0') + '-' + us[2].padStart(2, '0') : d.slice(0, 10);
+    if (d !== sess) return;
+    const sh = Math.min(Math.abs(Number(t.shares) || 0), left), bp = Math.abs(Number(t.price) || 0);
+    if (!(sh > 0) || !(bp > 0)) return;
+    pl -= (bp - prev) * sh;            // these shares started the day at their buy price, not yesterday's close
+    left -= sh;
+  });
+  return pl;
+};
 </script>
 <script>
 /* ===== PER-ACCOUNT FIFO HELPERS (v14, 2026-10-07) =====
@@ -4023,23 +4048,6 @@ body:not(.dark-mode) .k-sec-more-btn { background:rgba(0,0,0,0.04); }
 /* add stock + filters: same height, no floating buttons over them anymore */
 .search-section .search-input, .search-section #addBtn { height:46px; }
 </style>
-<style>
-/* DD-BTN-BORDER (2026-10-21): make buttons inside the toolbar drop-down menus clearly outlined */
-.st-dd-menu .st-toolbar-btn {
-  border: 1px solid rgba(160,174,200,0.70) !important;
-  background: rgba(148,163,184,0.14) !important;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
-}
-.st-dd-menu .st-toolbar-btn:hover {
-  border-color: var(--color-positive,#27ae60) !important;
-  background: rgba(39,174,96,0.14) !important;
-}
-.st-dd-menu .st-toolbar-btn.active {
-  background: var(--color-positive,#27ae60) !important;
-  border-color: var(--color-positive,#27ae60) !important;
-  color: #fff;
-}
-</style>
 </head>
 <body>
 <!-- 
@@ -4168,7 +4176,6 @@ body:not(.dark-mode) .k-sec-more-btn { background:rgba(0,0,0,0.04); }
     <button type="button" class="st-dd-btn" aria-haspopup="true" aria-expanded="false" onclick="window.toggleStDropdown(this)">🤖 AI &amp; Deep Scan <span class="st-dd-caret">▾</span></button>
     <div class="st-group-grid st-dd-menu" role="menu">
       <div class="ut-title st-dd-title">🤖 Deep Insights &amp; AI</div>
-      <button class="st-toolbar-btn" data-st-panel="dailyreview">📋 Daily Review</button>
       <button class="st-toolbar-btn" data-st-panel="aidoctor">🩺 AI Doctor</button>
       <button class="st-toolbar-btn" data-st-panel="askai">💬 Ask Portfolio</button>
       <button class="st-toolbar-btn" data-st-panel="anomaly">🚨 Anomaly</button>
@@ -4205,7 +4212,6 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
     overlap:  'renderOverlap',
     exposure: 'renderTrueExposure',
     aidoctor: 'renderAIDoctor',
-    dailyreview: 'renderDailyReview',
     schedd:   'renderSchedD',
   };
   if (key === 'compact') {
@@ -4312,11 +4318,6 @@ document.getElementById('stToolbarRow').addEventListener('click', function(e) {
   <div class="st-panel-title">💬 Ask Your Portfolio — Natural Language Query</div>
   <div class="st-panel-sub">Ask anything about your holdings in plain English. Claude reads your live portfolio data and answers with your exact numbers.</div>
   <div id="stAskAiContent"></div>
-</div>
-<div id="stDailyReviewPanel" class="st-panel">
-  <div class="st-panel-title">📋 Daily Review — Quick Scan + Deep Dive</div>
-  <div class="st-panel-sub">Quét toàn bộ holdings: giá, 1D/5D, earnings 7 ngày, tỷ trọng, so với thị trường (SPY/QQQ). Phân tích sâu mọi mã có trigger. Tự chạy mỗi lần mở app, sau khi giá được làm mới.</div>
-  <div id="stDailyReviewContent"></div>
 </div>
 <div id="stAidoctorPanel" class="st-panel">
   <div class="st-panel-title">🩺 AI Portfolio Doctor</div>
@@ -9191,13 +9192,12 @@ return { success: false, symbol, reason: `Alpha Vantage Error: ${error.message}`
                         totalCurrentValue += stats.currentValue;
                         totalUnrealizedPL += stats.unrealizedPL;
 
-                        const dailyChange = window.todayChangeOf(item) * stats.totalSharesOwned;
+                        const dailyChange = window.todayPLOf(item, stats.totalSharesOwned);
                         if (!isNaN(dailyChange) && isFinite(dailyChange)) {
                             totalPLToday += dailyChange;
+                            // value at the start of today (shares bought today count at their buy price)
+                            totalPreviousDayValue += item.price * stats.totalSharesOwned - dailyChange;
                         }
-
-                        const previousDayPrice = item.price - window.todayChangeOf(item);
-                        totalPreviousDayValue += previousDayPrice * stats.totalSharesOwned;
                     }
 
                     totalContributions += (item.transactions || []).reduce((sum, t) => sum + (t.type === 'buy' ? t.shares * t.price : -t.shares * t.price), 0);
@@ -10104,7 +10104,7 @@ renderPortfolioSummary() {
                         const totalPLPercent = (stats.costOfRemainingShares + (stats.realizedPL > 0 ? 0 : -stats.realizedPL)) > 0 ? (totalPL / (stats.costOfRemainingShares + (stats.realizedPL > 0 ? 0 : -stats.realizedPL))) * 100 : 0;
                         const totalPLClass = totalPL >= 0 ? 'positive' : 'negative';
                         const totalValue = stats.currentValue;
-                        const totalChangeToday = window.todayChangeOf(item) * stats.totalSharesOwned;
+                        const totalChangeToday = window.todayPLOf(item, stats.totalSharesOwned);
                         const totalChangeTodayClass = totalChangeToday >= 0 ? 'positive' : 'negative'; 
                         summaryText = `Gained <span class="${changeClass}">${this.formatCurrency(item.change)}</span> today, a change of <span class="${changePercentClass}">${(item.changePercent || 0).toFixed(2)}%</span>.`;
                         summaryText += `\nTotal Value: <span class="${totalPL >= 0 ? 'positive' : 'negative'}">${this.formatCurrency(totalValue)}</span>`;
@@ -10119,7 +10119,7 @@ renderPortfolioSummary() {
 
                     items.forEach(item => {
                         const stats = this.calculateTransactionStats(item.transactions, item.price);
-                        totalChangeToday += window.todayChangeOf(item) * stats.totalSharesOwned;
+                        totalChangeToday += window.todayPLOf(item, stats.totalSharesOwned);
                         totalValue += stats.currentValue;
                         totalCostBasis += stats.costOfRemainingShares;
                         totalPLUnrealized += stats.unrealizedPL;
@@ -10539,7 +10539,7 @@ renderPortfolioSummary() {
                         }
                     }
                     
-                    const todayPL = window.todayChangeOf(item) * stats.totalSharesOwned;
+                    const todayPL = window.todayPLOf(item, stats.totalSharesOwned);
                     const _navNote = window.fundNavIsStale(item)
                         ? ` <span style="font-size:0.72em;opacity:0.75;font-weight:500;">(NAV ${item.navSession ? new Date(item.navSession + 'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}) : item.quoteTime ? new Date(item.quoteTime * 1000).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : 'from last close'} — today's not out yet)</span>` : ''; 
                     
@@ -15409,7 +15409,6 @@ const PANELS = {
   overlap:  'stOverlapPanel',
   exposure: 'stExposurePanel',
   aidoctor: 'stAidoctorPanel',
-  dailyreview: 'stDailyReviewPanel',
   schedd:   'stSchedDPanel',
 };
 
@@ -25699,620 +25698,6 @@ window.exportYahooPortfolio = function () {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   window.addEventListener('load', init);
 })();
-</script>
-<script>
-/* ===== DAILY REVIEW (added 2026-10-21) =====
-   Quick scan of every holding + deep dive on holdings that hit a trigger.
-   Triggers: |1D| >= 5%, |5D| >= 8%, earnings within 7 days, position >= 15% of portfolio,
-             plus DELL / STX / TSLL which are always reviewed.
-   Reads holdings straight from window.stockTracker, so buying/selling in the app
-   updates the review automatically. Self-contained: touches no existing function. */
-(function () {
-  'use strict';
-
-  var LS_KEY      = 'dailyReview_v1';
-  var AI_URL      = 'https://ai-proxy.giolamchieu1975.workers.dev';
-  var AI_MODEL    = 'claude-sonnet-4-20250514';
-  var ALWAYS      = ['DELL', 'STX', 'TSLL'];
-  var SPECULATIVE = ['CBRG', 'FRMI', 'GEVO', 'QS', 'ENVX', 'SOUN', 'SMR', 'AMPX', 'TSLL'];
-  var TH_1D = 5, TH_5D = 10, TH_CONC = 15, TH_EARN_DAYS = 7, MAX_DEEP = 999, MAX_CONTEXT = 30, AI_BATCH = 6;
-  var BENCHMARKS = ['SPY', 'QQQ'];
-  var AUTO_MIN_GAP_MS = 20 * 60 * 1000;
-  var running = false;
-  var lastResult = null;
-
-  function esc(s) {
-    if (typeof window.escHtml === 'function') return window.escHtml(String(s == null ? '' : s));
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
-  function fmtPct(n) { return (n >= 0 ? '+' : '') + n.toFixed(2) + '%'; }
-  function fmtMoney(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
-  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-  function tracker() { return window.stockTracker; }
-
-  function loadLast() {
-    try { var r = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); if (r && r.rows) return r; } catch (e) {}
-    return null;
-  }
-  function saveLast(res) { try { localStorage.setItem(LS_KEY, JSON.stringify(res)); } catch (e) {} }
-
-  /* ---------- 1. Build rows from the live tracker ---------- */
-  function buildRows() {
-    var t = tracker();
-    if (!t) return [];
-    var all = [].concat(t.stocks || [], t.mutualFunds || []);
-    var rows = [];
-    var bySym = {};
-    all.forEach(function (it) {
-      var stats;
-      try { stats = t.calculateTransactionStats(JSON.parse(JSON.stringify(it.transactions || [])), it.price || 0); }
-      catch (e) { return; }
-      var sh = stats.totalSharesOwned || 0;
-      if (!(sh > 0) || !(it.price > 0)) return;
-      var d1 = it.changePercent;
-      if (d1 == null) d1 = it.percentChange;
-      if (d1 == null && it.change != null && it.previousClose) d1 = it.change / it.previousClose * 100;
-      d1 = Number(d1) || 0;
-      if (typeof window.fundNavIsStale === 'function' && window.fundNavIsStale(it)) d1 = 0;
-      var cost = stats.costOfRemainingShares || 0;
-      var sym = String(it.symbol || '').toUpperCase();
-      if (bySym[sym]) {                       // same symbol on two cards: add them up
-        var m = bySym[sym];
-        m._cost += cost; m._unreal += (stats.unrealizedPL || 0);
-        m.shares += sh; m.value += sh * it.price;
-        m.avgCost = m.shares > 0 ? m._cost / m.shares : 0;
-        m.unrealPct = m._cost > 0 ? m._unreal / m._cost * 100 : 0;
-        return;
-      }
-      var kind = 'stock';
-      try { if (typeof window.classifyAsset === 'function') kind = window.classifyAsset(it, t); } catch (e) {}
-      var row = {
-        _cost: cost, _unreal: stats.unrealizedPL || 0, kind: kind,
-        w52High: it.week52High || it.yearHigh || null, w52Low: it.week52Low || it.yearLow || null,
-        symbol: it.symbol,
-        name: it.name || it.symbol,
-        price: it.price,
-        shares: sh,
-        value: sh * it.price,
-        avgCost: stats.averageCostBasis || 0,
-        unrealPct: cost > 0 ? (stats.unrealizedPL || 0) / cost * 100 : 0,
-        d1: d1,
-        d5: null,
-        pct: 0,
-        earnDays: null,
-        earnDate: null,
-        triggers: [],
-        action: 'HOLD',
-        reason: 'No material change',
-        next: '',
-        priority: 0,
-        deep: false
-      };
-      row.symbol = sym;
-      bySym[sym] = row;
-      rows.push(row);
-    });
-    var total = rows.reduce(function (s, r) { return s + r.value; }, 0);
-    rows.forEach(function (r) { r.pct = total > 0 ? r.value / total * 100 : 0; });
-    rows.total = total;
-    return rows;
-  }
-
-  /* ---------- 2. 5-day change from Yahoo (through the user's worker) ---------- */
-  async function fetch5D(row) {
-    try {
-      var url = window.YQ('https://query1.finance.yahoo.com/v8/finance/chart/' +
-        encodeURIComponent(row.symbol) + '?interval=1d&range=5d');
-      var res = await fetch(url, { cache: 'no-store' });
-      if (!res.ok) return;
-      var j = await res.json();
-      var r0 = j && j.chart && j.chart.result && j.chart.result[0];
-      if (!r0) return;
-      var meta = r0.meta || {};
-      var base = meta.chartPreviousClose;
-      if (base == null) {
-        var closes = (r0.indicators && r0.indicators.quote && r0.indicators.quote[0] && r0.indicators.quote[0].close) || [];
-        for (var i = 0; i < closes.length; i++) { if (closes[i] != null) { base = closes[i]; break; } }
-      }
-      var px = meta.regularMarketPrice != null ? meta.regularMarketPrice : row.price;
-      if (base > 0 && px > 0) row.d5 = (px / base - 1) * 100;
-    } catch (e) { /* leave d5 = null */ }
-  }
-  async function fetchAll5D(rows) {
-    var queue = rows.slice();
-    async function worker() { while (queue.length) { await fetch5D(queue.shift()); } }
-    await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
-  }
-
-  /* ---------- 2b. Market context: SPY / QQQ 1D and 5D ---------- */
-  async function fetchMarket() {
-    var out = {};
-    await Promise.all(BENCHMARKS.map(async function (sym) {
-      try {
-        var res = await fetch(window.YQ('https://query1.finance.yahoo.com/v8/finance/chart/' + sym + '?interval=1d&range=5d'), { cache: 'no-store' });
-        if (!res.ok) return;
-        var j = await res.json();
-        var r0 = j && j.chart && j.chart.result && j.chart.result[0];
-        if (!r0) return;
-        var meta = r0.meta || {};
-        var px = meta.regularMarketPrice;
-        var ts = r0.timestamp || [];
-        var closes = (r0.indicators && r0.indicators.quote && r0.indicators.quote[0] && r0.indicators.quote[0].close) || [];
-        var etKey = function (sec) {
-          return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(sec * 1000));
-        };
-        var prev = meta.previousClose != null ? meta.previousClose : null;
-        if (prev == null) {
-          var pday = meta.regularMarketTime ? etKey(meta.regularMarketTime) : null;
-          for (var i = ts.length - 1; i >= 0; i--) {
-            if (closes[i] == null) continue;
-            if (pday && etKey(ts[i]) >= pday) continue;
-            prev = closes[i]; break;
-          }
-        }
-        var m = {};
-        if (px > 0 && prev > 0) m.d1 = (px / prev - 1) * 100;
-        if (px > 0 && meta.chartPreviousClose > 0) m.d5 = (px / meta.chartPreviousClose - 1) * 100;
-        if (m.d1 != null || m.d5 != null) out[sym] = m;
-      } catch (e) {}
-    }));
-    return out;
-  }
-  function marketLine(mk) {
-    if (!mk) return '';
-    return BENCHMARKS.filter(function (s) { return mk[s]; }).map(function (s) {
-      var m = mk[s];
-      return s + ' ' + (m.d1 != null ? fmtPct(m.d1) : '–') + ' (5D ' + (m.d5 != null ? fmtPct(m.d5) : '–') + ')';
-    }).join(' · ');
-  }
-
-  /* ---------- 3. Triggers ---------- */
-  function applyEarnings(rows) {
-    var er = null;
-    try { er = window.getErCache && window.getErCache(); } catch (e) {}
-    if (!er) {
-      if (typeof window.fetchAllEarnings === 'function') { try { window.fetchAllEarnings(); } catch (e) {} }
-      return false;
-    }
-    rows.forEach(function (r) {
-      var d = er[r.symbol];
-      if (d) {
-        r.earnDate = d;
-        r.earnDays = Math.round((Date.parse(d + 'T12:00:00') - Date.now()) / 86400000);
-      }
-    });
-    return true;
-  }
-  function applyTriggers(rows) {
-    rows.forEach(function (r) {
-      var t = [];
-      if (Math.abs(r.d1) >= TH_1D) t.push('1D ' + fmtPct(r.d1));
-      if (r.d5 != null && Math.abs(r.d5) >= TH_5D) t.push('5D ' + fmtPct(r.d5));
-      if (r.earnDays != null && r.earnDays >= 0 && r.earnDays <= TH_EARN_DAYS) t.push('Earnings ' + (r.earnDays === 0 ? 'hôm nay' : r.earnDays === 1 ? 'ngày mai' : 'trong ' + r.earnDays + ' ngày') + ' (' + r.earnDate + ')');
-      if (r.pct >= TH_CONC && r.kind === 'stock') t.push('Concentration ' + r.pct.toFixed(1) + '% of portfolio');
-      if (ALWAYS.indexOf(r.symbol) !== -1) t.push('Priority holding');
-      r.triggers = t;
-      r.score = (ALWAYS.indexOf(r.symbol) !== -1 ? 3 : 0) +
-                (SPECULATIVE.indexOf(r.symbol) !== -1 ? 1 : 0) +
-                Math.abs(r.d1) / TH_1D + (r.d5 != null ? Math.abs(r.d5) / TH_5D : 0) +
-                (r.earnDays != null && r.earnDays >= 0 && r.earnDays <= TH_EARN_DAYS ? 1 : 0) +
-                (r.pct >= TH_CONC && r.kind === 'stock' ? 2 : 0);
-    });
-  }
-
-  /* ---------- 4. Extra context for the deep dive (news + analysts) ---------- */
-  async function fetchContext(rows) {
-    var t = tracker();
-    var key = (t && t.config && (t.config.finnhubApiKey || t.config.finnhubKey)) || '';
-    if (!key) return;
-    var today = new Date().toISOString().slice(0, 10);
-    var wk = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      if (/^[A-Z]{5}$/.test(r.symbol) && r.symbol.charAt(4) === 'X') continue; // mutual fund: no company news
-      try {
-        var nr = await fetch('https://finnhub.io/api/v1/company-news?symbol=' + r.symbol + '&from=' + wk + '&to=' + today + '&token=' + key);
-        if (nr.ok) {
-          var nj = await nr.json();
-          if (Array.isArray(nj)) {
-            r.news = nj.sort(function (a, b) { return b.datetime - a.datetime; }).slice(0, 3)
-              .map(function (n) { return n.headline; });
-          }
-        }
-      } catch (e) {}
-      await sleep(350);
-      try {
-        var rr = await fetch('https://finnhub.io/api/v1/stock/recommendation?symbol=' + r.symbol + '&token=' + key);
-        if (rr.ok) {
-          var rj = await rr.json();
-          if (Array.isArray(rj) && rj.length) {
-            var a = rj[0], b = rj[1] || null;
-            var net = function (x) { return (x.strongBuy || 0) + (x.buy || 0) - (x.sell || 0) - (x.strongSell || 0); };
-            r.analyst = { period: a.period, strongBuy: a.strongBuy, buy: a.buy, hold: a.hold, sell: a.sell, strongSell: a.strongSell,
-                          netChangeVsPrevMonth: b ? net(a) - net(b) : null };
-          }
-        }
-      } catch (e) {}
-      await sleep(350);
-    }
-  }
-
-  /* ---------- 5. AI judgement for the deep-dive set ---------- */
-  async function askAI(deepRows, totalValue, market) {
-    var payload = deepRows.map(function (r) {
-      return {
-        symbol: r.symbol, price: r.price, change1DPct: +r.d1.toFixed(2),
-        change5DPct: r.d5 == null ? null : +r.d5.toFixed(2),
-        pctOfPortfolio: +r.pct.toFixed(1), avgCost: +r.avgCost.toFixed(2),
-        unrealizedPct: +r.unrealPct.toFixed(1), earningsDate: r.earnDate,
-        triggers: r.triggers, newsChecked: !!r.contextFetched, recentHeadlines: r.news || [], analystRatings: r.analyst || null,
-        vsQQQ5DPct: (r.d5 != null && market && market.QQQ && market.QQQ.d5 != null) ? +(r.d5 - market.QQQ.d5).toFixed(2) : null,
-        speculative: SPECULATIVE.indexOf(r.symbol) !== -1,
-        week52High: r.w52High, week52Low: r.w52Low,
-        previousReview: r.prev || null
-      };
-    });
-    var prompt =
-      'You are a careful portfolio analyst for a retail investor (Khanh). Today is ' + new Date().toDateString() + '. ' +
-      'Total portfolio value is about ' + fmtMoney(totalValue) + '. Review ONLY the holdings in the JSON below.\n' +
-      'MARKET CONTEXT (benchmarks, % change): ' + (marketLine(market) || 'not available') + '\n\n' +
-      'Rules:\n' +
-      '- Use ONLY the data given. If the data does not explain a move, say "chưa rõ nguyên nhân từ dữ liệu có sẵn". Never invent news, numbers or earnings results.\n' +
-      '- First separate market-wide moves from stock-specific ones: compare each stock with SPY/QQQ (vsQQQ5DPct = stock 5D minus QQQ 5D). A drop in line with the market is not by itself a reason to TRIM or SELL; a drop far worse than the market needs a stock-specific reason.\n' +
-      '- newsChecked=false means headlines were NOT fetched for that stock (not that there is no news); do not conclude "no news".\n' +
-      '- A falling price is NOT automatically BUY. Weigh: why it moved, what the headlines/analysts say, earnings proximity, position size and risk/reward.\n' +
-      '- DELL is a very large position: weigh concentration. TSLL is a leveraged ETF: treat as high risk. Speculative names: be conservative about averaging down.\n' +
-      '- action must be exactly one of BUY, HOLD, WAIT, TRIM, SELL.\n' +
-      '- Write "reason" and "next" in Vietnamese (keep tickers and finance terms in English), 1-2 short sentences each. "next" is the condition or price level for the next action.\n' +
-      '- priority is 1-10 (10 = most important to look at today).\n' +
-      '- previousReview is your last call on this stock. Stay consistent: only change the action when the new data justifies it, and if you change it, say why in "reason".\n' +
-      'Return ONLY a JSON array, no markdown, no commentary, like:\n' +
-      '[{"symbol":"XXX","action":"HOLD","priority":6,"reason":"...","next":"..."}]\n\n' +
-      'HOLDINGS:\n' + JSON.stringify(payload);
-    var res = await fetch(AI_URL, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: AI_MODEL, max_tokens: 8000, messages: [{ role: 'user', content: prompt }] })
-    });
-    var data = await res.json();
-    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-    var text = (data.content || []).filter(function (b) { return b.type === 'text'; })
-      .map(function (b) { return b.text; }).join('');
-    var arr = parseAIList(text);
-    if (!arr.length) {
-      var snippet = String(text || '').replace(/\s+/g, ' ').slice(0, 140);
-      throw new Error(text ? ('AI trả về không đúng định dạng: "' + snippet + '…"') : 'AI trả về rỗng');
-    }
-    return arr;
-  }
-
-  // Accepts a clean array, a fenced ```json block, an object wrapping the array, or a
-  // response cut off mid-way (keeps every complete {...} object that has a symbol).
-  function parseAIList(text) {
-    if (!text) return [];
-    var t = String(text).replace(/```(?:json)?/gi, '');
-    var s = t.indexOf('['), e = t.lastIndexOf(']');
-    if (s >= 0 && e > s) {
-      try { var a = JSON.parse(t.slice(s, e + 1)); if (Array.isArray(a)) return a.filter(function (o) { return o && o.symbol; }); } catch (x) {}
-    }
-    try {
-      var o = JSON.parse(t.trim());
-      if (o && typeof o === 'object') {
-        for (var k in o) { if (Array.isArray(o[k])) return o[k].filter(function (x) { return x && x.symbol; }); }
-      }
-    } catch (x) {}
-    var out = [], m, re = /\{[^{}]*"symbol"\s*:\s*"[^"]+"[^{}]*\}/g;
-    while ((m = re.exec(t))) { try { out.push(JSON.parse(m[0])); } catch (x) {} }
-    return out;
-  }
-
-  // Small batches keep each answer short (long answers were getting cut off), and
-  // each batch gets one retry. Returns { results, errors }.
-  async function askAIBatched(deepRows, totalValue, onProgress, market) {
-    var results = [], errors = [];
-    for (var i = 0; i < deepRows.length; i += AI_BATCH) {
-      var chunk = deepRows.slice(i, i + AI_BATCH);
-      if (onProgress) onProgress(Math.min(i + AI_BATCH, deepRows.length), deepRows.length);
-      var got = null, lastErr = null;
-      for (var attempt = 0; attempt < 2 && !got; attempt++) {
-        try { got = await askAI(chunk, totalValue, market); }
-        catch (e) { lastErr = e.message || String(e); await sleep(1500); }
-      }
-      if (got) {
-        results = results.concat(got);
-        var missing = chunk.filter(function (r) { return !got.some(function (o) { return String(o.symbol).toUpperCase() === r.symbol; }); });
-        if (missing.length) {          // one quick retry for symbols the AI skipped
-          try { results = results.concat(await askAI(missing, totalValue, market)); } catch (e) {}
-        }
-      } else {
-        errors.push(lastErr);
-      }
-    }
-    return { results: results, errors: errors };
-  }
-
-  /* ---------- 6. Main run ---------- */
-  async function run(opts) {
-    opts = opts || {};
-    if (running) return lastResult;
-    running = true;
-    setStatus('⏳ Đang quét danh mục…');
-    try {
-      var rows = buildRows();
-      if (!rows.length) throw new Error('Chưa có holdings/giá. Đợi app tải xong rồi thử lại.');
-      var total = rows.total;
-      applyEarnings(rows);
-      setStatus('⏳ Lấy biến động 5 ngày (' + rows.length + ' mã)…');
-      var market = {};
-      await Promise.all([fetchAll5D(rows), fetchMarket().then(function (m) { market = m; })]);
-      applyTriggers(rows);
-
-      var triggered = rows.filter(function (r) { return r.triggers.length; })
-        .sort(function (a, b) { return b.score - a.score; });
-      var deep = triggered.slice(0, MAX_DEEP);
-      var aiError = null;
-
-      var prevRes = loadLast();
-      if (prevRes && Date.now() - prevRes.at < 4 * 86400000) {
-        deep.forEach(function (r) {
-          var p = prevRes.rows.filter(function (x) { return x.symbol === r.symbol && x.deep && !x.unreviewed && !x.aiMissing; })[0];
-          if (p) r.prev = { action: p.action, reason: p.reason, at: new Date(prevRes.at).toISOString().slice(0, 16) };
-        });
-      }
-      if (deep.length) {
-        setStatus('⏳ Lấy news và analyst cho ' + Math.min(deep.length, MAX_CONTEXT) + ' mã…');
-        var ctxRows = deep.slice(0, MAX_CONTEXT);
-        await fetchContext(ctxRows);
-        ctxRows.forEach(function (r) { r.contextFetched = true; });
-        setStatus('⏳ AI đang phân tích ' + deep.length + ' mã…');
-        try {
-          var batch = await askAIBatched(deep, total, function (done, n) { setStatus('⏳ AI đang phân tích ' + done + '/' + n + ' mã…'); }, market);
-          if (batch.errors.length) aiError = batch.errors[0] + (batch.errors.length > 1 ? ' (' + batch.errors.length + ' nhóm lỗi)' : '');
-          batch.results.forEach(function (o) {
-            var sym = String(o.symbol || '').toUpperCase();
-            var r = rows.filter(function (x) { return x.symbol === sym; })[0];
-            if (!r) return;
-            var a = String(o.action || '').toUpperCase();
-            r.action = ['BUY', 'HOLD', 'WAIT', 'TRIM', 'SELL'].indexOf(a) !== -1 ? a : 'WAIT';
-            r.reason = o.reason || '';
-            r.next = o.next || '';
-            r.priority = Number(o.priority) || 5;
-            r.deep = true;
-          });
-        } catch (e) {
-          aiError = e.message || String(e);
-        }
-        deep.forEach(function (r) {
-          if (!r.deep) { r.aiMissing = true; r.prev = null; r.action = 'WAIT'; r.reason = aiError ? ('Có trigger nhưng AI lỗi: ' + aiError) : 'Có trigger nhưng AI không trả lời mã này. Bấm Chạy ngay để thử lại.'; r.priority = Math.min(9, Math.round(r.score)); r.deep = true; }
-        });
-      }
-
-      var leftover = triggered.slice(MAX_DEEP);
-      leftover.forEach(function (r) { r.unreviewed = true; r.action = 'CHƯA XEM'; r.reason = 'Có trigger (' + r.triggers.join('; ') + ') nhưng ngoài top ' + MAX_DEEP + ' nên chưa phân tích sâu.'; });
-
-      var plain = rows.map(function (r) {
-        return { symbol: r.symbol, name: r.name, price: r.price, value: r.value, pct: r.pct, d1: r.d1, d5: r.d5,
-                 earnDate: r.earnDate, earnDays: r.earnDays, triggers: r.triggers, action: r.action, reason: r.reason,
-                 next: r.next, priority: r.priority, deep: r.deep, unrealPct: r.unrealPct,
-                 unreviewed: !!r.unreviewed, aiMissing: !!r.aiMissing, prevAction: r.prev ? r.prev.action : null, kind: r.kind };
-      });
-      lastResult = { at: Date.now(), session: sessionKey(), marketOpen: marketOpen(), market: market, total: total, rows: plain, aiError: aiError, earningsReady: !!window.getErCache && !!window.getErCache() };
-      saveLast(lastResult);
-      setStatus('');
-      render();
-      updateBadge();
-      return lastResult;
-    } catch (e) {
-      setStatus('⚠️ ' + (e.message || e));
-      console.warn('[DailyReview]', e);
-      return null;
-    } finally {
-      running = false;
-    }
-  }
-
-  /* ---------- 7. UI ---------- */
-  var ACT_STYLE = {
-    BUY:  ['🟢', '#27ae60'], HOLD: ['🟢', '#2ecc71'], WAIT: ['🟡', '#f1c40f'],
-    TRIM: ['🟠', '#e67e22'], SELL: ['🔴', '#e74c3c']
-  };
-  function actBadge(a, r) {
-    if (r && !r.deep && !r.unreviewed) return '<span style="color:var(--text-secondary);">HOLD</span>';
-    var s = ACT_STYLE[a] || ['⚪', '#999'];
-    var chg = (r && r.prevAction && r.prevAction !== a) ? ' <span style="font-size:0.68rem;padding:1px 5px;border-radius:5px;background:rgba(241,196,15,0.18);color:#f39c12;">đổi từ ' + esc(r.prevAction) + '</span>' : '';
-    return '<span style="font-weight:700;color:' + s[1] + ';">' + s[0] + ' ' + esc(a) + '</span>' + chg;
-  }
-  function colorPct(n) { return n >= 0 ? '#27ae60' : '#e74c3c'; }
-
-  function setStatus(msg) {
-    var el = document.getElementById('drStatus');
-    if (el) el.textContent = msg;
-  }
-  function updateBadge() {
-    var n = lastResult ? lastResult.rows.filter(function (r) { return r.deep; }).length : 0;
-    document.querySelectorAll('[data-st-panel="dailyreview"]').forEach(function (b) {
-      b.textContent = '📋 Daily Review' + (n ? ' (' + n + ')' : '');
-    });
-  }
-
-  function render() {
-    var el = document.getElementById('stDailyReviewContent');
-    if (!el) return;
-    var res = lastResult || loadLast();
-    var head =
-      '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">' +
-      '<button onclick="window.runDailyReview(true)" style="padding:9px 16px;border-radius:9px;border:none;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:700;font-size:0.82rem;cursor:pointer;">🔄 Chạy ngay</button>' +
-      '<button onclick="window.sendDailyReviewTelegram()" style="padding:9px 16px;border-radius:9px;border:1px solid var(--border-color);background:var(--bg-secondary);color:var(--text-primary);font-weight:700;font-size:0.82rem;cursor:pointer;">✈️ Gửi Telegram</button>' +
-      '<span id="drStatus" style="font-size:0.75rem;color:var(--text-secondary);"></span></div>';
-    if (!res) {
-      el.innerHTML = head + '<p style="color:var(--text-secondary);padding:12px 0;">Chưa có kết quả. Bấm “Chạy ngay” (app cũng tự chạy khi mở).</p>';
-      return;
-    }
-    var rows = res.rows;
-    var deep = rows.filter(function (r) { return r.deep; }).sort(function (a, b) { return b.priority - a.priority; });
-    var top5 = deep.slice(0, 5);
-    var when = new Date(res.at).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' });
-    var html = head +
-      '<div style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:12px;">Cập nhật ' + esc(when) + ' (giờ California) · ' +
-      rows.length + ' mã · tổng ≈ ' + fmtMoney(res.total) + ' · ' + (deep.length + rows.filter(function (r) { return r.unreviewed; }).length) + ' mã có trigger, ' + deep.filter(function (r) { return !r.aiMissing; }).length + ' đã được AI phân tích' +
-      (res.earningsReady ? '' : ' · <b>lịch earnings chưa tải xong, bấm Chạy ngay lại sau ít phút</b>') + '</div>' +
-      (marketLine(res.market) ? '<div style="font-size:0.8rem;margin:-4px 0 12px;padding:8px 12px;border:1px solid var(--border-color);border-radius:9px;background:var(--bg-secondary);">📈 Thị trường: ' + esc(marketLine(res.market)) + '</div>' : '');
-    if (res.aiError) {
-      var okN = deep.filter(function (r) { return !r.aiMissing; }).length;
-      html += '<div style="padding:10px 12px;margin-bottom:12px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;font-size:0.78rem;color:#e74c3c;">' +
-        (okN ? 'Một phần AI bị lỗi (' + okN + ' mã vẫn có kết quả): ' : 'AI không khả dụng: ') + esc(res.aiError) +
-        '. Giá và trigger bên dưới vẫn đúng; bấm Chạy ngay để thử lại.</div>';
-    }
-
-    html += '<div class="st-section-head">TOP 5 ACTIONS</div>';
-    if (!top5.length) html += '<p style="color:var(--text-secondary);">Hôm nay không có mã nào chạm trigger.</p>';
-    top5.forEach(function (r) {
-      html += '<div style="padding:10px 12px;margin:6px 0;border:1px solid var(--border-color);border-radius:10px;background:var(--bg-secondary);">' +
-        '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><div><b>' + esc(r.symbol) + '</b> · ' + actBadge(r.action, r) + '</div>' +
-        '<div style="color:' + colorPct(r.d1) + ';font-weight:700;">' + fmtPct(r.d1) + (r.d5 != null ? ' <span style="color:var(--text-secondary);font-weight:400;">· 5D ' + fmtPct(r.d5) + '</span>' : '') + '</div></div>' +
-        '<div style="font-size:0.8rem;margin-top:4px;">' + esc(r.reason) + '</div>' +
-        (r.next ? '<div style="font-size:0.78rem;margin-top:3px;color:var(--text-secondary);">➜ ' + esc(r.next) + '</div>' : '') + '</div>';
-    });
-
-    var rest = deep.slice(5);
-    var unrev = rows.filter(function (r) { return r.unreviewed; });
-    if (rest.length) {
-      html += '<div class="st-section-head" style="margin-top:16px;">DEEP DIVE (' + rest.length + ' mã còn lại đã phân tích)</div>';
-      rest.forEach(function (r) {
-        html += '<div style="padding:8px 12px;margin:5px 0;border:1px solid var(--border-color);border-radius:9px;">' +
-          '<b>' + esc(r.symbol) + '</b> · ' + actBadge(r.action, r) + ' · <span style="color:' + colorPct(r.d1) + ';">' + fmtPct(r.d1) + '</span>' +
-          '<div style="font-size:0.76rem;color:var(--text-secondary);margin-top:2px;">' + esc(r.triggers.join(' · ')) + '</div>' +
-          '<div style="font-size:0.78rem;margin-top:3px;">' + esc(r.reason) + (r.next ? ' ➜ ' + esc(r.next) : '') + '</div></div>';
-      });
-    }
-
-    if (unrev.length) {
-      html += '<div class="st-section-head" style="margin-top:16px;">CÓ TRIGGER NHƯNG CHƯA PHÂN TÍCH (' + unrev.length + ')</div>' +
-        '<div style="font-size:0.76rem;color:var(--text-secondary);margin-bottom:6px;">Ngoài giới hạn ' + MAX_DEEP + ' mã mỗi lần. Xem nhanh lý do trigger:</div>';
-      unrev.forEach(function (r) {
-        html += '<div style="font-size:0.78rem;padding:3px 0;"><b>' + esc(r.symbol) + '</b> · <span style="color:' + colorPct(r.d1) + ';">' + fmtPct(r.d1) + '</span> · ' + esc(r.triggers.join(' · ')) + '</div>';
-      });
-    }
-
-    html += '<div class="st-section-head" style="margin-top:16px;">QUICK SCAN — ' + rows.length + ' mã</div>' +
-      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.76rem;">' +
-      '<tr style="text-align:left;color:var(--text-secondary);"><th style="padding:4px 6px;">Mã</th><th>Giá</th><th>1D</th><th>5D</th><th>% DM</th><th>Action</th><th>Ghi chú</th></tr>';
-    rows.slice().sort(function (a, b) { return Math.abs(b.d1) - Math.abs(a.d1); }).forEach(function (r) {
-      html += '<tr style="border-top:1px solid var(--border-color);">' +
-        '<td style="padding:4px 6px;"><b>' + esc(r.symbol) + '</b></td>' +
-        '<td>$' + Number(r.price).toFixed(2) + '</td>' +
-        '<td style="color:' + colorPct(r.d1) + ';">' + fmtPct(r.d1) + '</td>' +
-        '<td style="color:' + (r.d5 == null ? 'var(--text-secondary)' : colorPct(r.d5)) + ';">' + (r.d5 == null ? '–' : fmtPct(r.d5)) + '</td>' +
-        '<td>' + r.pct.toFixed(1) + '%</td>' +
-        '<td>' + actBadge(r.action, r) + '</td>' +
-        '<td style="color:var(--text-secondary);">' + esc(r.deep ? r.reason : (r.triggers.length ? r.reason : 'No material change')) + '</td></tr>';
-    });
-    html += '</table></div>' +
-      '<div style="font-size:0.66rem;color:var(--text-secondary);margin-top:12px;">AI phân tích dựa trên giá, news Finnhub 7 ngày và analyst ratings; không lên web tìm thêm. ' +
-      'News/analyst chỉ được kiểm tra cho các mã có trigger. Phân tích tham khảo, không phải lời khuyên tài chính.</div>';
-    el.innerHTML = html;
-  }
-
-  /* ---------- 8. Telegram ---------- */
-  function buildTelegramText() {
-    var res = lastResult || loadLast();
-    if (!res) return '';
-    var deep = res.rows.filter(function (r) { return r.deep; }).sort(function (a, b) { return b.priority - a.priority; });
-    var lines = ['📋 DAILY REVIEW ' + new Date(res.at).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', dateStyle: 'medium', timeStyle: 'short' }) + ' PT',
-                 'Portfolio ≈ ' + fmtMoney(res.total) + ' · ' + res.rows.length + ' mã'].concat(marketLine(res.market) ? ['📈 ' + marketLine(res.market)] : []).concat(['', 'TOP 5 ACTIONS']);
-    if (!deep.length) lines.push('Không có mã nào chạm trigger.');
-    deep.slice(0, 5).forEach(function (r, i) {
-      lines.push((i + 1) + '. ' + r.symbol + ' — ' + r.action + (r.prevAction && r.prevAction !== r.action ? ' (đổi từ ' + r.prevAction + ')' : '') + ' (' + fmtPct(r.d1) + (r.d5 != null ? ', 5D ' + fmtPct(r.d5) : '') + ')');
-      if (r.reason) lines.push('   ' + r.reason);
-      if (r.next) lines.push('   ➜ ' + r.next);
-    });
-    var conc = res.rows.filter(function (r) { return r.pct >= TH_CONC; });
-    if (conc.length) { lines.push('', '⚠️ Tập trung: ' + conc.map(function (r) { return r.symbol + ' ' + r.pct.toFixed(1) + '%'; }).join(', ')); }
-    var earn = res.rows.filter(function (r) { return r.earnDays != null && r.earnDays >= 0 && r.earnDays <= TH_EARN_DAYS; })
-      .sort(function (a, b) { return a.earnDays - b.earnDays; });
-    if (earn.length) { lines.push('', '📅 Earnings 7 ngày: ' + earn.map(function (r) { return r.symbol + ' ' + r.earnDate.slice(5); }).join(', ')); }
-    lines.push('', 'Tham khảo, không phải lời khuyên tài chính.');
-    return lines.join('\n');
-  }
-  window.sendDailyReviewTelegram = async function () {
-    try {
-      if (!lastResult && !loadLast()) { setStatus('Chưa có kết quả để gửi. Bấm Chạy ngay trước.'); return; }
-      var cfg = typeof window.getTelegramConfig === 'function' ? await window.getTelegramConfig(true) : null;
-      if (!cfg) { setStatus('Chưa cấu hình Telegram (Settings → Telegram).'); return; }
-      var text = buildTelegramText();
-      var r = await fetch('https://api.telegram.org/bot' + cfg.token + '/sendMessage', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: cfg.chatId, text: text.slice(0, 4000) })
-      });
-      var j = await r.json();
-      setStatus(j.ok ? '✓ Đã gửi Telegram.' : 'Telegram từ chối: ' + (j.description || 'lỗi không rõ'));
-    } catch (e) { setStatus('Không gửi được: ' + (e.message || e)); }
-  };
-
-  /* ---------- 9. Hooks ---------- */
-  window.runDailyReview = function (manual) { return run({ manual: !!manual }); };
-  window.renderDailyReview = function () {
-    if (!lastResult) lastResult = loadLast();
-    render();
-    if (!lastResult && !running) run({ manual: false });
-  };
-  window.__dailyReviewTest = { buildRows: buildRows, applyTriggers: applyTriggers, buildTelegramText: buildTelegramText };
-
-  /* Market clock (ET, holidays ignored) */
-  function etNow() { return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })); }
-  function marketOpen() {
-    var et = etNow(), m = et.getHours() * 60 + et.getMinutes(), d = et.getDay();
-    return d >= 1 && d <= 5 && m >= 570 && m < 960;
-  }
-  function sessionKey() {
-    try { if (typeof window.currentSessionKey === 'function') return window.currentSessionKey(); } catch (e) {}
-    return etNow().toISOString().slice(0, 10);
-  }
-  function shouldAutoRun() {
-    var last = loadLast();
-    if (!last) return true;
-    if (marketOpen()) return Date.now() - last.at >= AUTO_MIN_GAP_MS;
-    // Market closed: prices don't move, so one review per session is enough.
-    return !(last.session === sessionKey() && !last.marketOpen);
-  }
-
-  // Auto-run on every app open, but only AFTER the app has refreshed live prices.
-  // Prices saved in Firestore from the last visit load first; reviewing those would
-  // report yesterday's moves as today's.
-  var autoDone = false;
-  function triggerAuto(reason) {
-    if (autoDone) return;
-    autoDone = true;
-    lastResult = loadLast();
-    updateBadge();
-    if (!shouldAutoRun()) return;
-    setTimeout(function () { run({ auto: true, reason: reason }); }, 1500);
-  }
-  (function hookRefresh() {
-    var tries = 0;
-    var timer = setInterval(function () {
-      tries++;
-      var t = tracker();
-      if (t && typeof t.refreshItems === 'function' && !t.__drHooked) {
-        clearInterval(timer);
-        t.__drHooked = true;
-        var orig = t.refreshItems;
-        t.refreshItems = async function (items, type) {
-          var out = await orig.apply(this, arguments);
-          if (type === 'stock') { window.__drStockRefreshAt = Date.now(); triggerAuto('refresh'); }
-          return out;
-        };
-        lastResult = loadLast();
-        updateBadge();
-        // Fallback: if no live refresh happens within 3 minutes (e.g. market closed and
-        // auto-refresh is off), run on the loaded prices only when the market is closed.
-        setTimeout(function () { if (!autoDone && !marketOpen()) triggerAuto('timeout'); }, 180000);
-      } else if (tries > 90) { clearInterval(timer); }
-    }, 1000);
-  })();
-})();
-
 </script>
 </body>
 <script>
