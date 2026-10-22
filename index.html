@@ -867,6 +867,15 @@ window.itemsByAccount = function (items, opts) {
         .st-dd-menu.open { display:grid !important; }
         .st-dd-title { grid-column:1 / -1; margin-bottom:2px; }
         @media (max-width:480px) { .st-dd-menu { left:8px; right:8px; grid-template-columns:1fr 1fr; } }
+        /* 2026-10-21: buttons inside the dropdowns had the menu's own background and a near-black border in
+           dark mode, so their outlines were almost invisible. Give them a visible outline + lighter fill. */
+        .st-dd-menu .st-toolbar-btn { background:var(--bg-tertiary, rgba(127,127,127,0.08)) !important;
+            border:1.5px solid color-mix(in srgb, var(--text-secondary) 45%, transparent) !important;
+            color:var(--text-primary) !important; border-radius:10px !important; padding:9px 12px !important; min-height:40px; }
+        .st-dd-menu .st-toolbar-btn:hover { border-color:var(--accent-primary, #7c3aed) !important;
+            background:color-mix(in srgb, var(--accent-primary, #7c3aed) 14%, var(--bg-tertiary, transparent)) !important; }
+        .st-dd-menu .st-dd-title { color:var(--text-primary) !important; font-size:0.78rem !important; opacity:1 !important; margin:0 0 4px 2px !important; }
+        .st-dd-menu .st-toolbar-btn.active { background:var(--color-positive,#27ae60) !important; color:#fff !important; border-color:var(--color-positive,#27ae60) !important; }
         #headerLockBtn { padding:6px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-color); background:var(--bg-secondary); color:var(--text-primary); font-size:0.82rem; font-weight:600; cursor:pointer; margin-right:6px; }
 
         /* Group-header trend icons: drawn as SVG so every device shows the same color
