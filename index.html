@@ -4057,6 +4057,205 @@ body:not(.dark-mode) .k-sec-more-btn { background:rgba(0,0,0,0.04); }
 /* add stock + filters: same height, no floating buttons over them anymore */
 .search-section .search-input, .search-section #addBtn { height:46px; }
 </style>
+<style id="ui-polish-2026-11-13">
+/* ============================================================
+   Portfolio Tracker – UI polish (light + dark)
+   Load this AFTER the existing styles. Dark mode = body.dark-mode.
+   ============================================================ */
+
+/* ---- 1. One shared set of tokens for both themes ---- */
+body {
+  --k-surface: #ffffff;
+  --k-surface-2: #f5f7fa;
+  --k-text: #0f172a;
+  --k-muted: #5b6778;
+  --k-border: #d9dfe7;
+  --k-pos: #047857;
+  --k-neg: #b91c1c;
+  --k-accent: #6d28d9;
+  --k-accent-soft: rgba(109, 40, 217, 0.10);
+  --k-on-accent: #ffffff;
+  --k-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+}
+body.dark-mode {
+  --k-surface: #151923;
+  --k-surface-2: #1c212d;
+  --k-text: #eef2f8;
+  --k-muted: #9aa6b8;
+  --k-border: rgba(255, 255, 255, 0.10);
+  --k-pos: #34d399;
+  --k-neg: #f87171;
+  --k-accent: #a78bfa;
+  --k-accent-soft: rgba(167, 139, 250, 0.16);
+  --k-on-accent: #14101f;
+  --k-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- 2. Typography: one font everywhere, steady digits ---- */
+button, input, select, textarea { font-family: inherit !important; }
+.summary-value, .pill-value, .info-value, .summary-item, .summary-card {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 3. Top ticker bar: neutral surface, no glow ---- */
+#chart-summary-panel {
+  background: var(--k-surface) !important;
+  border: 1px solid var(--k-border) !important;
+  box-shadow: var(--k-shadow) !important;
+}
+#chart-summary-panel::before,
+#chart-summary-panel::after { display: none !important; }
+#chart-summary-panel .summary-pill {
+  background: var(--k-surface-2) !important;
+  border: 1px solid var(--k-border) !important;
+  color: var(--k-text) !important;
+  box-shadow: none !important;
+}
+#chart-summary-panel .pill-value.positive { color: var(--k-pos) !important; }
+#chart-summary-panel .pill-value.negative { color: var(--k-neg) !important; }
+
+/* ---- 4. Hero card: clear hierarchy ---- */
+/* (selectors are deliberately over-specific to beat the existing !important theme layers) */
+html body #portfolio-summary#portfolio-summary .summary-total.summary-total {   /* stray white box in light mode */
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+#total-pl-today-label { color: var(--k-muted) !important; }   /* "today" was invisible in light */
+#portfolio-summary .summary-badge .summary-value {            /* secondary numbers step down */
+  font-size: 17px !important;
+  font-weight: 700 !important;
+}
+#portfolio-summary .portfolio-inner { align-items: flex-start !important; }
+body:not(.dark-mode) #portfolio-summary .summary-toggle {     /* looked disabled in light */
+  background: var(--k-surface-2) !important;
+  color: var(--k-text) !important;
+  border: 1px solid var(--k-border) !important;
+}
+
+/* ---- 5. Tools: a real button, not a divider strip ---- */
+#toggleToolbarBtn {
+  width: auto !important;
+  padding: 8px 16px !important;
+  border-radius: 10px !important;
+  background: var(--k-surface) !important;
+  color: var(--k-text) !important;
+  border: 1px solid var(--k-border) !important;
+  font-weight: 600 !important;
+}
+
+/* ---- 6. Section list: aligned to page, no dead space ---- */
+#stocksGrid {
+  padding-inline: 24px !important;
+  row-gap: 12px !important;
+  box-sizing: border-box !important;
+}
+#stocksGrid .group-content.collapsed,
+#stocksGrid .summary-content.collapsed { display: none !important; }
+#stocksGrid .group-header {
+  margin-top: 4px !important;
+  padding: 12px 16px !important;
+  border-radius: 12px !important;
+  background: var(--k-surface) !important;
+  border: 1px solid var(--k-border) !important;
+}
+#stocksGrid .summary-content { padding: 0 !important; }
+#stocksGrid .summary-card {
+  display: flex !important;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 20px;
+  margin: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  padding: 10px 16px !important;
+  text-align: left !important;
+  background: transparent !important;
+  border: 1px dashed var(--k-border) !important;
+  box-shadow: none !important;
+}
+#stocksGrid .summary-card h4 { margin: 0 !important; font-size: 14px !important; }
+#stocksGrid .summary-card p  { margin: 0 !important; font-size: 14px !important; }
+
+/* ---- 7. One accent colour (purple, matching the logo) ---- */
+.view-toggle button.active {
+  background: var(--k-accent) !important;
+  color: var(--k-on-accent) !important;
+  border-color: var(--k-accent) !important;
+}
+.tabs .tab.active {
+  background: var(--k-accent-soft) !important;
+  color: var(--k-accent) !important;
+  border-color: transparent !important;
+  box-shadow: inset 0 0 0 1px var(--k-accent) !important;
+}
+
+/* ---- 8. Buy vs Sell are visibly different ---- */
+html body .add-btn.transaction-btn.buy-btn.buy-btn {
+  background: #047857 !important;
+  border-color: #047857 !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+html body .add-btn.transaction-btn.sell-btn.sell-btn {
+  background: transparent !important;
+  border: 1px solid var(--k-neg) !important;
+  color: var(--k-neg) !important;
+  box-shadow: none !important;
+}
+
+/* ---- 6b. Wide screens: cards and chart share one column (full width, capped at 1800px) ---- */
+#stocksGrid {
+  max-width: 1800px !important;
+  margin-inline: auto !important;
+}
+@media (min-width: 769px) {
+  #portfolio-performance-container {
+    width: min(1752px, calc(100% - 48px)) !important;
+    margin-inline: auto !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* top section fills the screen too, up to the same cap */
+.container { max-width: 1800px !important; }
+
+/* ---- 10. Tablet and phone ---- */
+/* Header: never break a label mid-word; wrap whole controls instead */
+.header h1, .header button { white-space: nowrap !important; }
+
+@media (max-width: 1100px) {
+  .header { flex-wrap: wrap !important; row-gap: 8px !important; }
+  #user-info { flex-wrap: wrap; }
+  #user-info > span { white-space: nowrap; }
+}
+@media (max-width: 900px) {
+  /* hero tiles use the full card width once the card stacks */
+  html body #portfolio-summary#portfolio-summary .summary-grid {
+    width: 100% !important;
+    align-self: stretch !important;
+  }
+}
+/* keep the section list lined up with the page gutter at every size */
+@media (min-width: 481px) and (max-width: 768px) {
+  #stocksGrid { padding-inline: 14px !important; }
+}
+@media (max-width: 480px) {
+  #stocksGrid { padding-inline: 10px !important; }
+  /* ticker stays on one row despite the new pill borders */
+  #chart-summary-panel { gap: 3px !important; }
+  #chart-summary-panel .summary-pill { padding: 4px 5px !important; }
+  #portfolio-summary .summary-badge .summary-value { font-size: 16px !important; }
+}
+
+/* ---- 9. Header: Demo Mode readable in light ---- */
+#demoModeBtn {
+  background: var(--k-surface) !important;
+  color: var(--k-muted) !important;
+  border: 1px solid var(--k-border) !important;
+}
+</style>
 </head>
 <body>
 <!-- 
@@ -10123,7 +10322,7 @@ renderPortfolioSummary() {
                         const totalChangeToday = window.todayPLOf(item, stats.totalSharesOwned);
                         const totalChangeTodayClass = totalChangeToday >= 0 ? 'positive' : 'negative'; 
                         summaryText = `Gained <span class="${changeClass}">${this.formatCurrency(item.change)}</span> today, a change of <span class="${changePercentClass}">${(item.changePercent || 0).toFixed(2)}%</span>.`;
-                        summaryText += `\nTotal Value: <span class="${totalPL >= 0 ? 'positive' : 'negative'}">${this.formatCurrency(totalValue)}</span>`;
+                        summaryText += `\nTotal Value: ${this.formatCurrency(totalValue)}`;
                         summaryText += `\nTotal P/L: <span class="${totalPLClass}">${this.formatCurrency(totalPL)}</span> (<span class="${totalPLClass}">${this.formatNumber(totalPLPercent, 2)}%</span>)`;
                         summaryText += `\nTotal Change Today: <span class="${totalChangeTodayClass}">${this.formatCurrency(totalChangeToday)}</span>`;
                     }
@@ -10451,7 +10650,7 @@ renderPortfolioSummary() {
                             stockInfoHTML = `
                                 <div class="info-row"> <span class="info-label">Open:</span> <span class="info-value">${this.formatCurrency(item.open || 0)}</span> </div>
                                 <div class="info-row"> <span class="info-label">Total Shares:</span> <span class="info-value">${this.formatNumber(stats.totalSharesOwned, 3)}</span> </div>
-                                <div class="info-row"> <span class="info-label">Total Value:</span> <span class="info-value ${positiveClass(totalPL)}">${this.formatCurrency(stats.currentValue)}</span> </div>
+                                <div class="info-row"> <span class="info-label">Total Value:</span> <span class="info-value">${this.formatCurrency(stats.currentValue)}</span> </div>
                                 ${(function(){
                                     // One row, but which denominator applies depends on the
                                     // asset class: a stock is weighed against other stocks,
